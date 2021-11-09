@@ -1,7 +1,7 @@
+pub mod util;
+
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub(crate) mod test_utils;
+
+#[cfg(test)]
+mod tests {}
