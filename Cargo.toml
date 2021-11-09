@@ -1,0 +1,9 @@
+[package]
+name = "binary_type_inference"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cwe_checker_lib = { git = "ssh://git@github.com/trailofbits/cwe_checker.git" }
