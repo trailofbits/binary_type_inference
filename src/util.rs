@@ -6,7 +6,7 @@ use cwe_checker_lib::{
 use log::{debug, error, info};
 use std::io::Read;
 
-/// convert cwe logs into our logging infra
+/// Convert cwe logs into our logging infra
 pub fn log_cwe_message(msg: &LogMessage) {
     match msg.level {
         LogLevel::Error => error!("{}", msg.text),
@@ -15,6 +15,8 @@ pub fn log_cwe_message(msg: &LogMessage) {
     }
 }
 
+/// Gets the [Project] IR for a reader of exported JSON IR and the binary as a slice of bytes. This function does not
+/// handle bare metal binaries.
 pub fn get_intermediate_representation_for_reader(
     rdr: impl Read,
     binary: &[u8],
