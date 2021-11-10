@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::vec::Vec;
 
 #[derive(Debug, Clone)]
@@ -58,3 +59,5 @@ pub struct SubtypeConstraint {
     lhs: DerivedTypeVar,
     rhs: DerivedTypeVar,
 }
+
+pub struct ConstraintSet(BTreeSet<SubtypeConstraint>);
