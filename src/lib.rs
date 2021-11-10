@@ -1,3 +1,7 @@
+//! # Type Constraint Generation by Abstract Interpretation
+
+#![warn(missing_docs)]
+
 mod analysis;
 pub mod constraint_generation;
 pub mod constraints;
