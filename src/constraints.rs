@@ -1,8 +1,9 @@
 use std::collections::BTreeSet;
-use std::vec::Vec;
+use std::ops::{Deref, DerefMut};
+use std::vec::{self, Vec};
 
 /// A static type variable with a name
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TypeVariable {
     name: String,
 }
@@ -33,7 +34,7 @@ impl Default for VariableManager {
 }
 
 /// A field constraint of the form .σN@k where N is the bit-width of the field at byte offset k
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Field {
     offset: i64,
     size: u64,
@@ -42,13 +43,13 @@ pub struct Field {
 /// This function has an input parameter at the location defined by the parameter index
 /// Note(Ian): In the future if we have our own solvers these locations should be extended to be more
 /// general than indeces.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct In {
     param_index: u32,
 }
 
 /// A field label specifies the capabilities of a [DerivedTypeVar]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FieldLabel {
     /// The previous label can be loaded from
     Load,
@@ -67,18 +68,81 @@ pub enum FieldLabel {
 /// Variance is determined by the sign monoid of the component [FieldLabel] variances ⊕·⊕ = ⊖·⊖ = ⊕ and ⊕·⊖ = ⊖·⊕ = ⊖
 /// [DerivedTypeVar] forms the expression αw where α ∈ V and w ∈ Σ^*
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DerivedTypeVar {
     var: TypeVariable,
     labels: Vec<FieldLabel>,
 }
 
+impl DerivedTypeVar {
+    pub fn new(base_var: TypeVariable) -> DerivedTypeVar {
+        DerivedTypeVar {
+            var: base_var,
+            labels: vec![],
+        }
+    }
+
+    pub fn add_field_label(&mut self, lab: FieldLabel) {
+        self.labels.push(lab);
+    }
+}
+
 /// Expresses a subtyping constraint of the form lhs ⊑ rhs
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SubtypeConstraint {
     lhs: DerivedTypeVar,
     rhs: DerivedTypeVar,
 }
 
+impl SubtypeConstraint {
+    pub fn new(lhs: DerivedTypeVar, rhs: DerivedTypeVar) -> SubtypeConstraint {
+        SubtypeConstraint { lhs, rhs }
+    }
+}
+
 /// A set of [SubtypeConstraint]
 pub struct ConstraintSet(BTreeSet<SubtypeConstraint>);
+
+impl ConstraintSet {
+    pub fn insert_all(&mut self, cons: &ConstraintSet) {
+        cons.0.iter().cloned().for_each(|con| {
+            self.0.insert(con);
+        });
+    }
+
+    pub fn singleton(cons: SubtypeConstraint) -> ConstraintSet {
+        let mut emp = ConstraintSet::empty();
+        emp.insert(cons);
+        emp
+    }
+
+    pub fn empty() -> ConstraintSet {
+        ConstraintSet(BTreeSet::new())
+    }
+}
+
+impl From<BTreeSet<SubtypeConstraint>> for ConstraintSet {
+    fn from(c: BTreeSet<SubtypeConstraint>) -> Self {
+        ConstraintSet(c)
+    }
+}
+
+impl Default for ConstraintSet {
+    fn default() -> ConstraintSet {
+        ConstraintSet(BTreeSet::new())
+    }
+}
+
+impl Deref for ConstraintSet {
+    type Target = BTreeSet<SubtypeConstraint>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ConstraintSet {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
