@@ -1,13 +1,15 @@
 use cwe_checker_lib::{
     analysis::graph::{Graph, Node},
-    intermediate_representation::{Arg, Blk, Def, Term},
+    intermediate_representation::{Arg, Blk, Def, Sub, Term},
 };
 use petgraph::visit::Dfs;
 
 use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variable};
 
+use cwe_checker_lib::intermediate_representation::Tid;
+
 use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable,
+    ConstraintSet, DerivedTypeVar, Field, FieldLabel, In, SubtypeConstraint, TypeVariable,
     VariableManager,
 };
 
@@ -43,7 +45,8 @@ pub trait SubprocedureLocators {
     // TODO(ian) may need the subprocedure tid here.
     /// Takes a points-to and register mapping to resolve type variables of inputs and outputs
     fn get_type_variables_and_constraints_for_arg(
-        arg: Arg,
+        &self,
+        arg: &Arg,
         reg: &impl RegisterMapping,
         points_to: &impl PointsToMapping,
         vm: &mut VariableManager,
@@ -194,6 +197,84 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                 )
             })
     }
+
+    fn term_to_tvar<T>(term: &Term<T>) -> TypeVariable {
+        TypeVariable::new(term.tid.get_str_repr().to_owned())
+    }
+
+    fn arg_to_constraints(
+        &self,
+        target_func: &Term<Sub>,
+        ind: usize,
+        arg: &Arg,
+        vm: &mut VariableManager,
+        index_to_field_label: &impl Fn(usize) -> FieldLabel,
+        arg_is_subtype_of_representations: bool,
+    ) -> ConstraintSet {
+        let mut base_var = DerivedTypeVar::new(Self::term_to_tvar(target_func));
+        base_var.add_field_label(index_to_field_label(ind));
+        let (type_vars_for_arg, mut additional_constraints) = self
+            .subprocedure_locators
+            .get_type_variables_and_constraints_for_arg(arg, &self.reg_map, &self.points_to, vm);
+        type_vars_for_arg
+            .into_iter()
+            .map(|tvar| {
+                if arg_is_subtype_of_representations {
+                    SubtypeConstraint::new(base_var.clone(), DerivedTypeVar::new(tvar))
+                } else {
+                    SubtypeConstraint::new(DerivedTypeVar::new(tvar), base_var.clone())
+                }
+            })
+            .for_each(|cons| {
+                additional_constraints.insert(cons);
+            });
+        additional_constraints
+    }
+
+    fn handle_call(&self, target_function: &Term<Sub>, vm: &mut VariableManager) -> ConstraintSet {
+        self.handle_function_args(
+            target_function,
+            &target_function.term.formal_args,
+            vm,
+            &|ind| FieldLabel::In(ind),
+            false,
+        )
+    }
+
+    fn handle_function_args(
+        &self,
+        target_function: &Term<Sub>,
+        args: &Vec<Arg>,
+        vm: &mut VariableManager,
+        index_to_field_label: &impl Fn(usize) -> FieldLabel,
+        arg_is_subtype_of_representations: bool,
+    ) -> ConstraintSet {
+        let mut constraints = ConstraintSet::default();
+        args.iter()
+            .enumerate()
+            .map(|(ind, arg)| {
+                self.arg_to_constraints(
+                    target_function,
+                    ind,
+                    arg,
+                    vm,
+                    index_to_field_label,
+                    arg_is_subtype_of_representations,
+                )
+            })
+            .for_each(|cons| constraints.insert_all(&cons));
+        constraints
+    }
+
+    fn handle_return(&self, return_from: &Term<Sub>, vm: &mut VariableManager) -> ConstraintSet {
+        self.handle_function_args(
+            return_from,
+            &return_from.term.formal_args,
+            vm,
+            &|ind| FieldLabel::Out(ind),
+            true,
+        )
+    }
 }
 
 pub struct Context<'a, R, P, S>
@@ -217,8 +298,14 @@ where
         if let Some(nd_cont) = nd_cont {
             match nd {
                 Node::BlkStart(blk, sub) => nd_cont.handle_block_start(blk, vman),
-                Node::CallReturn { call, return_ } => ConstraintSet::default(),
-                Node::CallSource { source, target } => ConstraintSet::default(),
+                Node::CallReturn {
+                    call,
+                    return_: (return_blk, return_proc),
+                } => nd_cont.handle_return(return_proc, vman),
+                Node::CallSource {
+                    source,
+                    target: (target_blk, target_func),
+                } => nd_cont.handle_call(target_func, vman),
                 // block post conditions arent needed to generate constraints
                 Node::BlkEnd(_blk, _term) => Default::default(),
             }

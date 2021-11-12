@@ -1,11 +1,17 @@
 use std::collections::BTreeSet;
 use std::ops::{Deref, DerefMut};
-use std::vec::{self, Vec};
+use std::vec::Vec;
 
 /// A static type variable with a name
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TypeVariable {
     name: String,
+}
+
+impl TypeVariable {
+    pub fn new(name: String) -> TypeVariable {
+        TypeVariable { name }
+    }
 }
 
 /// Manages ephmeral type variables
@@ -51,7 +57,7 @@ impl Field {
 /// general than indeces.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct In {
-    param_index: u32,
+    pub param_index: usize,
 }
 
 /// A field label specifies the capabilities of a [DerivedTypeVar]
@@ -62,9 +68,9 @@ pub enum FieldLabel {
     /// The previous label can be stored to
     Store,
     /// An in parameter on the function
-    In(In),
+    In(usize),
     /// A formal return on the function
-    Out,
+    Out(usize),
     /// A field with the specified bit width and byte offset
     Field(Field),
 }
