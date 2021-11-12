@@ -93,11 +93,14 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         constraints
     }
 
-    fn make_loaded_tvar(var: TypeVariable, sz: ByteSize) -> DerivedTypeVar {
+    fn make_mem_tvar(var: TypeVariable, sz: ByteSize, label: FieldLabel) -> DerivedTypeVar {
         let mut var = DerivedTypeVar::new(var);
-        var.add_field_label(FieldLabel::Load);
+        var.add_field_label(label);
         var.add_field_label(FieldLabel::Field(Field::new(0, sz.as_bit_length())));
         var
+    }
+    fn make_loaded_tvar(var: TypeVariable, sz: ByteSize) -> DerivedTypeVar {
+        Self::make_mem_tvar(var, sz, FieldLabel::Load)
     }
 
     fn apply_load(
@@ -106,21 +109,52 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         address: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        let (var, mut constraints) = self.reg_map.access(v_into, vman);
+        self.apply_mem_op(v_into, address, vman, Self::make_loaded_tvar, true)
+    }
 
-        let all_tvars = self.points_to.points_to(address, v_into.size, vman);
+    fn make_store_tvar(var: TypeVariable, sz: ByteSize) -> DerivedTypeVar {
+        Self::make_mem_tvar(var, sz, FieldLabel::Store)
+    }
+
+    fn apply_mem_op(
+        &self,
+        variable: &Variable,
+        address: &Expression,
+        vman: &mut VariableManager,
+        make_type_var: impl Fn(TypeVariable, ByteSize) -> DerivedTypeVar,
+        memop_is_upcasted: bool,
+    ) -> ConstraintSet {
+        let (var, mut constraints) = self.reg_map.access(variable, vman);
+
+        let all_tvars = self.points_to.points_to(address, variable.size, vman);
         let all_dtvars: BTreeSet<DerivedTypeVar> = all_tvars
             .into_iter()
-            .map(|tv| Self::make_loaded_tvar(tv, v_into.size))
+            .map(|tv| make_type_var(tv, variable.size))
             .collect();
 
         all_dtvars
             .into_iter()
-            .map(|subty| SubtypeConstraint::new(subty, DerivedTypeVar::new(var.clone())))
+            .map(|memop_tvar| {
+                let reg_tvar = DerivedTypeVar::new(var.clone());
+                if memop_is_upcasted {
+                    SubtypeConstraint::new(memop_tvar, reg_tvar)
+                } else {
+                    SubtypeConstraint::new(reg_tvar, memop_tvar)
+                }
+            })
             .for_each(|cons| {
                 constraints.insert(cons);
             });
         constraints
+    }
+
+    fn apply_store(
+        &self,
+        v_from: &Variable,
+        address_into: &Expression,
+        vman: &mut VariableManager,
+    ) -> ConstraintSet {
+        self.apply_mem_op(v_from, address_into, vman, Self::make_store_tvar, false)
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
