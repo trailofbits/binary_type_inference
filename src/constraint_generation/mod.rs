@@ -115,7 +115,6 @@ where
 {
     graph: &'a Graph<'a>,
     node_contexts: HashMap<Node<'a>, NodeContext<R, P, S>>,
-    vman: VariableManager,
 }
 
 impl<R, P, S> Context<'_, R, P, S>
@@ -124,11 +123,11 @@ where
     P: PointsToMapping,
     S: SubprocedureLocators,
 {
-    fn generate_constraints_for_node(&self, nd: Node) -> ConstraintSet {
+    fn generate_constraints_for_node(&self, nd: Node, vman: &mut VariableManager) -> ConstraintSet {
         let nd_cont = self.node_contexts.get(&nd);
         if let Some(nd_cont) = nd_cont {
             match nd {
-                Node::BlkStart(blk, sub) => nd_cont.handle_block_start(blk, &mut self.vman),
+                Node::BlkStart(blk, sub) => nd_cont.handle_block_start(blk, vman),
                 Node::CallReturn { call, return_ } => ConstraintSet::default(),
                 Node::CallSource { source, target } => ConstraintSet::default(),
                 // block post conditions arent needed to generate constraints
@@ -140,10 +139,11 @@ where
     }
 
     pub fn generate_constraints(&self) -> ConstraintSet {
+        let mut vman = VariableManager::new();
         let mut cs: ConstraintSet = Default::default();
         for nd_ind in self.graph.node_indices() {
             cs = ConstraintSet::from(
-                cs.union(&self.generate_constraints_for_node(self.graph[nd_ind]))
+                cs.union(&self.generate_constraints_for_node(self.graph[nd_ind], &mut vman))
                     .cloned()
                     .collect::<BTreeSet<SubtypeConstraint>>(),
             );
