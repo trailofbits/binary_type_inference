@@ -61,24 +61,32 @@ pub struct NodeContext<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLo
 }
 
 impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContext<R, P, S> {
+    fn evaluate_expression(
+        &self,
+        value: &Expression,
+        vman: &mut VariableManager,
+    ) -> (TypeVariable, ConstraintSet) {
+        match &value {
+            Expression::Var(v2) => {
+                let (rhs_type_var, additional_constraints) = self.reg_map.access(&v2, vman);
+                (rhs_type_var, additional_constraints)
+            }
+            _ => (vman.fresh(), ConstraintSet::empty()), // TODO(ian) handle additional constraints, add/sub
+        }
+    }
+
     fn generate_expression_constraint(
         &self,
         lhs_type_var: TypeVariable,
         value: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        match &value {
-            Expression::Var(v2) => {
-                let (rhs_type_var, additional_constraints) = self.reg_map.access(&v2, vman);
-                let mut s = ConstraintSet::singleton(SubtypeConstraint::new(
-                    DerivedTypeVar::new(rhs_type_var),
-                    DerivedTypeVar::new(lhs_type_var),
-                ));
-                s.insert_all(&additional_constraints);
-                s
-            }
-            _ => ConstraintSet::empty(),
-        }
+        let (rhs_type_var, mut constraints) = self.evaluate_expression(value, vman);
+        constraints.insert(SubtypeConstraint::new(
+            DerivedTypeVar::new(rhs_type_var),
+            DerivedTypeVar::new(lhs_type_var),
+        ));
+        constraints
     }
 
     fn apply_assign(
@@ -109,7 +117,13 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         address: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        self.apply_mem_op(v_into, address, vman, Self::make_loaded_tvar, true)
+        self.apply_mem_op(
+            &Expression::Var(v_into.clone()),
+            address,
+            vman,
+            Self::make_loaded_tvar,
+            true,
+        )
     }
 
     fn make_store_tvar(var: TypeVariable, sz: ByteSize) -> DerivedTypeVar {
@@ -118,18 +132,20 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn apply_mem_op(
         &self,
-        variable: &Variable,
+        expr_value: &Expression,
         address: &Expression,
         vman: &mut VariableManager,
         make_type_var: impl Fn(TypeVariable, ByteSize) -> DerivedTypeVar,
         memop_is_upcasted: bool,
     ) -> ConstraintSet {
-        let (var, mut constraints) = self.reg_map.access(variable, vman);
+        let (var, mut constraints) = self.evaluate_expression(expr_value, vman);
 
-        let all_tvars = self.points_to.points_to(address, variable.size, vman);
+        let all_tvars = self
+            .points_to
+            .points_to(address, expr_value.bytesize(), vman);
         let all_dtvars: BTreeSet<DerivedTypeVar> = all_tvars
             .into_iter()
-            .map(|tv| make_type_var(tv, variable.size))
+            .map(|tv| make_type_var(tv, expr_value.bytesize()))
             .collect();
 
         all_dtvars
@@ -150,17 +166,17 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn apply_store(
         &self,
-        v_from: &Variable,
+        value_from: &Expression,
         address_into: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        self.apply_mem_op(v_from, address_into, vman, Self::make_store_tvar, false)
+        self.apply_mem_op(value_from, address_into, vman, Self::make_store_tvar, false)
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
         match &df.term {
             Def::Load { var, address } => self.apply_load(var, address, vman),
-            Def::Store { address, value } => Default::default(),
+            Def::Store { address, value } => self.apply_store(value, address, vman),
             Def::Assign { var, value } => self.apply_assign(var, value, vman),
         }
     }
