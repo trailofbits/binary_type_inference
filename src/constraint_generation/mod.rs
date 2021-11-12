@@ -7,7 +7,8 @@ use petgraph::visit::Dfs;
 use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variable};
 
 use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, SubtypeConstraint, TypeVariable, VariableManager,
+    ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable,
+    VariableManager,
 };
 
 use std::{
@@ -30,7 +31,7 @@ pub trait PointsToMapping {
     /// can create fresh type variables.
     fn points_to(
         &self,
-        address: Expression,
+        address: &Expression,
         sz: ByteSize,
         vman: &mut VariableManager,
     ) -> BTreeSet<TypeVariable>;
@@ -63,7 +64,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     fn generate_expression_constraint(
         &self,
         lhs_type_var: TypeVariable,
-        value: Expression,
+        value: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
         match &value {
@@ -80,15 +81,53 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         }
     }
 
-    fn apply_assign(&self, var: Variable, value: Expression, vman: &mut VariableManager) {
-        let (typ_var, constraints) = self.reg_map.access(&var, vman);
+    fn apply_assign(
+        &self,
+        var: &Variable,
+        value: &Expression,
+        vman: &mut VariableManager,
+    ) -> ConstraintSet {
+        let (typ_var, mut constraints) = self.reg_map.access(&var, vman);
+        let new_cons = self.generate_expression_constraint(typ_var, value, vman);
+        constraints.insert_all(&new_cons);
+        constraints
+    }
+
+    fn make_loaded_tvar(var: TypeVariable, sz: ByteSize) -> DerivedTypeVar {
+        let mut var = DerivedTypeVar::new(var);
+        var.add_field_label(FieldLabel::Load);
+        var.add_field_label(FieldLabel::Field(Field::new(0, sz.as_bit_length())));
+        var
+    }
+
+    fn apply_load(
+        &self,
+        v_into: &Variable,
+        address: &Expression,
+        vman: &mut VariableManager,
+    ) -> ConstraintSet {
+        let (var, mut constraints) = self.reg_map.access(v_into, vman);
+
+        let all_tvars = self.points_to.points_to(address, v_into.size, vman);
+        let all_dtvars: BTreeSet<DerivedTypeVar> = all_tvars
+            .into_iter()
+            .map(|tv| Self::make_loaded_tvar(tv, v_into.size))
+            .collect();
+
+        all_dtvars
+            .into_iter()
+            .map(|subty| SubtypeConstraint::new(subty, DerivedTypeVar::new(var.clone())))
+            .for_each(|cons| {
+                constraints.insert(cons);
+            });
+        constraints
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
         match &df.term {
-            Def::Load { var, address } => ConstraintSet::default(),
-            Def::Store { address, value } => ConstraintSet::default(),
-            Def::Assign { var, value } => ConstraintSet::default(),
+            Def::Load { var, address } => self.apply_load(var, address, vman),
+            Def::Store { address, value } => Default::default(),
+            Def::Assign { var, value } => self.apply_assign(var, value, vman),
         }
     }
 
@@ -131,7 +170,7 @@ where
                 Node::CallReturn { call, return_ } => ConstraintSet::default(),
                 Node::CallSource { source, target } => ConstraintSet::default(),
                 // block post conditions arent needed to generate constraints
-                Node::BlkEnd(blk, term) => Default::default(),
+                Node::BlkEnd(_blk, _term) => Default::default(),
             }
         } else {
             ConstraintSet::default()

@@ -37,7 +37,13 @@ impl Default for VariableManager {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Field {
     offset: i64,
-    size: u64,
+    size: usize,
+}
+
+impl Field {
+    pub fn new(offset: i64, size: usize) -> Field {
+        Field { offset, size }
+    }
 }
 
 /// This function has an input parameter at the location defined by the parameter index
