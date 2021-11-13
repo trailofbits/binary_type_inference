@@ -16,8 +16,20 @@ pub struct Context<'a> {
     extern_symbol_map: &'a BTreeMap<Tid, ExternSymbol>,
 }
 
+impl<'a> Context<'a> {
+    pub fn new(
+        graph: &'a Graph<'a>,
+        extern_symbol_map: &'a BTreeMap<Tid, ExternSymbol>,
+    ) -> Context<'a> {
+        Context {
+            graph: graph,
+            extern_symbol_map: extern_symbol_map,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq)]
-pub struct TermSet(BTreeSet<Tid>);
+pub struct TermSet(pub BTreeSet<Tid>);
 
 impl AbstractDomain for TermSet {
     fn merge(&self, other: &Self) -> Self {

@@ -11,6 +11,8 @@ pub mod constraint_generation;
 /// Our model of subtyping constraints
 pub mod constraints;
 
+pub mod node_context;
+
 #[cfg(test)]
 pub(crate) mod test_utils;
 

@@ -2,7 +2,7 @@ use cwe_checker_lib::{
     analysis::graph::{Graph, Node},
     intermediate_representation::{Arg, Blk, Def, Sub, Term},
 };
-use petgraph::visit::Dfs;
+use petgraph::{graph::NodeIndex, visit::Dfs};
 
 use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variable};
 
@@ -13,10 +13,19 @@ use crate::constraints::{
     VariableManager,
 };
 
-use std::{
-    collections::{btree_set::BTreeSet, HashMap},
-    ops::Deref,
-};
+use std::collections::{btree_set::BTreeSet, HashMap};
+
+pub fn tid_indexed_by_variable(tid: &Tid, var: &Variable) -> TypeVariable {
+    TypeVariable::new(tid.get_str_repr().to_owned() + "_" + &var.name)
+}
+
+pub fn tid_to_tvar(tid: &Tid) -> TypeVariable {
+    TypeVariable::new(tid.get_str_repr().to_owned())
+}
+
+pub fn term_to_tvar<T>(term: &Term<T>) -> TypeVariable {
+    tid_to_tvar(&term.tid)
+}
 
 /// Maps a variable (register) to it's representing type variable at this time step in the program. This type variable is some representation of
 /// all reaching definitions of this register.
@@ -198,10 +207,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             })
     }
 
-    fn term_to_tvar<T>(term: &Term<T>) -> TypeVariable {
-        TypeVariable::new(term.tid.get_str_repr().to_owned())
-    }
-
     fn arg_to_constraints(
         &self,
         target_func: &Term<Sub>,
@@ -211,7 +216,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
         arg_is_subtype_of_representations: bool,
     ) -> ConstraintSet {
-        let mut base_var = DerivedTypeVar::new(Self::term_to_tvar(target_func));
+        let mut base_var = DerivedTypeVar::new(term_to_tvar(target_func));
         base_var.add_field_label(index_to_field_label(ind));
         let (type_vars_for_arg, mut additional_constraints) = self
             .subprocedure_locators
@@ -284,7 +289,7 @@ where
     S: SubprocedureLocators,
 {
     graph: &'a Graph<'a>,
-    node_contexts: HashMap<Node<'a>, NodeContext<R, P, S>>,
+    node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
 }
 
 impl<R, P, S> Context<'_, R, P, S>
@@ -293,8 +298,13 @@ where
     P: PointsToMapping,
     S: SubprocedureLocators,
 {
-    fn generate_constraints_for_node(&self, nd: Node, vman: &mut VariableManager) -> ConstraintSet {
-        let nd_cont = self.node_contexts.get(&nd);
+    fn generate_constraints_for_node(
+        &self,
+        nd_ind: NodeIndex,
+        vman: &mut VariableManager,
+    ) -> ConstraintSet {
+        let nd_cont = self.node_contexts.get(&nd_ind);
+        let nd = self.graph[nd_ind];
         if let Some(nd_cont) = nd_cont {
             match nd {
                 Node::BlkStart(blk, sub) => nd_cont.handle_block_start(blk, vman),
@@ -319,7 +329,7 @@ where
         let mut cs: ConstraintSet = Default::default();
         for nd_ind in self.graph.node_indices() {
             cs = ConstraintSet::from(
-                cs.union(&self.generate_constraints_for_node(self.graph[nd_ind], &mut vman))
+                cs.union(&self.generate_constraints_for_node(nd_ind, &mut vman))
                     .cloned()
                     .collect::<BTreeSet<SubtypeConstraint>>(),
             );
