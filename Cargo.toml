@@ -13,9 +13,10 @@ name = "json_to_constraints"
 
 [dependencies]
 cwe_checker_lib = { git = "ssh://git@github.com/trailofbits/cwe_checker.git" }
+#cwe_checker_lib = { path = "../cwe_checker/src/cwe_checker_lib" }
 serde_json = "1.0"
 bytes = "1.1.0"
-anyhow = "1.0"                                                                 # for easy error types
+anyhow = "1.0"     # for easy error types
 log = "0.4.14"
 petgraph = "0.5.1"
 clap = "~2.33"

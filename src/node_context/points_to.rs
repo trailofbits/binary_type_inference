@@ -13,7 +13,7 @@ use cwe_checker_lib::intermediate_representation::{Arg, ByteSize, Project, Varia
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
-use std::fmt::Pointer;
+use std::fmt::{format, Pointer};
 use std::rc::Rc;
 
 // Each node context holds a reference to

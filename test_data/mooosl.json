@@ -238,7 +238,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         },
         {
@@ -362,7 +362,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         },
         {
@@ -1030,7 +1030,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         },
         {
@@ -1563,7 +1563,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         },
         {
@@ -2331,7 +2331,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         },
         {
@@ -5396,7 +5396,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         },
         {
@@ -6539,7 +6539,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         },
         {
@@ -6648,7 +6648,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         },
         {
@@ -11605,7 +11605,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -13615,7 +13615,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -15392,7 +15392,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -17158,7 +17158,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -19964,7 +19964,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -22840,7 +22840,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -23735,7 +23735,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         },
         {
@@ -27946,7 +27946,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -31663,7 +31663,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -35094,7 +35094,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -41735,7 +41735,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -46441,7 +46441,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": [
+            "locals": [
               {
                 "location": {
                   "mnemonic": "LOAD",
@@ -46702,7 +46702,7 @@
                 "intent": "OUTPUT"
               }
             ],
-            "local_vars": []
+            "locals": []
           }
         }
       ],

@@ -32,7 +32,6 @@ pub fn make_node_contexts<R: RegisterMapping, P: PointsToMapping, S: Subprocedur
             let r = register_contexts.remove(&idx);
             let p = points_to_contexts.remove(&idx);
             let s = subproc_contexts.remove(&idx);
-
             match (r, p, s) {
                 (Some(r), Some(p), Some(s)) => Some((idx, NodeContext::new(r, p, s))),
                 _ => None,
