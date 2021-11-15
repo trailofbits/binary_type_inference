@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use cwe_checker_lib::{
-    analysis::pointer_inference::Config, intermediate_representation::Project,
+    analysis::{graph::Graph, pointer_inference::Config},
+    intermediate_representation::Project,
     utils::binary::RuntimeMemoryImage,
 };
 use petgraph::graph::NodeIndex;
@@ -42,12 +43,10 @@ pub fn make_node_contexts<R: RegisterMapping, P: PointsToMapping, S: Subprocedur
 
 pub fn create_default_context(
     proj: &Project,
+    graph: &Graph,
     config: Config,
     rt_mem: &RuntimeMemoryImage,
 ) -> Result<HashMap<NodeIndex, NodeContext<RegisterContext, PointsToContext, ProcedureContext>>> {
-    let extern_subs = proj.program.term.extern_symbols.keys().cloned().collect();
-    let mut graph = cwe_checker_lib::analysis::graph::get_program_cfg(&proj.program, extern_subs);
-
     let reg_context = register_map::run_analysis(proj, &graph);
 
     let points_to_context = points_to::run_analysis(proj, config, &graph, rt_mem)?;

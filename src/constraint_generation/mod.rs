@@ -321,12 +321,22 @@ where
     node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
 }
 
-impl<R, P, S> Context<'_, R, P, S>
+impl<'a, R, P, S> Context<'a, R, P, S>
 where
     R: RegisterMapping,
     P: PointsToMapping,
     S: SubprocedureLocators,
 {
+    pub fn new(
+        graph: &'a Graph<'a>,
+        node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
+    ) -> Context<'a, R, P, S> {
+        Context {
+            graph,
+            node_contexts,
+        }
+    }
+
     fn generate_constraints_for_node(
         &self,
         nd_ind: NodeIndex,
