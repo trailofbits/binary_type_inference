@@ -3,6 +3,12 @@ name = "binary_type_inference"
 version = "0.1.0"
 edition = "2018"
 
+[lib]
+
+
+[[bin]]
+name = "json_to_constraints"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

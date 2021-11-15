@@ -87,6 +87,14 @@ pub struct NodeContext<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLo
 }
 
 impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContext<R, P, S> {
+    pub fn new(r: R, p: P, s: S) -> NodeContext<R, P, S> {
+        NodeContext {
+            reg_map: r,
+            points_to: p,
+            subprocedure_locators: s,
+        }
+    }
+
     fn evaluate_expression(
         &self,
         value: &Expression,

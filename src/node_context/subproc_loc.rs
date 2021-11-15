@@ -1,23 +1,15 @@
-use std::collections::{BTreeSet, HashMap};
-use std::rc::Rc;
+use std::collections::BTreeSet;
 
+use cwe_checker_lib::intermediate_representation::Arg;
 use cwe_checker_lib::intermediate_representation::{Expression, Variable};
-use cwe_checker_lib::{
-    intermediate_representation::{Arg, Tid},
-    pcode::ArgIntent,
-};
 
 use crate::constraint_generation::{ArgTvar, SubprocedureLocators};
 use crate::constraints::ConstraintSet;
 
-struct Summary {
-    pub formal_args: Vec<Arg>,
-    pub formal_rets: Vec<Arg>,
-}
-
-struct ProcedureContext {
+#[derive(Clone)]
+pub struct ProcedureContext {
     // the procedure context doesnt change
-    stack_pointer: Variable,
+    pub stack_pointer: Variable,
 }
 
 impl SubprocedureLocators for ProcedureContext {
