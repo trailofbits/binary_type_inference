@@ -35,5 +35,7 @@ fn main() -> anyhow::Result<()> {
     let ctx = constraint_generation::Context::new(&graph, nd_context);
     let constraints = ctx.generate_constraints();
 
+    print!("{}", constraints);
+
     Ok(())
 }

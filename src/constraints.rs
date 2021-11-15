@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::fmt::{Display, Write};
 use std::ops::{Deref, DerefMut};
 use std::vec::Vec;
 
@@ -11,6 +12,13 @@ pub struct TypeVariable {
 impl TypeVariable {
     pub fn new(name: String) -> TypeVariable {
         TypeVariable { name }
+    }
+}
+
+impl Display for TypeVariable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.name)?;
+        Ok(())
     }
 }
 
@@ -52,6 +60,12 @@ impl Field {
     }
 }
 
+impl Display for Field {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("σ{}@{}", self.size, self.offset))
+    }
+}
+
 /// This function has an input parameter at the location defined by the parameter index
 /// Note(Ian): In the future if we have our own solvers these locations should be extended to be more
 /// general than indeces.
@@ -75,6 +89,18 @@ pub enum FieldLabel {
     Field(Field),
 }
 
+impl Display for FieldLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FieldLabel::Load => f.write_str("load"),
+            FieldLabel::Store => f.write_str("store"),
+            FieldLabel::In(ind) => f.write_fmt(format_args!("in{}", ind)),
+            FieldLabel::Out(ind) => f.write_fmt(format_args!("out{}", ind)),
+            FieldLabel::Field(field) => field.fmt(f),
+        }
+    }
+}
+
 /// A derived type variable that contains the base [TypeVariable] and an ordered vector of [FieldLabel].
 /// Each label is applied in order to determine the expressed capability on the base type variable.
 /// Variance is determined by the sign monoid of the component [FieldLabel] variances ⊕·⊕ = ⊖·⊖ = ⊕ and ⊕·⊖ = ⊖·⊕ = ⊖
@@ -84,6 +110,17 @@ pub enum FieldLabel {
 pub struct DerivedTypeVar {
     var: TypeVariable,
     labels: Vec<FieldLabel>,
+}
+
+impl Display for DerivedTypeVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.var.fmt(f)?;
+        for l in self.labels.iter() {
+            f.write_char('.')?;
+            l.fmt(f)?;
+        }
+        Ok(())
+    }
 }
 
 impl DerivedTypeVar {
@@ -109,6 +146,12 @@ pub struct SubtypeConstraint {
 impl SubtypeConstraint {
     pub fn new(lhs: DerivedTypeVar, rhs: DerivedTypeVar) -> SubtypeConstraint {
         SubtypeConstraint { lhs, rhs }
+    }
+}
+
+impl Display for SubtypeConstraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ⊑ {}", self.lhs, self.rhs)
     }
 }
 
@@ -142,6 +185,16 @@ impl From<BTreeSet<SubtypeConstraint>> for ConstraintSet {
 impl Default for ConstraintSet {
     fn default() -> ConstraintSet {
         ConstraintSet(BTreeSet::new())
+    }
+}
+
+impl Display for ConstraintSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for cons in self.0.iter() {
+            writeln!(f, "{}", cons)?;
+        }
+
+        Ok(())
     }
 }
 
