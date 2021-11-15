@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use std::ops::Deref;
 
+use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::intermediate_representation::{Project, Sub, Tid, Variable};
 use petgraph::graph::NodeIndex;
@@ -11,11 +12,13 @@ use crate::constraint_generation::{self, RegisterMapping};
 use crate::constraints::{ConstraintSet, DerivedTypeVar, SubtypeConstraint, TypeVariable};
 use cwe_checker_lib::analysis::forward_interprocedural_fixpoint;
 
+/// The context of register definitions for a given program ICFG node.
 pub struct RegisterContext {
     mapping: BTreeMap<Variable, TermSet>,
 }
 
 impl RegisterContext {
+    /// Creates a new register context that can answer register access queries from a reaching definitions [NodeValue].
     pub fn new(mapping: BTreeMap<Variable, TermSet>) -> RegisterContext {
         RegisterContext { mapping }
     }
@@ -81,9 +84,7 @@ impl RegisterMapping for RegisterContext {
 
 /// Runs reaching definitions on the project and produces a mapping from node index to the Register Context.
 /// The register context can be queried to determine the representing type variable for an accessed register
-pub fn run_analysis(proj: &Project) -> HashMap<NodeIndex, RegisterContext> {
-    let externs = proj.program.term.extern_symbols.keys().cloned().collect();
-    let graph = cwe_checker_lib::analysis::graph::get_program_cfg(&proj.program, externs);
+pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, RegisterContext> {
     let cont = Context::new(&graph, &proj.program.term.extern_symbols);
     let mut computation = forward_interprocedural_fixpoint::create_computation(cont, None);
     computation.compute();

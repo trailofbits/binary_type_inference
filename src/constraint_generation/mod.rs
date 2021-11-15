@@ -35,6 +35,12 @@ pub trait RegisterMapping {
     fn access(&self, var: &Variable, vman: &mut VariableManager) -> (TypeVariable, ConstraintSet);
 }
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TypeVariableAccess {
+    pub ty_var: TypeVariable,
+    pub offset: Option<i64>,
+}
+
 /// Maps an address expression and a size to the possible type variables representing the loaded address at this program point.
 /// Implementors of this trait effectively act as memory managers for the type inference algorithm.
 pub trait PointsToMapping {
@@ -45,7 +51,7 @@ pub trait PointsToMapping {
         address: &Expression,
         sz: ByteSize,
         vman: &mut VariableManager,
-    ) -> BTreeSet<TypeVariable>;
+    ) -> BTreeSet<TypeVariableAccess>;
 }
 
 /// Links formal parameters with the type variable for their actual argument at callsites.
@@ -113,13 +119,15 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         constraints
     }
 
-    fn make_mem_tvar(var: TypeVariable, sz: ByteSize, label: FieldLabel) -> DerivedTypeVar {
-        let mut var = DerivedTypeVar::new(var);
-        var.add_field_label(label);
-        var.add_field_label(FieldLabel::Field(Field::new(0, sz.as_bit_length())));
-        var
+    fn make_mem_tvar(var: TypeVariableAccess, sz: ByteSize, label: FieldLabel) -> DerivedTypeVar {
+        let mut der_var = DerivedTypeVar::new(var.ty_var);
+        der_var.add_field_label(label);
+        if let Some(off) = var.offset {
+            der_var.add_field_label(FieldLabel::Field(Field::new(off, sz.as_bit_length())));
+        }
+        der_var
     }
-    fn make_loaded_tvar(var: TypeVariable, sz: ByteSize) -> DerivedTypeVar {
+    fn make_loaded_tvar(var: TypeVariableAccess, sz: ByteSize) -> DerivedTypeVar {
         Self::make_mem_tvar(var, sz, FieldLabel::Load)
     }
 
@@ -138,7 +146,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         )
     }
 
-    fn make_store_tvar(var: TypeVariable, sz: ByteSize) -> DerivedTypeVar {
+    fn make_store_tvar(var: TypeVariableAccess, sz: ByteSize) -> DerivedTypeVar {
         Self::make_mem_tvar(var, sz, FieldLabel::Store)
     }
 
@@ -147,7 +155,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         expr_value: &Expression,
         address: &Expression,
         vman: &mut VariableManager,
-        make_type_var: impl Fn(TypeVariable, ByteSize) -> DerivedTypeVar,
+        make_type_var: impl Fn(TypeVariableAccess, ByteSize) -> DerivedTypeVar,
         memop_is_upcasted: bool,
     ) -> ConstraintSet {
         let (var, mut constraints) = self.evaluate_expression(expr_value, vman);
