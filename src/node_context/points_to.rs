@@ -1,16 +1,18 @@
 use crate::constraint_generation::{PointsToMapping, TypeVariableAccess};
 use crate::constraints::{ConstraintSet, DerivedTypeVar, SubtypeConstraint, TypeVariable};
 use anyhow::Result;
-use cwe_checker_lib::abstract_domain::{AbstractIdentifier, IntervalDomain, TryToBitvec};
+use cwe_checker_lib::abstract_domain::{
+    AbstractIdentifier, DataDomain, IntervalDomain, TryToBitvec,
+};
 use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
 use cwe_checker_lib::analysis::pointer_inference::PointerInference;
 use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, graph};
-use cwe_checker_lib::intermediate_representation::Project;
+use cwe_checker_lib::intermediate_representation::{Arg, ByteSize, Project, Variable};
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
 use petgraph::graph::NodeIndex;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::Pointer;
 use std::rc::Rc;
 
@@ -40,13 +42,27 @@ impl PointsToContext {
         &self,
         object_id: &AbstractIdentifier,
         offset: &IntervalDomain,
+        sz: ByteSize,
     ) -> TypeVariableAccess {
         // TODO(ian): Is this sign always right
         // TODO(ian): we may want to normalize this offset to the abstract object offset
         TypeVariableAccess {
             offset: offset.try_to_offset().ok(),
             ty_var: TypeVariable::new(object_id.to_string()),
+            sz,
         }
+    }
+
+    fn dom_val_to_tvars(
+        &self,
+        dom_val: &DataDomain<IntervalDomain>,
+        sz: ByteSize,
+    ) -> BTreeSet<TypeVariableAccess> {
+        dom_val
+            .get_relative_values()
+            .into_iter()
+            .map(|(a_id, offset)| self.memory_access_into_tvar(a_id, offset, sz))
+            .collect()
     }
 }
 
@@ -56,15 +72,11 @@ impl PointsToMapping for PointsToContext {
     fn points_to(
         &self,
         address: &cwe_checker_lib::intermediate_representation::Expression,
-        _sz: cwe_checker_lib::intermediate_representation::ByteSize,
+        sz: cwe_checker_lib::intermediate_representation::ByteSize,
         _vman: &mut crate::constraints::VariableManager,
     ) -> std::collections::BTreeSet<TypeVariableAccess> {
         let dom_val = self.pointer_state.eval(address);
-        dom_val
-            .get_relative_values()
-            .into_iter()
-            .map(|(a_id, offset)| self.memory_access_into_tvar(a_id, offset))
-            .collect()
+        self.dom_val_to_tvars(&dom_val, sz)
     }
 }
 

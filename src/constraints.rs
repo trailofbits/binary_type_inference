@@ -14,7 +14,7 @@ impl TypeVariable {
     }
 }
 
-/// Manages ephmeral type variables
+/// Manages ephemeral type variables
 pub struct VariableManager {
     curr_id: u64,
 }

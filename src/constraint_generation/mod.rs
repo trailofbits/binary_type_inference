@@ -1,6 +1,7 @@
 use cwe_checker_lib::{
     analysis::graph::{Graph, Node},
     intermediate_representation::{Arg, Blk, Def, Sub, Term},
+    utils::binary::RuntimeMemoryImage,
 };
 use petgraph::{graph::NodeIndex, visit::Dfs};
 
@@ -38,6 +39,7 @@ pub trait RegisterMapping {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TypeVariableAccess {
     pub ty_var: TypeVariable,
+    pub sz: ByteSize,
     pub offset: Option<i64>,
 }
 
@@ -54,6 +56,12 @@ pub trait PointsToMapping {
     ) -> BTreeSet<TypeVariableAccess>;
 }
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ArgTvar {
+    MemTvar(TypeVariableAccess),
+    VariableTvar(TypeVariable),
+}
+
 /// Links formal parameters with the type variable for their actual argument at callsites.
 /// Additionally, links actual returns to formal returns at return sites.
 pub trait SubprocedureLocators {
@@ -65,7 +73,7 @@ pub trait SubprocedureLocators {
         reg: &impl RegisterMapping,
         points_to: &impl PointsToMapping,
         vm: &mut VariableManager,
-    ) -> (BTreeSet<TypeVariable>, ConstraintSet);
+    ) -> (BTreeSet<ArgTvar>, ConstraintSet);
 }
 
 /// Represents the flow-sensitive context needed by flow-insensitive constraint generation to generate type variables and constraints at a given program point.
@@ -119,16 +127,16 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         constraints
     }
 
-    fn make_mem_tvar(var: TypeVariableAccess, sz: ByteSize, label: FieldLabel) -> DerivedTypeVar {
+    fn make_mem_tvar(var: TypeVariableAccess, label: FieldLabel) -> DerivedTypeVar {
         let mut der_var = DerivedTypeVar::new(var.ty_var);
         der_var.add_field_label(label);
         if let Some(off) = var.offset {
-            der_var.add_field_label(FieldLabel::Field(Field::new(off, sz.as_bit_length())));
+            der_var.add_field_label(FieldLabel::Field(Field::new(off, var.sz.as_bit_length())));
         }
         der_var
     }
-    fn make_loaded_tvar(var: TypeVariableAccess, sz: ByteSize) -> DerivedTypeVar {
-        Self::make_mem_tvar(var, sz, FieldLabel::Load)
+    fn make_loaded_tvar(var: TypeVariableAccess) -> DerivedTypeVar {
+        Self::make_mem_tvar(var, FieldLabel::Load)
     }
 
     fn apply_load(
@@ -146,8 +154,8 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         )
     }
 
-    fn make_store_tvar(var: TypeVariableAccess, sz: ByteSize) -> DerivedTypeVar {
-        Self::make_mem_tvar(var, sz, FieldLabel::Store)
+    fn make_store_tvar(var: TypeVariableAccess) -> DerivedTypeVar {
+        Self::make_mem_tvar(var, FieldLabel::Store)
     }
 
     fn apply_mem_op(
@@ -155,7 +163,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         expr_value: &Expression,
         address: &Expression,
         vman: &mut VariableManager,
-        make_type_var: impl Fn(TypeVariableAccess, ByteSize) -> DerivedTypeVar,
+        make_type_var: impl Fn(TypeVariableAccess) -> DerivedTypeVar,
         memop_is_upcasted: bool,
     ) -> ConstraintSet {
         let (var, mut constraints) = self.evaluate_expression(expr_value, vman);
@@ -163,10 +171,8 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         let all_tvars = self
             .points_to
             .points_to(address, expr_value.bytesize(), vman);
-        let all_dtvars: BTreeSet<DerivedTypeVar> = all_tvars
-            .into_iter()
-            .map(|tv| make_type_var(tv, expr_value.bytesize()))
-            .collect();
+        let all_dtvars: BTreeSet<DerivedTypeVar> =
+            all_tvars.into_iter().map(|tv| make_type_var(tv)).collect();
 
         all_dtvars
             .into_iter()
@@ -215,6 +221,13 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             })
     }
 
+    fn argtvar_to_dtv(tvar: ArgTvar) -> DerivedTypeVar {
+        match tvar {
+            ArgTvar::VariableTvar(tv) => DerivedTypeVar::new(tv),
+            ArgTvar::MemTvar(tv_access) => Self::make_loaded_tvar(tv_access),
+        }
+    }
+
     fn arg_to_constraints(
         &self,
         target_func: &Term<Sub>,
@@ -233,9 +246,9 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             .into_iter()
             .map(|tvar| {
                 if arg_is_subtype_of_representations {
-                    SubtypeConstraint::new(base_var.clone(), DerivedTypeVar::new(tvar))
+                    SubtypeConstraint::new(base_var.clone(), Self::argtvar_to_dtv(tvar))
                 } else {
-                    SubtypeConstraint::new(DerivedTypeVar::new(tvar), base_var.clone())
+                    SubtypeConstraint::new(Self::argtvar_to_dtv(tvar), base_var.clone())
                 }
             })
             .for_each(|cons| {
@@ -282,7 +295,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     fn handle_return(&self, return_from: &Term<Sub>, vm: &mut VariableManager) -> ConstraintSet {
         self.handle_function_args(
             return_from,
-            &return_from.term.formal_args,
+            &return_from.term.formal_rets,
             vm,
             &|ind| FieldLabel::Out(ind),
             true,
@@ -318,11 +331,11 @@ where
                 Node::BlkStart(blk, sub) => nd_cont.handle_block_start(blk, vman),
                 Node::CallReturn {
                     call,
-                    return_: (return_blk, return_proc),
+                    return_: (returned_to_blk, return_proc),
                 } => nd_cont.handle_return(return_proc, vman),
                 Node::CallSource {
                     source,
-                    target: (target_blk, target_func),
+                    target: (calling_blk, target_func),
                 } => nd_cont.handle_call(target_func, vman),
                 // block post conditions arent needed to generate constraints
                 Node::BlkEnd(_blk, _term) => Default::default(),
