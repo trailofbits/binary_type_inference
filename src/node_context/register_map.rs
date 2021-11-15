@@ -7,6 +7,7 @@ use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::intermediate_representation::{ByteSize, Project, Sub, Tid, Variable};
 use petgraph::graph::NodeIndex;
+use petgraph::EdgeDirection::Incoming;
 
 use crate::analysis::reaching_definitions::{Context, TermSet};
 use crate::constraint_generation::{self, RegisterMapping};
@@ -92,7 +93,16 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
 
     let entry_sub_to_entry_node_map =
         pointer_inference::compute_entry_function_to_entry_node_map(proj, graph);
-    for (_sub_tid, start_node_index) in entry_sub_to_entry_node_map.into_iter() {
+
+    let speculative_points = graph
+        .node_indices()
+        .filter(|nd_idx| graph.edges_directed(*nd_idx, Incoming).count() == 0);
+
+    for start_node_index in entry_sub_to_entry_node_map
+        .into_iter()
+        .map(|(sub_tid, ndidx)| ndidx)
+        .chain(speculative_points)
+    {
         computation.set_node_value(
             start_node_index,
             cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue::Value(
