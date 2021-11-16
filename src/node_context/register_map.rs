@@ -116,7 +116,11 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
         .node_values()
         .iter()
         .filter_map(|(ind, dom_map)| match dom_map {
-            NodeValue::CallFlowCombinator { .. } => None,
+            NodeValue::CallFlowCombinator {
+                call_stub,
+                interprocedural_flow,
+            } => super::merge_values(call_stub, interprocedural_flow)
+                .map(|x| (ind.clone(), RegisterContext::new(x.deref().clone()))),
             NodeValue::Value(v) => Some((ind.clone(), RegisterContext::new(v.deref().clone()))),
         })
         .collect()

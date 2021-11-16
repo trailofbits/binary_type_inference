@@ -1556,6 +1556,14 @@
             "formals": [
               {
                 "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
                   "name": "RAX",
                   "size": 8,
                   "is_virtual": false
@@ -11598,6 +11606,22 @@
             "formals": [
               {
                 "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
+                  "name": "RSI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
                   "name": "RAX",
                   "size": 8,
                   "is_virtual": false
@@ -15385,6 +15409,14 @@
             "formals": [
               {
                 "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
                   "name": "RAX",
                   "size": 8,
                   "is_virtual": false
@@ -17149,6 +17181,14 @@
               }
             ],
             "formals": [
+              {
+                "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
               {
                 "var": {
                   "name": "RAX",
@@ -19955,6 +19995,22 @@
               }
             ],
             "formals": [
+              {
+                "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
+                  "name": "RSI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
               {
                 "var": {
                   "name": "RAX",
@@ -22831,6 +22887,22 @@
               }
             ],
             "formals": [
+              {
+                "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
+                  "name": "RSI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
               {
                 "var": {
                   "name": "RAX",
@@ -27937,6 +28009,22 @@
               }
             ],
             "formals": [
+              {
+                "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
+                  "name": "RSI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
               {
                 "var": {
                   "name": "RAX",

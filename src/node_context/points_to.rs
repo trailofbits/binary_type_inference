@@ -5,7 +5,7 @@ use cwe_checker_lib::abstract_domain::{
     AbstractIdentifier, DataDomain, IntervalDomain, TryToBitvec,
 };
 use cwe_checker_lib::analysis::graph::Graph;
-use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
+use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::{merge_option, NodeValue};
 use cwe_checker_lib::analysis::pointer_inference;
 use cwe_checker_lib::analysis::pointer_inference::PointerInference;
 use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, graph};
@@ -92,7 +92,11 @@ pub fn run_analysis<'a>(
         .node_indices()
         .filter_map(|idx| {
             pointer_res.get_node_value(idx).and_then(|nv| match nv {
-                NodeValue::CallFlowCombinator { .. } => None,
+                NodeValue::CallFlowCombinator {
+                    call_stub,
+                    interprocedural_flow,
+                } => super::merge_values(call_stub, interprocedural_flow)
+                    .map(|x| (idx.clone(), PointsToContext::new(x))),
                 NodeValue::Value(v) => Some((idx.clone(), PointsToContext::new(v.clone()))),
             })
         })

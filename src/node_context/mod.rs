@@ -1,7 +1,12 @@
 use std::collections::HashMap;
 
 use cwe_checker_lib::{
-    analysis::{graph::Graph, pointer_inference::Config},
+    abstract_domain::AbstractDomain,
+    analysis::{
+        graph::{Graph, Node},
+        interprocedural_fixpoint_generic::merge_option,
+        pointer_inference::Config,
+    },
     intermediate_representation::Project,
     utils::binary::RuntimeMemoryImage,
 };
@@ -32,6 +37,7 @@ pub fn make_node_contexts<R: RegisterMapping, P: PointsToMapping, S: Subprocedur
             let r = register_contexts.remove(&idx);
             let p = points_to_contexts.remove(&idx);
             let s = subproc_contexts.remove(&idx);
+
             match (r, p, s) {
                 (Some(r), Some(p), Some(s)) => Some((idx, NodeContext::new(r, p, s))),
                 _ => None,
@@ -64,4 +70,8 @@ pub fn create_default_context(
         proc_context,
         graph.node_indices(),
     ))
+}
+
+fn merge_values<T: AbstractDomain>(v1: &Option<T>, v2: &Option<T>) -> Option<T> {
+    merge_option(v1, v1, |x, y| x.merge(y))
 }

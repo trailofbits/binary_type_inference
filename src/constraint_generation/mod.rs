@@ -344,6 +344,7 @@ where
     ) -> ConstraintSet {
         let nd_cont = self.node_contexts.get(&nd_ind);
         let nd = self.graph[nd_ind];
+
         if let Some(nd_cont) = nd_cont {
             match nd {
                 Node::BlkStart(blk, sub) => nd_cont.handle_block_start(blk, vman),
