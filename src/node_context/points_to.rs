@@ -11,11 +11,11 @@ use cwe_checker_lib::analysis::pointer_inference::PointerInference;
 use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, graph};
 use cwe_checker_lib::intermediate_representation::{Arg, ByteSize, Project, Variable};
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
+use log::warn;
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::{format, Pointer};
 use std::rc::Rc;
-
 // Each node context holds a reference to
 pub struct PointsToContext {
     pointer_state: pointer_inference::State,
@@ -44,11 +44,28 @@ impl PointsToContext {
         offset: &IntervalDomain,
         sz: ByteSize,
     ) -> TypeVariableAccess {
-        // TODO(ian): Is this sign always right
+        // TODO(ian): So retypd doesnt handle negative offsets, how do we handle this
         // TODO(ian): we may want to normalize this offset to the abstract object offset
         TypeVariableAccess {
-            offset: offset.try_to_offset().ok(),
-            ty_var: TypeVariable::new(object_id.to_string()),
+            offset: offset.try_to_offset().ok().and_then(|off| {
+                if off.is_negative() {
+                    warn!(
+                        "Unhandled negative offset {:?} {}",
+                        object_id.to_string(),
+                        off
+                    );
+                    None
+                } else {
+                    Some(off)
+                }
+            }),
+            ty_var: TypeVariable::new(
+                object_id
+                    .to_string()
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect(),
+            ),
             sz,
         }
     }

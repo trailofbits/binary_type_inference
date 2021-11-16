@@ -3,6 +3,7 @@ use clap::{App, Arg};
 use cwe_checker_lib::{analysis::pointer_inference::Config, utils::binary::RuntimeMemoryImage};
 
 fn main() -> anyhow::Result<()> {
+    env_logger::init();
     let matches = App::new("json_to_constraints")
         .arg(Arg::with_name("input_bin").required(true).index(1))
         .arg(Arg::with_name("input_json").required(true).index(2))

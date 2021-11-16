@@ -1,3 +1,4 @@
+use log::error;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Write};
 use std::ops::{Deref, DerefMut};
@@ -94,8 +95,13 @@ impl Display for FieldLabel {
         match self {
             FieldLabel::Load => f.write_str("load"),
             FieldLabel::Store => f.write_str("store"),
-            FieldLabel::In(ind) => f.write_fmt(format_args!("in{}", ind)),
-            FieldLabel::Out(ind) => f.write_fmt(format_args!("out{}", ind)),
+            FieldLabel::In(ind) => f.write_fmt(format_args!("in_{}", ind)),
+            FieldLabel::Out(ind) => {
+                if *ind != 0 {
+                    error!("Multi return field label cannot be converted to retypd constraints");
+                }
+                f.write_str("out")
+            }
             FieldLabel::Field(field) => field.fmt(f),
         }
     }
