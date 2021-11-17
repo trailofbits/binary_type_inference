@@ -22,13 +22,13 @@ impl<'a> Context<'a> {
         extern_symbol_map: &'a BTreeMap<Tid, ExternSymbol>,
     ) -> Context<'a> {
         Context {
-            graph: graph,
-            extern_symbol_map: extern_symbol_map,
+            graph,
+            extern_symbol_map,
         }
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct TermSet(pub BTreeSet<Tid>);
 
 impl AbstractDomain for TermSet {

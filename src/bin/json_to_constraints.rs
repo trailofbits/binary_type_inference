@@ -17,7 +17,9 @@ fn main() -> anyhow::Result<()> {
     let json_file = std::fs::File::open(input_json).expect("unable to read json");
 
     let mut ir = util::get_intermediate_representation_for_reader(json_file, &bin_bytes)?;
-    ir.normalize();
+
+    ir.normalize().iter().for_each(|v| util::log_cwe_message(v));
+
     let extern_subs = ir.program.term.extern_symbols.keys().cloned().collect();
     let graph = cwe_checker_lib::analysis::graph::get_program_cfg(&ir.program, extern_subs);
 

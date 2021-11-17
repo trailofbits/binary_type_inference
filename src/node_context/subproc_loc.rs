@@ -7,8 +7,9 @@ use crate::constraint_generation::{ArgTvar, SubprocedureLocators};
 use crate::constraints::ConstraintSet;
 
 #[derive(Clone)]
+/// The context for a node needed to evaluate an argument specification.
 pub struct ProcedureContext {
-    // the procedure context doesnt change
+    /// The procedure context doesnt change. It only needs to know about the stack variable for this project.
     pub stack_pointer: Variable,
 }
 
@@ -30,14 +31,14 @@ impl SubprocedureLocators for ProcedureContext {
             Arg::Stack { offset, size, .. } => {
                 let accessed_pointers = points_to.points_to(
                     &Expression::Var(self.stack_pointer.clone()).plus_const(*offset),
-                    size.clone(),
+                    *size,
                     vm,
                 );
 
                 (
                     accessed_pointers
                         .into_iter()
-                        .map(|tv_access| ArgTvar::MemTvar(tv_access))
+                        .map(ArgTvar::MemTvar)
                         .collect(),
                     ConstraintSet::empty(),
                 )

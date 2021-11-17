@@ -11,6 +11,7 @@ pub mod constraint_generation;
 /// Our model of subtyping constraints
 pub mod constraints;
 
+/// Node contexts handle flow/context sensitive information for a given node's type constraints.
 pub mod node_context;
 
 #[cfg(test)]

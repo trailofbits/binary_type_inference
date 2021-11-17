@@ -1,29 +1,31 @@
 use cwe_checker_lib::{
     analysis::graph::{Graph, Node},
     intermediate_representation::{Arg, Blk, Def, Sub, Term},
-    utils::binary::RuntimeMemoryImage,
 };
-use petgraph::{graph::NodeIndex, visit::Dfs};
+use petgraph::graph::NodeIndex;
 
 use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variable};
 
 use cwe_checker_lib::intermediate_representation::Tid;
 
 use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, Field, FieldLabel, In, SubtypeConstraint, TypeVariable,
+    ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable,
     VariableManager,
 };
 
 use std::collections::{btree_set::BTreeSet, HashMap};
 
+/// Gets a type variable for a [Tid] where multiple type variables need to exist at that [Tid] which are distinguished by which [Variable] they operate over.
 pub fn tid_indexed_by_variable(tid: &Tid, var: &Variable) -> TypeVariable {
     TypeVariable::new(tid.get_str_repr().to_owned() + "_" + &var.name)
 }
 
+/// Converts a [Tid] to a [TypeVariable] by retrieving the string representation of the TID
 pub fn tid_to_tvar(tid: &Tid) -> TypeVariable {
     TypeVariable::new(tid.get_str_repr().to_owned())
 }
 
+/// Converts a term to a TypeVariable by using its unique term identifier (Tid).
 pub fn term_to_tvar<T>(term: &Term<T>) -> TypeVariable {
     tid_to_tvar(&term.tid)
 }
@@ -37,9 +39,13 @@ pub trait RegisterMapping {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// Describes a [TypeVariable] for an abstract memory location where the acess may occur at some fixed offset into the type variable's cell.
 pub struct TypeVariableAccess {
+    /// The type variable which is accessed
     pub ty_var: TypeVariable,
+    /// The size of the access
     pub sz: ByteSize,
+    /// The potential constant offset at which the access occurs
     pub offset: Option<i64>,
 }
 
@@ -57,8 +63,11 @@ pub trait PointsToMapping {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// An arg can either be a memory access (generally passed via the stack), or directly avialable in a variable.
 pub enum ArgTvar {
+    /// Describes how to access the argument as a memory variable.
     MemTvar(TypeVariableAccess),
+    /// Describes an argument in a register.
     VariableTvar(TypeVariable),
 }
 
@@ -87,6 +96,7 @@ pub struct NodeContext<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLo
 }
 
 impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContext<R, P, S> {
+    /// Given a register, pointer, and subprocedure mapping, generates a full NodeContext.
     pub fn new(r: R, p: P, s: S) -> NodeContext<R, P, S> {
         NodeContext {
             reg_map: r,
@@ -102,7 +112,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     ) -> (TypeVariable, ConstraintSet) {
         match &value {
             Expression::Var(v2) => {
-                let (rhs_type_var, additional_constraints) = self.reg_map.access(&v2, vman);
+                let (rhs_type_var, additional_constraints) = self.reg_map.access(v2, vman);
                 (rhs_type_var, additional_constraints)
             }
             _ => (vman.fresh(), ConstraintSet::empty()), // TODO(ian) handle additional constraints, add/sub
@@ -129,7 +139,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         value: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        let (typ_var, mut constraints) = self.reg_map.access(&var, vman);
+        let (typ_var, mut constraints) = self.reg_map.access(var, vman);
         let new_cons = self.generate_expression_constraint(typ_var, value, vman);
         constraints.insert_all(&new_cons);
         constraints
@@ -278,7 +288,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     fn handle_function_args(
         &self,
         target_function: &Term<Sub>,
-        args: &Vec<Arg>,
+        args: &[Arg],
         vm: &mut VariableManager,
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
         arg_is_subtype_of_representations: bool,
@@ -311,6 +321,8 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     }
 }
 
+/// Holds a mapping between the nodes and their flow-sensitive analysis results, which
+/// are needed for constraint generation
 pub struct Context<'a, R, P, S>
 where
     R: RegisterMapping,
@@ -327,6 +339,7 @@ where
     P: PointsToMapping,
     S: SubprocedureLocators,
 {
+    /// Creates a new context for type constraint generation.
     pub fn new(
         graph: &'a Graph<'a>,
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
@@ -347,14 +360,14 @@ where
 
         if let Some(nd_cont) = nd_cont {
             match nd {
-                Node::BlkStart(blk, sub) => nd_cont.handle_block_start(blk, vman),
+                Node::BlkStart(blk, _sub) => nd_cont.handle_block_start(blk, vman),
                 Node::CallReturn {
-                    call,
-                    return_: (returned_to_blk, return_proc),
+                    call: _call,
+                    return_: (_returned_to_blk, return_proc),
                 } => nd_cont.handle_return(return_proc, vman),
                 Node::CallSource {
-                    source,
-                    target: (calling_blk, target_func),
+                    source: _source,
+                    target: (_calling_blk, target_func),
                 } => nd_cont.handle_call(target_func, vman),
                 // block post conditions arent needed to generate constraints
                 Node::BlkEnd(_blk, _term) => Default::default(),
@@ -364,6 +377,7 @@ where
         }
     }
 
+    /// Walks all of the nodes and gather the inferred subtyping constraints.
     pub fn generate_constraints(&self) -> ConstraintSet {
         let mut vman = VariableManager::new();
         let mut cs: ConstraintSet = Default::default();

@@ -1,22 +1,19 @@
 use crate::constraint_generation::{PointsToMapping, TypeVariableAccess};
-use crate::constraints::{ConstraintSet, DerivedTypeVar, SubtypeConstraint, TypeVariable};
+use crate::constraints::TypeVariable;
 use anyhow::Result;
 use cwe_checker_lib::abstract_domain::{
     AbstractIdentifier, DataDomain, IntervalDomain, TryToBitvec,
 };
 use cwe_checker_lib::analysis::graph::Graph;
-use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::{merge_option, NodeValue};
+use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
-use cwe_checker_lib::analysis::pointer_inference::PointerInference;
-use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, graph};
-use cwe_checker_lib::intermediate_representation::{Arg, ByteSize, Project, Variable};
+use cwe_checker_lib::intermediate_representation::{ByteSize, Project};
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
 use log::warn;
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
-use std::fmt::{format, Pointer};
-use std::rc::Rc;
-// Each node context holds a reference to
+
+/// Holds a pointer_inference state for a node in order to mantain a type variable mapping for pointers.
 pub struct PointsToContext {
     pointer_state: pointer_inference::State,
 }
@@ -77,7 +74,7 @@ impl PointsToContext {
     ) -> BTreeSet<TypeVariableAccess> {
         dom_val
             .get_relative_values()
-            .into_iter()
+            .iter()
             .map(|(a_id, offset)| self.memory_access_into_tvar(a_id, offset, sz))
             .collect()
     }
@@ -97,6 +94,7 @@ impl PointsToMapping for PointsToContext {
     }
 }
 
+/// Runs analysis on the project to generate a [PointsToMapping]
 pub fn run_analysis<'a>(
     proj: &'a Project,
     config: pointer_inference::Config,
@@ -112,9 +110,15 @@ pub fn run_analysis<'a>(
                 NodeValue::CallFlowCombinator {
                     call_stub,
                     interprocedural_flow,
-                } => super::merge_values(call_stub, interprocedural_flow)
-                    .map(|x| (idx.clone(), PointsToContext::new(x))),
-                NodeValue::Value(v) => Some((idx.clone(), PointsToContext::new(v.clone()))),
+                } => (if interprocedural_flow.is_some() {
+                    interprocedural_flow
+                } else {
+                    call_stub
+                })
+                .as_ref()
+                .map(|v| (idx, PointsToContext::new(v.clone()))),
+
+                NodeValue::Value(v) => Some((idx, PointsToContext::new(v.clone()))),
             })
         })
         .collect())

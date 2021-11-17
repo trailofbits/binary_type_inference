@@ -5,7 +5,7 @@ use std::ops::Deref;
 use cwe_checker_lib::abstract_domain::DomainMap;
 use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
-use cwe_checker_lib::intermediate_representation::{ByteSize, Project, Sub, Tid, Variable};
+use cwe_checker_lib::intermediate_representation::{Project, Tid, Variable};
 use petgraph::graph::NodeIndex;
 use petgraph::EdgeDirection::Incoming;
 
@@ -26,7 +26,7 @@ impl RegisterContext {
     }
 
     fn create_empty_var_name(
-        var: &Variable,
+        _var: &Variable,
         vman: &mut crate::constraints::VariableManager,
     ) -> TypeVariable {
         vman.fresh()
@@ -87,7 +87,7 @@ impl RegisterMapping for RegisterContext {
 /// Runs reaching definitions on the project and produces a mapping from node index to the Register Context.
 /// The register context can be queried to determine the representing type variable for an accessed register
 pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, RegisterContext> {
-    let cont = Context::new(&graph, &proj.program.term.extern_symbols);
+    let cont = Context::new(graph, &proj.program.term.extern_symbols);
     let bottom_btree = BTreeMap::new();
     let mut computation = forward_interprocedural_fixpoint::create_computation(cont, None);
 
@@ -100,7 +100,7 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
 
     for start_node_index in entry_sub_to_entry_node_map
         .into_iter()
-        .map(|(sub_tid, ndidx)| ndidx)
+        .map(|(_sub_tid, ndidx)| ndidx)
         .chain(speculative_points)
     {
         computation.set_node_value(
@@ -119,9 +119,14 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
             NodeValue::CallFlowCombinator {
                 call_stub,
                 interprocedural_flow,
-            } => super::merge_values(call_stub, interprocedural_flow)
-                .map(|x| (ind.clone(), RegisterContext::new(x.deref().clone()))),
-            NodeValue::Value(v) => Some((ind.clone(), RegisterContext::new(v.deref().clone()))),
+            } => (if interprocedural_flow.is_some() {
+                interprocedural_flow
+            } else {
+                call_stub
+            })
+            .as_ref()
+            .map(|v| (*ind, RegisterContext::new(v.deref().clone()))),
+            NodeValue::Value(v) => Some((*ind, RegisterContext::new(v.deref().clone()))),
         })
         .collect()
 }

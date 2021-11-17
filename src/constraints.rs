@@ -11,7 +11,9 @@ pub struct TypeVariable {
 }
 
 impl TypeVariable {
+    /// Create a new type variable with the given name
     pub fn new(name: String) -> TypeVariable {
+        //TODO(ian): Maybe we should check the validity of the name here.
         TypeVariable { name }
     }
 }
@@ -56,6 +58,7 @@ pub struct Field {
 }
 
 impl Field {
+    /// creates a new field access at a byte offset and bit-width size.
     pub fn new(offset: i64, size: usize) -> Field {
         Field { offset, size }
     }
@@ -72,6 +75,7 @@ impl Display for Field {
 /// general than indeces.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct In {
+    /// The parameter index starting from 0
     pub param_index: usize,
 }
 
@@ -130,6 +134,7 @@ impl Display for DerivedTypeVar {
 }
 
 impl DerivedTypeVar {
+    /// Creates a derived type variable with no field labels.
     pub fn new(base_var: TypeVariable) -> DerivedTypeVar {
         DerivedTypeVar {
             var: base_var,
@@ -137,6 +142,7 @@ impl DerivedTypeVar {
         }
     }
 
+    /// Adds a field label to this derived type variable's list of field lables. Adds to the end of the list.
     pub fn add_field_label(&mut self, lab: FieldLabel) {
         self.labels.push(lab);
     }
@@ -150,6 +156,7 @@ pub struct SubtypeConstraint {
 }
 
 impl SubtypeConstraint {
+    /// Create a subtype constraint where lhs is a subtype of rhs.
     pub fn new(lhs: DerivedTypeVar, rhs: DerivedTypeVar) -> SubtypeConstraint {
         SubtypeConstraint { lhs, rhs }
     }
@@ -165,18 +172,21 @@ impl Display for SubtypeConstraint {
 pub struct ConstraintSet(BTreeSet<SubtypeConstraint>);
 
 impl ConstraintSet {
+    /// Insert all the constraints from [cons] into this constraint set.
     pub fn insert_all(&mut self, cons: &ConstraintSet) {
         cons.0.iter().cloned().for_each(|con| {
             self.0.insert(con);
         });
     }
 
+    /// A singleton constraint set with one subtyping relation.
     pub fn singleton(cons: SubtypeConstraint) -> ConstraintSet {
         let mut emp = ConstraintSet::empty();
         emp.insert(cons);
         emp
     }
 
+    /// An empty constraint set
     pub fn empty() -> ConstraintSet {
         ConstraintSet(BTreeSet::new())
     }
