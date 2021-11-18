@@ -7,20 +7,24 @@ use cwe_checker_lib::abstract_domain::{
 use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
-use cwe_checker_lib::intermediate_representation::{ByteSize, Project};
+use cwe_checker_lib::intermediate_representation::{ByteSize, Project, Variable};
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
-use log::warn;
+use log::{error, info, warn};
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
 
 /// Holds a pointer_inference state for a node in order to mantain a type variable mapping for pointers.
 pub struct PointsToContext {
     pointer_state: pointer_inference::State,
+    pub stack_pointer: Variable,
 }
 
 impl PointsToContext {
-    fn new(st: pointer_inference::State) -> PointsToContext {
-        PointsToContext { pointer_state: st }
+    fn new(st: pointer_inference::State, stack_pointer: Variable) -> PointsToContext {
+        PointsToContext {
+            pointer_state: st,
+            stack_pointer,
+        }
     }
 }
 
@@ -41,19 +45,47 @@ impl PointsToContext {
         offset: &IntervalDomain,
         sz: ByteSize,
     ) -> TypeVariableAccess {
-        // TODO(ian): So retypd doesnt handle negative offsets, how do we handle this
         // TODO(ian): we may want to normalize this offset to the abstract object offset
+        // TODO(ian): This normalizes to the *current* stack size but this could cause overlaps if we have say stack params.
         TypeVariableAccess {
             offset: offset.try_to_offset().ok().and_then(|off| {
-                if off.is_negative() {
+                let mut curr_offset = off;
+                if &self.pointer_state.stack_id == object_id {
+                    // access on our current stack
+                    // so safe to normalize to positive
+                    if let Some((_stack_id, sp_off)) = self
+                        .pointer_state
+                        .get_register(&self.stack_pointer)
+                        .get_if_unique_target()
+                    {
+                        if let Ok(curr_size) = sp_off.try_to_offset() {
+                            if (-curr_size) < (-curr_offset) {
+                                warn!(
+                                    "Accessing stack offset {} when size is {}",
+                                    curr_offset, curr_size
+                                );
+                            }
+                            info!(
+                                "Updating offset {} by {} to {}",
+                                curr_offset,
+                                -curr_size,
+                                curr_offset - curr_size
+                            );
+                            curr_offset = curr_offset - curr_size;
+                        }
+                    }
+                }
+
+                if curr_offset.is_negative() {
                     warn!(
-                        "Unhandled negative offset {:?} {}",
+                        "Unhandled negative offset {:?} {} stack_id: {},",
                         object_id.to_string(),
-                        off
+                        curr_offset,
+                        self.pointer_state.stack_id,
                     );
                     None
                 } else {
-                    Some(off)
+                    Some(curr_offset)
                 }
             }),
             ty_var: TypeVariable::new(
@@ -116,9 +148,17 @@ pub fn run_analysis<'a>(
                     call_stub
                 })
                 .as_ref()
-                .map(|v| (idx, PointsToContext::new(v.clone()))),
+                .map(|v| {
+                    (
+                        idx,
+                        PointsToContext::new(v.clone(), proj.stack_pointer_register.clone()),
+                    )
+                }),
 
-                NodeValue::Value(v) => Some((idx, PointsToContext::new(v.clone()))),
+                NodeValue::Value(v) => Some((
+                    idx,
+                    PointsToContext::new(v.clone(), proj.stack_pointer_register.clone()),
+                )),
             })
         })
         .collect())

@@ -1,0 +1,3 @@
+[submodule "external/retypd"]
+	path = external/retypd
+	url = https://github.com/GrammaTech/retypd
