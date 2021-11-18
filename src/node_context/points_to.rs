@@ -9,13 +9,14 @@ use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
 use cwe_checker_lib::intermediate_representation::{ByteSize, Project, Variable};
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
-use log::{error, info, warn};
+use log::{info, warn};
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
 
 /// Holds a pointer_inference state for a node in order to mantain a type variable mapping for pointers.
 pub struct PointsToContext {
     pointer_state: pointer_inference::State,
+    /// Stack pointer for the program, used to determine the stack offset
     pub stack_pointer: Variable,
 }
 
@@ -71,7 +72,7 @@ impl PointsToContext {
                                 -curr_size,
                                 curr_offset - curr_size
                             );
-                            curr_offset = curr_offset - curr_size;
+                            curr_offset -= curr_size;
                         }
                     }
                 }
