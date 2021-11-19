@@ -2,6 +2,7 @@ use cwe_checker_lib::{
     analysis::graph::{Graph, Node},
     intermediate_representation::{Arg, Blk, Def, Sub, Term},
 };
+use log::warn;
 use petgraph::graph::NodeIndex;
 
 use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variable};
@@ -13,6 +14,7 @@ use crate::constraints::{
     VariableManager,
 };
 
+use log::error;
 use std::collections::{btree_set::BTreeSet, HashMap};
 
 /// Gets a type variable for a [Tid] where multiple type variables need to exist at that [Tid] which are distinguished by which [Variable] they operate over.
@@ -28,6 +30,11 @@ pub fn tid_to_tvar(tid: &Tid) -> TypeVariable {
 /// Converts a term to a TypeVariable by using its unique term identifier (Tid).
 pub fn term_to_tvar<T>(term: &Term<T>) -> TypeVariable {
     tid_to_tvar(&term.tid)
+}
+
+/// Creates an actual argument type variable for the procedure
+pub fn arg_tvar(index: usize, target_sub: &Tid) -> TypeVariable {
+    TypeVariable::new(format!("arg_{}_{}", target_sub.get_str_repr(), index))
 }
 
 /// Maps a variable (register) to it's representing type variable at this time step in the program. This type variable is some representation of
@@ -115,7 +122,10 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                 let (rhs_type_var, additional_constraints) = self.reg_map.access(v2, vman);
                 (rhs_type_var, additional_constraints)
             }
-            _ => (vman.fresh(), ConstraintSet::empty()), // TODO(ian) handle additional constraints, add/sub
+            _ => {
+                warn!("Unhandled expression: {:?}", value);
+                (vman.fresh(), ConstraintSet::empty())
+            } // TODO(ian) handle additional constraints, add/sub
         }
     }
 
@@ -135,11 +145,13 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn apply_assign(
         &self,
+        tid: &Tid,
         var: &Variable,
         value: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        let (typ_var, mut constraints) = self.reg_map.access(var, vman);
+        let mut constraints = ConstraintSet::default();
+        let typ_var = tid_indexed_by_variable(tid, var);
         let new_cons = self.generate_expression_constraint(typ_var, value, vman);
         constraints.insert_all(&new_cons);
         constraints
@@ -159,11 +171,16 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn apply_load(
         &self,
+        tid: &Tid,
         v_into: &Variable,
         address: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
+        let constraints = ConstraintSet::default();
+        let typ_var = tid_indexed_by_variable(tid, v_into);
         self.apply_mem_op(
+            typ_var,
+            constraints,
             &Expression::Var(v_into.clone()),
             address,
             vman,
@@ -178,24 +195,22 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn apply_mem_op(
         &self,
-        expr_value: &Expression,
+        reg_value: TypeVariable,
+        mut reg_constraints: ConstraintSet,
+        reg_expr: &Expression,
         address: &Expression,
         vman: &mut VariableManager,
         make_type_var: impl Fn(TypeVariableAccess) -> DerivedTypeVar,
         memop_is_upcasted: bool,
     ) -> ConstraintSet {
-        let (var, mut constraints) = self.evaluate_expression(expr_value, vman);
-
-        let all_tvars = self
-            .points_to
-            .points_to(address, expr_value.bytesize(), vman);
+        let all_tvars = self.points_to.points_to(address, reg_expr.bytesize(), vman);
         let all_dtvars: BTreeSet<DerivedTypeVar> =
             all_tvars.into_iter().map(|tv| make_type_var(tv)).collect();
 
         all_dtvars
             .into_iter()
             .map(|memop_tvar| {
-                let reg_tvar = DerivedTypeVar::new(var.clone());
+                let reg_tvar = DerivedTypeVar::new(reg_value.clone());
                 if memop_is_upcasted {
                     SubtypeConstraint::new(memop_tvar, reg_tvar)
                 } else {
@@ -203,25 +218,35 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                 }
             })
             .for_each(|cons| {
-                constraints.insert(cons);
+                reg_constraints.insert(cons);
             });
-        constraints
+        reg_constraints
     }
 
     fn apply_store(
         &self,
+        tid: &Tid,
         value_from: &Expression,
         address_into: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        self.apply_mem_op(value_from, address_into, vman, Self::make_store_tvar, false)
+        let (reg_val, constraints) = self.evaluate_expression(value_from, vman);
+        self.apply_mem_op(
+            reg_val,
+            constraints,
+            value_from,
+            address_into,
+            vman,
+            Self::make_store_tvar,
+            false,
+        )
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
         match &df.term {
-            Def::Load { var, address } => self.apply_load(var, address, vman),
-            Def::Store { address, value } => self.apply_store(value, address, vman),
-            Def::Assign { var, value } => self.apply_assign(var, value, vman),
+            Def::Load { var, address } => self.apply_load(&df.tid, var, address, vman),
+            Def::Store { address, value } => self.apply_store(&df.tid, value, address, vman),
+            Def::Assign { var, value } => self.apply_assign(&df.tid, var, value, vman),
         }
     }
 

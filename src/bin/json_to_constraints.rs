@@ -17,13 +17,16 @@ fn main() -> anyhow::Result<()> {
     let json_file = std::fs::File::open(input_json).expect("unable to read json");
 
     let mut ir = util::get_intermediate_representation_for_reader(json_file, &bin_bytes)?;
-
+    log::info!("Retrieved IR");
     ir.normalize().iter().for_each(|v| util::log_cwe_message(v));
+    log::info!("Normalized IR");
 
     let extern_subs = ir.program.term.extern_symbols.keys().cloned().collect();
     let graph = cwe_checker_lib::analysis::graph::get_program_cfg(&ir.program, extern_subs);
 
     let mut rt_mem = RuntimeMemoryImage::new(&bin_bytes)?;
+
+    log::info!("Created RuntimeMemoryImage");
 
     if ir.program.term.address_base_offset != 0 {
         // We adjust the memory addresses once globally

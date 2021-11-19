@@ -4,32 +4,46 @@ use cwe_checker_lib::{
     abstract_domain::{AbstractDomain, DomainMap, UnionMergeStrategy},
     analysis::graph::{Graph, Node},
     intermediate_representation::{
-        Arg, Blk, Def, Expression, ExternSymbol, Jmp, Term, Tid, Variable,
+        Arg, Blk, Def, Expression, ExternSymbol, Jmp, Project, Term, Tid, Variable,
     },
 };
-use std::collections::{BTreeMap, BTreeSet};
+use log::error;
 use std::ops::{Deref, DerefMut};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    vec,
+};
 
 pub struct Context<'a> {
     /// Graph to compute the fixpoint over
     graph: &'a Graph<'a>,
     extern_symbol_map: &'a BTreeMap<Tid, ExternSymbol>,
+    project: &'a Project,
 }
 
 impl<'a> Context<'a> {
     pub fn new(
+        project: &'a Project,
         graph: &'a Graph<'a>,
         extern_symbol_map: &'a BTreeMap<Tid, ExternSymbol>,
     ) -> Context<'a> {
         Context {
+            project,
             graph,
             extern_symbol_map,
         }
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Default)]
-pub struct TermSet(pub BTreeSet<Tid>);
+#[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
+pub enum Definition {
+    Normal(Tid),
+    ActualArg(Tid, usize),
+    ActualRet(Tid),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
+pub struct TermSet(pub BTreeSet<Definition>);
 
 impl AbstractDomain for TermSet {
     fn merge(&self, other: &Self) -> Self {
@@ -48,7 +62,7 @@ impl TermSet {
 }
 
 impl Deref for TermSet {
-    type Target = BTreeSet<Tid>;
+    type Target = BTreeSet<Definition>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -65,10 +79,26 @@ fn apply_definition_of_variable(
     state: &mut DomainMap<Variable, TermSet, UnionMergeStrategy>,
     defined_var: Variable,
     tid: Tid,
+    create_def: impl FnOnce(Tid) -> Definition,
 ) {
     let mut definers = TermSet::new();
-    definers.insert(tid);
+    definers.insert(create_def(tid));
     state.insert(defined_var, definers);
+}
+
+impl<'a> Context<'a> {
+    fn get_function_returns(&self, jmp: &Jmp) -> Vec<Arg> {
+        if let Jmp::Call { target, .. } = jmp {
+            for sub in self.project.program.term.subs.iter() {
+                if sub.tid == *target {
+                    return sub.term.formal_rets.clone();
+                }
+            }
+            return vec![];
+        } else {
+            vec![]
+        }
+    }
 }
 
 impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a> for Context<'a> {
@@ -87,10 +117,14 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         let mut new_value = value.clone();
         match &def.term {
             Def::Assign { var, value: _ } => {
-                apply_definition_of_variable(&mut new_value, var.clone(), def.tid.clone())
+                apply_definition_of_variable(&mut new_value, var.clone(), def.tid.clone(), |x| {
+                    Definition::Normal(x)
+                })
             }
             Def::Load { var, .. } => {
-                apply_definition_of_variable(&mut new_value, var.clone(), def.tid.clone())
+                apply_definition_of_variable(&mut new_value, var.clone(), def.tid.clone(), |x| {
+                    Definition::Normal(x)
+                })
             }
             Def::Store { .. } => (),
         };
@@ -104,7 +138,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
             Jmp::Call { target, .. } => Some(target),
             _ => None,
         };
-        //TODO(ian) should maybe handle callee saves? Anything physical register that isnt in the callee save should be defined by the stub
+        //TODO(ian) we need to clobber non callee saves here. Any physical register should be clobbered.
         if let Some(extern_symb) = call_target.and_then(|tid| self.extern_symbol_map.get(tid)) {
             let mut new_value = value.clone();
 
@@ -113,7 +147,12 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
             for arg in extern_symb.return_values.iter() {
                 match arg {
                     Arg::Register { var, data_type: _ } => {
-                        apply_definition_of_variable(&mut new_value, var.clone(), call.tid.clone());
+                        apply_definition_of_variable(
+                            &mut new_value,
+                            var.clone(),
+                            call.tid.clone(),
+                            |x| Definition::ActualRet(x),
+                        );
                     }
                     Arg::Stack { .. } => (),
                 }
@@ -143,18 +182,55 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         &self,
         value: &Self::Value,
         _call: &Term<Jmp>,
-        _target: &Node<'_>,
+        target: &Node<'_>,
     ) -> Option<Self::Value> {
-        Some(value.clone())
+        let called_sub = target.get_sub();
+        let mut new_value = value.clone();
+        for (i, arg) in called_sub.term.formal_args.iter().enumerate() {
+            match arg {
+                Arg::Register { var, .. } => apply_definition_of_variable(
+                    &mut new_value,
+                    var.clone(),
+                    called_sub.tid.clone(),
+                    |x| Definition::ActualArg(x, i),
+                ),
+                Arg::Stack { .. } => (), // These type vars are managed by the points-to analysis
+            }
+        }
+        Some(new_value)
     }
+
     fn update_return(
         &self,
         value: Option<&Self::Value>,
         _value_before_call: Option<&Self::Value>,
-        _call_term: &Term<Jmp>,
+        call_term: &Term<Jmp>,
         _return_term: &Term<Jmp>,
     ) -> Option<Self::Value> {
-        value.cloned()
+        let mut new_value = value.cloned().unwrap_or(DomainMap::from(BTreeMap::new()));
+
+        for (idx, arg) in self
+            .get_function_returns(&call_term.term)
+            .iter()
+            .enumerate()
+        {
+            match arg {
+                Arg::Register { var, .. } => {
+                    if idx != 0 {
+                        error!("For call: {:?} multiple formal returns", call_term);
+                    }
+                    apply_definition_of_variable(
+                        &mut new_value,
+                        var.clone(),
+                        call_term.tid.clone(),
+                        |x| Definition::ActualRet(x),
+                    );
+                }
+                Arg::Stack { .. } => (), // These type vars are managed by the points-to analysis
+            }
+        }
+
+        Some(new_value)
     }
 
     fn specialize_conditional(

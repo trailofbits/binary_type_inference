@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use std::env::VarError;
 use std::ops::Deref;
 
 use cwe_checker_lib::abstract_domain::DomainMap;
@@ -9,7 +10,7 @@ use cwe_checker_lib::intermediate_representation::{Project, Tid, Variable};
 use petgraph::graph::NodeIndex;
 use petgraph::EdgeDirection::Incoming;
 
-use crate::analysis::reaching_definitions::{Context, TermSet};
+use crate::analysis::reaching_definitions::{Context, Definition, TermSet};
 use crate::constraint_generation::{self, RegisterMapping};
 use crate::constraints::{ConstraintSet, DerivedTypeVar, SubtypeConstraint, TypeVariable};
 use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, pointer_inference};
@@ -35,9 +36,9 @@ impl RegisterContext {
     fn create_def_constraint(
         repr: TypeVariable,
         defined_var: &Variable,
-        def: &Tid,
+        def: &Definition,
     ) -> SubtypeConstraint {
-        let def_tvar = constraint_generation::tid_indexed_by_variable(def, defined_var);
+        let def_tvar = RegisterContext::type_variable_from_def(def, defined_var);
         SubtypeConstraint::new(DerivedTypeVar::new(def_tvar), DerivedTypeVar::new(repr))
     }
 
@@ -55,6 +56,18 @@ impl RegisterContext {
         );
         (repr, constraints)
     }
+
+    fn type_variable_from_def(def: &Definition, defined_variable: &Variable) -> TypeVariable {
+        match def {
+            Definition::ActualArg(tid, i) => constraint_generation::arg_tvar(*i, &tid),
+            Definition::Normal(tid) => {
+                constraint_generation::tid_indexed_by_variable(tid, defined_variable)
+            }
+            Definition::ActualRet(tid) => {
+                constraint_generation::tid_indexed_by_variable(tid, defined_variable)
+            }
+        }
+    }
 }
 
 impl RegisterMapping for RegisterContext {
@@ -70,7 +83,7 @@ impl RegisterMapping for RegisterContext {
         ts.map(|ts| {
             if ts.0.len() == 1 {
                 (
-                    constraint_generation::tid_indexed_by_variable(ts.iter().next().unwrap(), var),
+                    RegisterContext::type_variable_from_def(ts.iter().next().unwrap(), var),
                     ConstraintSet::empty(),
                 )
             } else {
@@ -87,7 +100,7 @@ impl RegisterMapping for RegisterContext {
 /// Runs reaching definitions on the project and produces a mapping from node index to the Register Context.
 /// The register context can be queried to determine the representing type variable for an accessed register
 pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, RegisterContext> {
-    let cont = Context::new(graph, &proj.program.term.extern_symbols);
+    let cont = Context::new(proj, graph, &proj.program.term.extern_symbols);
     let bottom_btree = BTreeMap::new();
     let mut computation = forward_interprocedural_fixpoint::create_computation(cont, None);
 
