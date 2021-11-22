@@ -315,19 +315,14 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         )
     }
 
+    /// The formal is always a subtype of the actual (this is a mangling of the actual/formal term)
     fn generate_formal_constraint(
         &self,
         formal: DerivedTypeVar,
         actual: DerivedTypeVar,
-        formal_is_subtype_of_actual: bool,
     ) -> SubtypeConstraint {
-        if formal_is_subtype_of_actual {
-            SubtypeConstraint::new(formal, actual)
-        } else {
-            SubtypeConstraint::new(actual, formal)
-        }
+        SubtypeConstraint::new(formal, actual)
     }
-
     fn handle_function_args(
         &self,
         target_function: &Term<Sub>,
@@ -355,11 +350,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                     arg_is_subtype_of_representations,
                 );
 
-                cons.insert(self.generate_formal_constraint(
-                    formal,
-                    actual.clone(),
-                    !arg_is_subtype_of_representations,
-                ));
+                cons.insert(self.generate_formal_constraint(formal, actual.clone()));
                 // cons.insert_all(self.)
                 cons
             })
@@ -386,13 +377,15 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         return_from: &Term<Sub>,
         vm: &mut VariableManager,
     ) -> ConstraintSet {
+        let act_rets = Self::create_actual_rets(call, &return_from.term.formal_rets);
+        act_rets.iter().for_each(|dv| eprintln!("{}", dv));
         self.handle_function_args(
             return_from,
-            &Self::create_actual_rets(call, &return_from.term.formal_rets),
+            &act_rets,
             &return_from.term.formal_rets,
             vm,
             &|ind| FieldLabel::Out(ind),
-            true,
+            false,
         )
     }
 }

@@ -1,5 +1,6 @@
 arg_sub_100003f08_0 ⊑ sub_100003f08@sp.store.σ64@8
 arg_sub_100003f08_1 ⊑ sub_100003f08@sp.store.σ64@16
+instr_100003f34_1_x0 ⊑ sub_100003f08.out
 instr_100003f64_1_tmpCY ⊑ instr_100003f2c_9_CY
 instr_100003f64_2_tmpOV ⊑ instr_100003f2c_10_OV
 instr_100003f64_4_tmpNG ⊑ instr_100003f2c_7_NG
@@ -9,7 +10,9 @@ instr_100003f84_1_x1 ⊑ sub_100003f08.in_1
 instr_100003f88_0_x30 ⊑ instr_100003f3c_0_pc
 instr_100003f88_0_x30 ⊑ instr_100003f9c_0_pc
 instr_100003f88_1_x0 ⊑ sub_100003f40@sp.store.σ64@0
-sub_100003f08.out ⊑ instr_100003f34_1_x0
+sub_100003f08.in_0 ⊑ arg_sub_100003f08_0
+sub_100003f08.in_1 ⊑ arg_sub_100003f08_1
+sub_100003f08.out ⊑ instr_100003f88_1_x0
 sub_100003f08@sp.load.σ32@8 ⊑ instr_100003f14_1_$U28500
 sub_100003f08@sp.load.σ32@12 ⊑ instr_100003f24_1_$U28500
 sub_100003f08@sp.load.σ32@16 ⊑ instr_100003f18_1_$U28500

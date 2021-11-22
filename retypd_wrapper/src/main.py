@@ -2,6 +2,7 @@ import retypd
 import sys
 import argparse
 import itertools
+import re
 
 if __name__ == "__main__":
     app = argparse.ArgumentParser(
@@ -23,8 +24,12 @@ if __name__ == "__main__":
         interesting_tvars = [cons.base for cons in all_dt if len(cons.path) > 0 and (isinstance(
             cons.path[0], retypd.InLabel) or isinstance(cons.path[0], retypd.OutLabel))]
 
+        # interesting_tvars += [cons.base for cons in all_dt if re.fullmatch(
+        #    "sub_[\da-z]*@sp", cons.base)]
+
     print(interesting_tvars)
     solver = retypd.Solver(cons_set, interesting_tvars)
+    print(cons_set)
     solver()
 
     for cons in solver.constraints:
