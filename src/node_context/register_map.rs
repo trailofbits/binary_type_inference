@@ -63,7 +63,7 @@ impl RegisterContext {
             Definition::Normal(tid) => {
                 constraint_generation::tid_indexed_by_variable(tid, defined_variable)
             }
-            Definition::ActualRet(tid) => {
+            Definition::ActualRet(tid, _i) => {
                 constraint_generation::tid_indexed_by_variable(tid, defined_variable)
             }
         }

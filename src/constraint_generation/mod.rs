@@ -1,6 +1,6 @@
 use cwe_checker_lib::{
     analysis::graph::{Graph, Node},
-    intermediate_representation::{Arg, Blk, Def, Sub, Term},
+    intermediate_representation::{Arg, Blk, Def, Jmp, Sub, Term},
 };
 use log::warn;
 use petgraph::graph::NodeIndex;
@@ -14,7 +14,7 @@ use crate::constraints::{
     VariableManager,
 };
 
-use log::error;
+use anyhow::{anyhow, Result};
 use std::collections::{btree_set::BTreeSet, HashMap};
 
 /// Gets a type variable for a [Tid] where multiple type variables need to exist at that [Tid] which are distinguished by which [Variable] they operate over.
@@ -276,12 +276,10 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         target_func: &Term<Sub>,
         ind: usize,
         arg: &Arg,
+        formal: &DerivedTypeVar,
         vm: &mut VariableManager,
-        index_to_field_label: &impl Fn(usize) -> FieldLabel,
         arg_is_subtype_of_representations: bool,
     ) -> ConstraintSet {
-        let mut base_var = DerivedTypeVar::new(term_to_tvar(target_func));
-        base_var.add_field_label(index_to_field_label(ind));
         let (type_vars_for_arg, mut additional_constraints) = self
             .subprocedure_locators
             .get_type_variables_and_constraints_for_arg(arg, &self.reg_map, &self.points_to, vm);
@@ -289,9 +287,9 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             .into_iter()
             .map(|tvar| {
                 if arg_is_subtype_of_representations {
-                    SubtypeConstraint::new(base_var.clone(), Self::argtvar_to_dtv(tvar))
+                    SubtypeConstraint::new(formal.clone(), Self::argtvar_to_dtv(tvar))
                 } else {
-                    SubtypeConstraint::new(Self::argtvar_to_dtv(tvar), base_var.clone())
+                    SubtypeConstraint::new(Self::argtvar_to_dtv(tvar), formal.clone())
                 }
             })
             .for_each(|cons| {
@@ -300,9 +298,16 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         additional_constraints
     }
 
+    fn create_actual_args(sz: usize, target_func: &Term<Sub>) -> Vec<DerivedTypeVar> {
+        (0..sz)
+            .map(|idx| DerivedTypeVar::new(arg_tvar(idx, &target_func.tid)))
+            .collect()
+    }
+
     fn handle_call(&self, target_function: &Term<Sub>, vm: &mut VariableManager) -> ConstraintSet {
         self.handle_function_args(
             target_function,
+            &Self::create_actual_args(target_function.term.formal_args.len(), target_function),
             &target_function.term.formal_args,
             vm,
             &|ind| FieldLabel::In(ind),
@@ -310,34 +315,80 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         )
     }
 
+    fn generate_formal_constraint(
+        &self,
+        formal: DerivedTypeVar,
+        actual: DerivedTypeVar,
+        formal_is_subtype_of_actual: bool,
+    ) -> SubtypeConstraint {
+        if formal_is_subtype_of_actual {
+            SubtypeConstraint::new(formal, actual)
+        } else {
+            SubtypeConstraint::new(actual, formal)
+        }
+    }
+
     fn handle_function_args(
         &self,
         target_function: &Term<Sub>,
+        actual_typevars: &[DerivedTypeVar],
         args: &[Arg],
         vm: &mut VariableManager,
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
         arg_is_subtype_of_representations: bool,
     ) -> ConstraintSet {
+        assert_eq!(args.len(), actual_typevars.len());
         let mut constraints = ConstraintSet::default();
+
         args.iter()
             .enumerate()
             .map(|(ind, arg)| {
-                self.arg_to_constraints(
+                let mut formal = DerivedTypeVar::new(term_to_tvar(target_function));
+                formal.add_field_label(index_to_field_label(ind));
+                let actual = &actual_typevars[ind];
+                let mut cons = self.arg_to_constraints(
                     target_function,
                     ind,
                     arg,
+                    &formal,
                     vm,
-                    index_to_field_label,
                     arg_is_subtype_of_representations,
-                )
+                );
+
+                cons.insert(self.generate_formal_constraint(
+                    formal,
+                    actual.clone(),
+                    !arg_is_subtype_of_representations,
+                ));
+                // cons.insert_all(self.)
+                cons
             })
             .for_each(|cons| constraints.insert_all(&cons));
         constraints
     }
 
-    fn handle_return(&self, return_from: &Term<Sub>, vm: &mut VariableManager) -> ConstraintSet {
+    fn create_actual_rets(call: &Term<Jmp>, rets: &[Arg]) -> Vec<DerivedTypeVar> {
+        rets.iter()
+            .map(|arg| match arg {
+                Arg::Register {
+                    var,
+                    data_type: _data_type,
+                } => DerivedTypeVar::new(tid_indexed_by_variable(&call.tid, var)),
+                // TODO handle this with anyhow
+                Arg::Stack { .. } => panic!("Cannot handle return value on the stack"),
+            })
+            .collect()
+    }
+
+    fn handle_return(
+        &self,
+        call: &Term<Jmp>,
+        return_from: &Term<Sub>,
+        vm: &mut VariableManager,
+    ) -> ConstraintSet {
         self.handle_function_args(
             return_from,
+            &Self::create_actual_rets(call, &return_from.term.formal_rets),
             &return_from.term.formal_rets,
             vm,
             &|ind| FieldLabel::Out(ind),
@@ -375,6 +426,19 @@ where
         }
     }
 
+    fn call_blk_to_call<'b>(
+        calling_blk: &'b Term<Blk>,
+        target_func: &Term<Sub>,
+    ) -> Option<&'b Term<Jmp>> {
+        calling_blk.term.jmps.iter().find(|jmp| match &jmp.term {
+            Jmp::Call {
+                target: tid,
+                return_: _return,
+            } => *tid == target_func.tid,
+            _ => false,
+        })
+    }
+
     fn generate_constraints_for_node(
         &self,
         nd_ind: NodeIndex,
@@ -387,9 +451,15 @@ where
             match nd {
                 Node::BlkStart(blk, _sub) => nd_cont.handle_block_start(blk, vman),
                 Node::CallReturn {
-                    call: _call,
+                    call: (call_blk, _calling_proc),
                     return_: (_returned_to_blk, return_proc),
-                } => nd_cont.handle_return(return_proc, vman),
+                } => nd_cont.handle_return(
+                    Self::call_blk_to_call(call_blk, return_proc).expect(
+                        "Invalid CFG where calling blk does not contain returning function.",
+                    ),
+                    return_proc,
+                    vman,
+                ),
                 Node::CallSource {
                     source: _source,
                     target: (_calling_blk, target_func),

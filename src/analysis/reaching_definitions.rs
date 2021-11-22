@@ -39,7 +39,7 @@ impl<'a> Context<'a> {
 pub enum Definition {
     Normal(Tid),
     ActualArg(Tid, usize),
-    ActualRet(Tid),
+    ActualRet(Tid, usize),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
@@ -144,14 +144,14 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
 
             // define the returned values, these should probably be collected by function application type inference into outs so not strictly
             // required but still good to have
-            for arg in extern_symb.return_values.iter() {
+            for (idx, arg) in extern_symb.return_values.iter().enumerate() {
                 match arg {
                     Arg::Register { var, data_type: _ } => {
                         apply_definition_of_variable(
                             &mut new_value,
                             var.clone(),
                             call.tid.clone(),
-                            |x| Definition::ActualRet(x),
+                            |x| Definition::ActualRet(x, idx),
                         );
                     }
                     Arg::Stack { .. } => (),
@@ -223,7 +223,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
                         &mut new_value,
                         var.clone(),
                         call_term.tid.clone(),
-                        |x| Definition::ActualRet(x),
+                        |x| Definition::ActualRet(x, idx),
                     );
                 }
                 Arg::Stack { .. } => (), // These type vars are managed by the points-to analysis
