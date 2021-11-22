@@ -1,5 +1,4 @@
-use backtrace::Backtrace;
-use log::{error, info};
+use log::error;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Write};
 use std::ops::{Deref, DerefMut};

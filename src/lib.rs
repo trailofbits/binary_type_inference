@@ -20,5 +20,8 @@ pub(crate) mod test_utils;
 /// Contains utility functions for transforming json into the project IR
 pub mod util;
 
+/// Contains an implementation of constraint solving, type sketch generation, and c type generation.
+pub mod solver;
+
 #[cfg(test)]
 mod tests {}

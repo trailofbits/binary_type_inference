@@ -14,7 +14,6 @@ use crate::constraints::{
     VariableManager,
 };
 
-use anyhow::{anyhow, Result};
 use std::collections::{btree_set::BTreeSet, HashMap};
 
 /// Gets a type variable for a [Tid] where multiple type variables need to exist at that [Tid] which are distinguished by which [Variable] they operate over.
@@ -76,6 +75,44 @@ pub enum ArgTvar {
     MemTvar(TypeVariableAccess),
     /// Describes an argument in a register.
     VariableTvar(TypeVariable),
+}
+
+struct Memop {
+    sz: ByteSize,
+    addr: Expression,
+    reg_value: TypeVariable,
+    reg_constraints: ConstraintSet,
+}
+
+impl Memop {
+    fn apply_mem_op(
+        &self,
+        points_to: &impl PointsToMapping,
+        vman: &mut VariableManager,
+        make_type_var: impl Fn(TypeVariableAccess) -> DerivedTypeVar,
+        memop_is_upcasted: bool,
+    ) -> ConstraintSet {
+        let mut new_cons = self.reg_constraints.clone();
+        let all_tvars = points_to.points_to(&self.addr, self.sz, vman);
+        let all_dtvars: BTreeSet<DerivedTypeVar> =
+            all_tvars.into_iter().map(|tv| make_type_var(tv)).collect();
+
+        all_dtvars
+            .into_iter()
+            .map(|memop_tvar| {
+                let reg_tvar = DerivedTypeVar::new(self.reg_value.clone());
+                if memop_is_upcasted {
+                    SubtypeConstraint::new(memop_tvar, reg_tvar)
+                } else {
+                    SubtypeConstraint::new(reg_tvar, memop_tvar)
+                }
+            })
+            .for_each(|cons| {
+                info!("{}", cons);
+                new_cons.insert(cons);
+            });
+        ConstraintSet::from(new_cons)
+    }
 }
 
 /// Links formal parameters with the type variable for their actual argument at callsites.
@@ -178,50 +215,17 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     ) -> ConstraintSet {
         let constraints = ConstraintSet::default();
         let typ_var = tid_indexed_by_variable(tid, v_into);
-        self.apply_mem_op(
-            typ_var,
-            constraints,
-            &Expression::Var(v_into.clone()),
-            address,
-            vman,
-            Self::make_loaded_tvar,
-            true,
-        )
+        let memop = Memop {
+            sz: v_into.size,
+            addr: address.clone(),
+            reg_value: typ_var,
+            reg_constraints: constraints,
+        };
+        memop.apply_mem_op(&self.points_to, vman, Self::make_loaded_tvar, true)
     }
 
     fn make_store_tvar(var: TypeVariableAccess) -> DerivedTypeVar {
         Self::make_mem_tvar(var, FieldLabel::Store)
-    }
-
-    fn apply_mem_op(
-        &self,
-        reg_value: TypeVariable,
-        mut reg_constraints: ConstraintSet,
-        reg_expr: &Expression,
-        address: &Expression,
-        vman: &mut VariableManager,
-        make_type_var: impl Fn(TypeVariableAccess) -> DerivedTypeVar,
-        memop_is_upcasted: bool,
-    ) -> ConstraintSet {
-        let all_tvars = self.points_to.points_to(address, reg_expr.bytesize(), vman);
-        let all_dtvars: BTreeSet<DerivedTypeVar> =
-            all_tvars.into_iter().map(|tv| make_type_var(tv)).collect();
-
-        all_dtvars
-            .into_iter()
-            .map(|memop_tvar| {
-                let reg_tvar = DerivedTypeVar::new(reg_value.clone());
-                if memop_is_upcasted {
-                    SubtypeConstraint::new(memop_tvar, reg_tvar)
-                } else {
-                    SubtypeConstraint::new(reg_tvar, memop_tvar)
-                }
-            })
-            .for_each(|cons| {
-                info!("{}", cons);
-                reg_constraints.insert(cons);
-            });
-        reg_constraints
     }
 
     fn apply_store(
@@ -234,15 +238,14 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         info!("{}: store", tid);
         let (reg_val, constraints) = self.evaluate_expression(value_from, vman);
         info!("{}: store {}", tid, reg_val);
-        self.apply_mem_op(
-            reg_val,
-            constraints,
-            value_from,
-            address_into,
-            vman,
-            Self::make_store_tvar,
-            false,
-        )
+
+        let memop = Memop {
+            sz: value_from.bytesize(),
+            addr: address_into.clone(),
+            reg_value: reg_val,
+            reg_constraints: constraints,
+        };
+        memop.apply_mem_op(&self.points_to, vman, Self::make_store_tvar, false)
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {

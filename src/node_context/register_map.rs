@@ -1,12 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use std::env::VarError;
 use std::ops::Deref;
 
 use cwe_checker_lib::abstract_domain::DomainMap;
 use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
-use cwe_checker_lib::intermediate_representation::{Project, Tid, Variable};
+use cwe_checker_lib::intermediate_representation::{Project, Variable};
 use petgraph::graph::NodeIndex;
 use petgraph::EdgeDirection::Incoming;
 
@@ -59,7 +58,7 @@ impl RegisterContext {
 
     fn type_variable_from_def(def: &Definition, defined_variable: &Variable) -> TypeVariable {
         match def {
-            Definition::ActualArg(tid, i) => constraint_generation::arg_tvar(*i, &tid),
+            Definition::ActualArg(tid, i) => constraint_generation::arg_tvar(*i, tid),
             Definition::Normal(tid) => {
                 constraint_generation::tid_indexed_by_variable(tid, defined_variable)
             }

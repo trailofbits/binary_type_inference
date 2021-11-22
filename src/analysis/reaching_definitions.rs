@@ -61,6 +61,12 @@ impl TermSet {
     }
 }
 
+impl Default for TermSet {
+    fn default() -> Self {
+        TermSet::new()
+    }
+}
+
 impl Deref for TermSet {
     type Target = BTreeSet<Definition>;
 
@@ -207,7 +213,9 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         call_term: &Term<Jmp>,
         _return_term: &Term<Jmp>,
     ) -> Option<Self::Value> {
-        let mut new_value = value.cloned().unwrap_or(DomainMap::from(BTreeMap::new()));
+        let mut new_value = value
+            .cloned()
+            .unwrap_or_else(|| DomainMap::from(BTreeMap::new()));
 
         for (idx, arg) in self
             .get_function_returns(&call_term.term)
