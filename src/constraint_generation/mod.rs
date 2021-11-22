@@ -2,7 +2,7 @@ use cwe_checker_lib::{
     analysis::graph::{Graph, Node},
     intermediate_representation::{Arg, Blk, Def, Jmp, Sub, Term},
 };
-use log::warn;
+use log::{info, warn};
 use petgraph::graph::NodeIndex;
 
 use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variable};
@@ -218,6 +218,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                 }
             })
             .for_each(|cons| {
+                info!("{}", cons);
                 reg_constraints.insert(cons);
             });
         reg_constraints
@@ -230,7 +231,9 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         address_into: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
+        info!("{}: store", tid);
         let (reg_val, constraints) = self.evaluate_expression(value_from, vman);
+        info!("{}: store {}", tid, reg_val);
         self.apply_mem_op(
             reg_val,
             constraints,
@@ -273,8 +276,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn arg_to_constraints(
         &self,
-        target_func: &Term<Sub>,
-        ind: usize,
         arg: &Arg,
         formal: &DerivedTypeVar,
         vm: &mut VariableManager,
@@ -323,6 +324,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     ) -> SubtypeConstraint {
         SubtypeConstraint::new(formal, actual)
     }
+
     fn handle_function_args(
         &self,
         target_function: &Term<Sub>,
@@ -341,14 +343,8 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                 let mut formal = DerivedTypeVar::new(term_to_tvar(target_function));
                 formal.add_field_label(index_to_field_label(ind));
                 let actual = &actual_typevars[ind];
-                let mut cons = self.arg_to_constraints(
-                    target_function,
-                    ind,
-                    arg,
-                    &formal,
-                    vm,
-                    arg_is_subtype_of_representations,
-                );
+                let mut cons =
+                    self.arg_to_constraints(arg, &formal, vm, arg_is_subtype_of_representations);
 
                 cons.insert(self.generate_formal_constraint(formal, actual.clone()));
                 // cons.insert_all(self.)
@@ -365,7 +361,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                     var,
                     data_type: _data_type,
                 } => DerivedTypeVar::new(tid_indexed_by_variable(&call.tid, var)),
-                // TODO handle this with anyhow
+                // TODO(ian): handle this with anyhow
                 Arg::Stack { .. } => panic!("Cannot handle return value on the stack"),
             })
             .collect()
@@ -378,7 +374,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         vm: &mut VariableManager,
     ) -> ConstraintSet {
         let act_rets = Self::create_actual_rets(call, &return_from.term.formal_rets);
-        act_rets.iter().for_each(|dv| eprintln!("{}", dv));
         self.handle_function_args(
             return_from,
             &act_rets,
