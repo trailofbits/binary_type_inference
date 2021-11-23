@@ -142,6 +142,13 @@ impl DerivedTypeVar {
         }
     }
 
+    /// Immutably add label.
+    pub fn create_with_label(&self, lab: FieldLabel) -> DerivedTypeVar {
+        let mut n = self.clone();
+        n.add_field_label(lab);
+        n
+    }
+
     /// Adds a field label to this derived type variable's list of field lables. Adds to the end of the list.
     pub fn add_field_label(&mut self, lab: FieldLabel) {
         self.labels.push(lab);
