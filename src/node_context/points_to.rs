@@ -1,4 +1,4 @@
-use crate::constraint_generation::{PointsToMapping, TypeVariableAccess};
+use crate::constraint_generation::{NodeContextMapping, PointsToMapping, TypeVariableAccess};
 use crate::constraints::TypeVariable;
 use anyhow::Result;
 use cwe_checker_lib::abstract_domain::{
@@ -7,24 +7,31 @@ use cwe_checker_lib::abstract_domain::{
 use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
-use cwe_checker_lib::intermediate_representation::{ByteSize, Project, Variable};
+use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Project, Variable};
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
 use log::{info, warn};
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
 
 /// Holds a pointer_inference state for a node in order to mantain a type variable mapping for pointers.
 pub struct PointsToContext {
     pointer_state: pointer_inference::State,
     /// Stack pointer for the program, used to determine the stack offset
     pub stack_pointer: Variable,
+    rt_mem: Arc<RuntimeMemoryImage>,
 }
 
 impl PointsToContext {
-    fn new(st: pointer_inference::State, stack_pointer: Variable) -> PointsToContext {
+    fn new(
+        st: pointer_inference::State,
+        stack_pointer: Variable,
+        rt_mem: Arc<RuntimeMemoryImage>,
+    ) -> PointsToContext {
         PointsToContext {
             pointer_state: st,
             stack_pointer,
+            rt_mem,
         }
     }
 }
@@ -54,11 +61,13 @@ impl PointsToContext {
                 if &self.pointer_state.stack_id == object_id {
                     // access on our current stack
                     // so safe to normalize to positive
-                    if let Some((_stack_id, sp_off)) = self
+                    if let Some((stack_id, sp_off)) = self
                         .pointer_state
                         .get_register(&self.stack_pointer)
                         .get_if_unique_target()
                     {
+                        //eprintln!("{:?}", self.pointer_state.memory.get_upp(stack_id))
+                        /*
                         if let Ok(curr_size) = sp_off.try_to_offset() {
                             if (-curr_size) < (-curr_offset) {
                                 warn!(
@@ -73,21 +82,21 @@ impl PointsToContext {
                                 curr_offset - curr_size
                             );
                             curr_offset -= curr_size;
-                        }
+                        }*/
                     }
                 }
 
-                if curr_offset.is_negative() {
+                /* if curr_offset.is_negative() {
                     warn!(
                         "Unhandled negative offset {:?} {} stack_id: {},",
                         object_id.to_string(),
                         curr_offset,
                         self.pointer_state.stack_id,
                     );
-                    None
-                } else {
-                    Some(curr_offset)
-                }
+                    None*
+                } else {*/
+                Some(curr_offset)
+                //}
             }),
             ty_var: TypeVariable::new(
                 object_id
@@ -113,6 +122,33 @@ impl PointsToContext {
     }
 }
 
+impl NodeContextMapping for PointsToContext {
+    fn apply_def(
+        &self,
+        term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Def,
+        >,
+    ) -> Self {
+        let mut new_ptr_state = self.pointer_state.clone();
+        match &term.term {
+            Def::Assign { var, value } => new_ptr_state.handle_register_assign(var, value),
+            // TODO(ian): dont unwrap
+            Def::Load { var, address } => new_ptr_state
+                .handle_load(var, address, &self.rt_mem)
+                .unwrap(),
+            Def::Store { address, value } => {
+                new_ptr_state.handle_store(address, value, &self.rt_mem);
+            }
+        };
+
+        PointsToContext::new(
+            new_ptr_state,
+            self.stack_pointer.clone(),
+            self.rt_mem.clone(),
+        )
+    }
+}
+
 impl PointsToMapping for PointsToContext {
     /// This method is conservative and only returns abstract objects for which we have an
     // TODO(ian): we should probably handle conflicting sizes
@@ -134,7 +170,9 @@ pub fn run_analysis<'a>(
     cfg: &'a Graph<'a>,
     rt_mem: &'a RuntimeMemoryImage,
 ) -> Result<HashMap<NodeIndex, PointsToContext>> {
-    let pointer_res = pointer_inference::run(proj, rt_mem, cfg, config, false, false);
+    let pointer_res = pointer_inference::run(proj, &rt_mem, cfg, config, false, false);
+
+    let rt_mem = Arc::new(rt_mem.clone());
 
     Ok(cfg
         .node_indices()
@@ -152,13 +190,21 @@ pub fn run_analysis<'a>(
                 .map(|v| {
                     (
                         idx,
-                        PointsToContext::new(v.clone(), proj.stack_pointer_register.clone()),
+                        PointsToContext::new(
+                            v.clone(),
+                            proj.stack_pointer_register.clone(),
+                            rt_mem.clone(),
+                        ),
                     )
                 }),
 
                 NodeValue::Value(v) => Some((
                     idx,
-                    PointsToContext::new(v.clone(), proj.stack_pointer_register.clone()),
+                    PointsToContext::new(
+                        v.clone(),
+                        proj.stack_pointer_register.clone(),
+                        rt_mem.clone(),
+                    ),
                 )),
             })
         })

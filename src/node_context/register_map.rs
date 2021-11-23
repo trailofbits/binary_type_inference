@@ -9,10 +9,12 @@ use cwe_checker_lib::intermediate_representation::{Project, Variable};
 use petgraph::graph::NodeIndex;
 use petgraph::EdgeDirection::Incoming;
 
+use crate::analysis;
 use crate::analysis::reaching_definitions::{Context, Definition, TermSet};
-use crate::constraint_generation::{self, RegisterMapping};
+use crate::constraint_generation::{self, NodeContextMapping, RegisterMapping};
 use crate::constraints::{ConstraintSet, DerivedTypeVar, SubtypeConstraint, TypeVariable};
 use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, pointer_inference};
+use cwe_checker_lib::intermediate_representation::Def;
 
 /// The context of register definitions for a given program ICFG node.
 pub struct RegisterContext {
@@ -58,13 +60,23 @@ impl RegisterContext {
 
     fn type_variable_from_def(def: &Definition, defined_variable: &Variable) -> TypeVariable {
         match def {
-            Definition::ActualArg(tid, i) => constraint_generation::arg_tvar(*i, tid),
             Definition::Normal(tid) => {
                 constraint_generation::tid_indexed_by_variable(tid, defined_variable)
             }
             Definition::ActualRet(tid, _i) => {
                 constraint_generation::tid_indexed_by_variable(tid, defined_variable)
             }
+        }
+    }
+}
+
+impl NodeContextMapping for RegisterContext {
+    fn apply_def(&self, term: &cwe_checker_lib::intermediate_representation::Term<Def>) -> Self {
+        let new_mapping =
+            analysis::reaching_definitions::apply_def(DomainMap::from(self.mapping.clone()), term);
+
+        RegisterContext {
+            mapping: new_mapping.deref().clone(),
         }
     }
 }

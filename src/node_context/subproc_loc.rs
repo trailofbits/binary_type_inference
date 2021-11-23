@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use cwe_checker_lib::intermediate_representation::Arg;
 use cwe_checker_lib::intermediate_representation::{Expression, Variable};
 
-use crate::constraint_generation::{ArgTvar, SubprocedureLocators};
+use crate::constraint_generation::{ArgTvar, NodeContextMapping, SubprocedureLocators};
 use crate::constraints::ConstraintSet;
 
 #[derive(Clone)]
@@ -11,6 +11,17 @@ use crate::constraints::ConstraintSet;
 pub struct ProcedureContext {
     /// The procedure context doesnt change. It only needs to know about the stack variable for this project.
     pub stack_pointer: Variable,
+}
+
+impl NodeContextMapping for ProcedureContext {
+    fn apply_def(
+        &self,
+        _term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Def,
+        >,
+    ) -> Self {
+        self.clone()
+    }
 }
 
 impl SubprocedureLocators for ProcedureContext {

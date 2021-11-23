@@ -38,7 +38,7 @@ impl<'a> Context<'a> {
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub enum Definition {
     Normal(Tid),
-    ActualArg(Tid, usize),
+    // Definitions created to
     ActualRet(Tid, usize),
 }
 
@@ -107,6 +107,26 @@ impl<'a> Context<'a> {
     }
 }
 
+pub fn apply_def(
+    mut old_value: DomainMap<Variable, TermSet, UnionMergeStrategy>,
+    def: &Term<Def>,
+) -> DomainMap<Variable, TermSet, UnionMergeStrategy> {
+    match &def.term {
+        Def::Assign { var, value: _ } => {
+            apply_definition_of_variable(&mut old_value, var.clone(), def.tid.clone(), |x| {
+                Definition::Normal(x)
+            })
+        }
+        Def::Load { var, .. } => {
+            apply_definition_of_variable(&mut old_value, var.clone(), def.tid.clone(), |x| {
+                Definition::Normal(x)
+            })
+        }
+        Def::Store { .. } => (),
+    };
+    old_value
+}
+
 impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a> for Context<'a> {
     /// Maps a variable to terms that may define it
     type Value = DomainMap<Variable, TermSet, UnionMergeStrategy>;
@@ -120,22 +140,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
     }
 
     fn update_def(&self, value: &Self::Value, def: &Term<Def>) -> Option<Self::Value> {
-        let mut new_value = value.clone();
-        match &def.term {
-            Def::Assign { var, value: _ } => {
-                apply_definition_of_variable(&mut new_value, var.clone(), def.tid.clone(), |x| {
-                    Definition::Normal(x)
-                })
-            }
-            Def::Load { var, .. } => {
-                apply_definition_of_variable(&mut new_value, var.clone(), def.tid.clone(), |x| {
-                    Definition::Normal(x)
-                })
-            }
-            Def::Store { .. } => (),
-        };
-
-        Some(new_value)
+        Some(apply_def(value.clone(), def))
     }
 
     /// Trust the stub and claim it defines the return
@@ -190,20 +195,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         _call: &Term<Jmp>,
         target: &Node<'_>,
     ) -> Option<Self::Value> {
-        let called_sub = target.get_sub();
-        let mut new_value = value.clone();
-        for (i, arg) in called_sub.term.formal_args.iter().enumerate() {
-            match arg {
-                Arg::Register { var, .. } => apply_definition_of_variable(
-                    &mut new_value,
-                    var.clone(),
-                    called_sub.tid.clone(),
-                    |x| Definition::ActualArg(x, i),
-                ),
-                Arg::Stack { .. } => (), // These type vars are managed by the points-to analysis
-            }
-        }
-        Some(new_value)
+        Some(value.clone())
     }
 
     fn update_return(
