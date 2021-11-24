@@ -1,3 +1,4 @@
+use crate::analysis::stack_depth_analysis;
 use crate::constraint_generation::{NodeContextMapping, PointsToMapping, TypeVariableAccess};
 use crate::constraints::TypeVariable;
 use anyhow::Result;
@@ -14,25 +15,53 @@ use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
+/// Wrpas a pointer state such that successor states can be generated.
+#[derive(Clone)]
+pub struct PointerState {
+    pub state: pointer_inference::State,
+    rt_mem: Arc<RuntimeMemoryImage>,
+}
+
+impl NodeContextMapping for PointerState {
+    fn apply_def(&self, term: &cwe_checker_lib::intermediate_representation::Term<Def>) -> Self {
+        let mut new_ptr_state = self.state.clone();
+        match &term.term {
+            Def::Assign { var, value } => new_ptr_state.handle_register_assign(var, value),
+            // TODO(ian): dont unwrap
+            Def::Load { var, address } => new_ptr_state
+                .handle_load(var, address, &self.rt_mem)
+                .unwrap(),
+            Def::Store { address, value } => {
+                new_ptr_state.handle_store(address, value, &self.rt_mem);
+            }
+        };
+
+        PointerState {
+            state: new_ptr_state,
+            rt_mem: self.rt_mem.clone(),
+        }
+    }
+}
+
 /// Holds a pointer_inference state for a node in order to mantain a type variable mapping for pointers.
 #[derive(Clone)]
 pub struct PointsToContext {
-    pointer_state: pointer_inference::State,
+    pointer_state: PointerState,
     /// Stack pointer for the program, used to determine the stack offset
     pub stack_pointer: Variable,
-    rt_mem: Arc<RuntimeMemoryImage>,
+    stack_depths: Arc<HashMap<AbstractIdentifier, i64>>,
 }
 
 impl PointsToContext {
     fn new(
-        st: pointer_inference::State,
+        st: PointerState,
         stack_pointer: Variable,
-        rt_mem: Arc<RuntimeMemoryImage>,
+        stack_depths: Arc<HashMap<AbstractIdentifier, i64>>,
     ) -> PointsToContext {
         PointsToContext {
             pointer_state: st,
             stack_pointer,
-            rt_mem,
+            stack_depths,
         }
     }
 }
@@ -59,11 +88,12 @@ impl PointsToContext {
         TypeVariableAccess {
             offset: offset.try_to_offset().ok().and_then(|off| {
                 let mut curr_offset = off;
-                if &self.pointer_state.stack_id == object_id {
+                if &self.pointer_state.state.stack_id == object_id {
                     // access on our current stack
                     // so safe to normalize to positive
                     if let Some((stack_id, sp_off)) = self
                         .pointer_state
+                        .state
                         .get_register(&self.stack_pointer)
                         .get_if_unique_target()
                     {
@@ -130,22 +160,12 @@ impl NodeContextMapping for PointsToContext {
             cwe_checker_lib::intermediate_representation::Def,
         >,
     ) -> Self {
-        let mut new_ptr_state = self.pointer_state.clone();
-        match &term.term {
-            Def::Assign { var, value } => new_ptr_state.handle_register_assign(var, value),
-            // TODO(ian): dont unwrap
-            Def::Load { var, address } => new_ptr_state
-                .handle_load(var, address, &self.rt_mem)
-                .unwrap(),
-            Def::Store { address, value } => {
-                new_ptr_state.handle_store(address, value, &self.rt_mem);
-            }
-        };
+        let new_ptr_state = self.pointer_state.apply_def(term);
 
         PointsToContext::new(
             new_ptr_state,
             self.stack_pointer.clone(),
-            self.rt_mem.clone(),
+            self.stack_depths.clone(),
         )
     }
 }
@@ -159,7 +179,7 @@ impl PointsToMapping for PointsToContext {
         sz: cwe_checker_lib::intermediate_representation::ByteSize,
         _vman: &mut crate::constraints::VariableManager,
     ) -> std::collections::BTreeSet<TypeVariableAccess> {
-        let dom_val = self.pointer_state.eval(address);
+        let dom_val = self.pointer_state.state.eval(address);
         self.dom_val_to_tvars(&dom_val, sz)
     }
 }
@@ -175,7 +195,7 @@ pub fn run_analysis<'a>(
 
     let rt_mem = Arc::new(rt_mem.clone());
 
-    Ok(cfg
+    let state_mapping: HashMap<NodeIndex, PointerState> = cfg
         .node_indices()
         .filter_map(|idx| {
             pointer_res.get_node_value(idx).and_then(|nv| match nv {
@@ -191,23 +211,43 @@ pub fn run_analysis<'a>(
                 .map(|v| {
                     (
                         idx,
-                        PointsToContext::new(
-                            v.clone(),
-                            proj.stack_pointer_register.clone(),
-                            rt_mem.clone(),
-                        ),
+                        PointerState {
+                            rt_mem: rt_mem.clone(),
+                            state: v.clone(),
+                        },
                     )
                 }),
 
                 NodeValue::Value(v) => Some((
                     idx,
-                    PointsToContext::new(
-                        v.clone(),
-                        proj.stack_pointer_register.clone(),
-                        rt_mem.clone(),
-                    ),
+                    PointerState {
+                        rt_mem: rt_mem.clone(),
+                        state: v.clone(),
+                    },
                 )),
             })
+        })
+        .collect();
+
+    let depth_context = stack_depth_analysis::Context::new(
+        &state_mapping,
+        cfg,
+        proj.stack_pointer_register.clone(),
+    );
+
+    let stack_depths = Arc::new(depth_context.get_stack_depths());
+
+    Ok(state_mapping
+        .into_iter()
+        .map(|(idx, ps)| {
+            (
+                idx,
+                PointsToContext::new(
+                    ps,
+                    proj.stack_pointer_register.clone(),
+                    stack_depths.clone(),
+                ),
+            )
         })
         .collect())
 }

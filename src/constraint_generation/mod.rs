@@ -373,6 +373,26 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     }
 }
 
+/// Thread the blk context through an inner state computation, monad like.
+pub fn fold_over_definition_states<C: NodeContextMapping, I>(
+    nd_ctxt: C,
+    blk: &Term<Blk>,
+    init_inner_state: I,
+    produce_new_inner_state: &mut impl FnMut(&Term<Def>, &C, I) -> I,
+) -> I {
+    let (final_inner_state, _last_nd_ctxt) = blk.term.defs.iter().fold(
+        (init_inner_state, nd_ctxt),
+        |(inner_state, new_ctxt), df: &Term<Def>| {
+            let next_inner = produce_new_inner_state(df, &new_ctxt, inner_state);
+            let next_ctxt = new_ctxt.apply_def(df);
+
+            (next_inner, next_ctxt)
+        },
+    );
+
+    final_inner_state
+}
+
 /// Holds a mapping between the nodes and their flow-sensitive analysis results, which
 /// are needed for constraint generation
 pub struct Context<'a, R, P, S>
@@ -417,16 +437,17 @@ where
         blk: &Term<Blk>,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        let (constraints, last_nd_ctxt) = blk.term.defs.iter().fold(
-            (ConstraintSet::default(), nd_ctxt),
-            |(mut constraints, new_ctxt), df: &Term<Def>| {
-                constraints.insert_all(&new_ctxt.handle_def(df, vman));
-                let next_ctxt = new_ctxt.apply_def(df);
-                (constraints, next_ctxt)
+        fold_over_definition_states(
+            nd_ctxt,
+            blk,
+            ConstraintSet::default(),
+            &mut |df: &Term<Def>,
+                  curr_ctxt: &NodeContext<R, P, S>,
+                  mut curr_constraints: ConstraintSet| {
+                curr_constraints.insert_all(&curr_ctxt.handle_def(df, vman));
+                curr_constraints
             },
-        );
-
-        constraints
+        )
     }
 
     fn generate_constraints_for_node(
