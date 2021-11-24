@@ -5,6 +5,7 @@ use cwe_checker_lib::{
 use log::{info, warn};
 use petgraph::{
     graph::{Edges, IndexType, NodeIndex},
+    visit::IntoEdges,
     EdgeDirection, EdgeType,
 };
 
@@ -381,7 +382,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         )
     }
 
-    fn handle_extern_actuals(
+    fn handle_extern_actual_params(
         &self,
         sub: &Term<ExternSymbol>,
         vman: &mut VariableManager,
@@ -391,6 +392,20 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             &sub.term.parameters,
             &|i| FieldLabel::In(i),
             false,
+            vman,
+        )
+    }
+
+    fn handle_extern_actual_rets(
+        &self,
+        sub: &Term<ExternSymbol>,
+        vman: &mut VariableManager,
+    ) -> ConstraintSet {
+        self.make_constraints(
+            sub,
+            &sub.term.return_values,
+            &|i| FieldLabel::Out(i),
+            true,
             vman,
         )
     }
@@ -495,13 +510,43 @@ where
 
         called_externs
             .map(|ext| {
-                let cons = nd_ctxt.handle_extern_actuals(&ext, vman);
+                let cons = nd_ctxt.handle_extern_actual_params(&ext, vman);
                 cons
             })
             .fold(ConstraintSet::default(), |mut prev, nxt| {
                 prev.insert_all(&nxt);
                 prev
             })
+    }
+
+    fn edges_to_edge_iter<E, Ty: EdgeType, Idx: IndexType>(
+        edges: Edges<E, Ty, Idx>,
+    ) -> impl Iterator<Item = &E> {
+        edges.map(|x| x.weight())
+    }
+
+    fn collect_extern_ret_constraints(
+        &self,
+        edges: impl Iterator<Item = &'a Edge<'a>>,
+        nd_ctxt: &NodeContext<R, P, S>,
+        vman: &mut VariableManager,
+    ) -> ConstraintSet {
+        let mut cons = ConstraintSet::default();
+        for edge in edges {
+            if let Edge::ExternCallStub(jmp) = edge {
+                if let Jmp::Call { target, .. } = &jmp.term {
+                    if let Some(extern_symb) = self.extern_symbols.get(target) {
+                        let term = Term {
+                            term: extern_symb.clone(),
+                            tid: target.clone(),
+                        };
+
+                        cons.insert_all(&nd_ctxt.handle_extern_actual_rets(&term, vman));
+                    }
+                }
+            }
+        }
+        cons
     }
 
     fn generate_constraints_for_node(
@@ -516,7 +561,18 @@ where
             match nd {
                 Node::BlkStart(blk, sub) => {
                     // TODO(ian): if there is an incoming extern call then we need to add the extern actual rets
+
                     let mut total_cons = ConstraintSet::default();
+
+                    let incoming_edges = Self::edges_to_edge_iter(
+                        self.graph.edges_directed(nd_ind, EdgeDirection::Incoming),
+                    );
+
+                    let add_cons =
+                        self.collect_extern_ret_constraints(incoming_edges, nd_cont, vman);
+
+                    total_cons.insert_all(&add_cons);
+
                     if blk.tid == sub.term.blocks[0].tid {
                         let ent_cons = nd_cont.handle_entry_formals(sub, vman);
                         total_cons.insert_all(&ent_cons);
