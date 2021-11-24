@@ -84,7 +84,6 @@ impl PointsToContext {
         sz: ByteSize,
     ) -> TypeVariableAccess {
         // TODO(ian): we may want to normalize this offset to the abstract object offset
-        // TODO(ian): This normalizes to the *current* stack size but this could cause overlaps if we have say stack params.
         TypeVariableAccess {
             offset: offset.try_to_offset().ok().and_then(|off| {
                 let mut curr_offset = off;
