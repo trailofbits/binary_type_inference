@@ -88,46 +88,21 @@ impl PointsToContext {
         TypeVariableAccess {
             offset: offset.try_to_offset().ok().and_then(|off| {
                 let mut curr_offset = off;
-                if &self.pointer_state.state.stack_id == object_id {
-                    // access on our current stack
-                    // so safe to normalize to positive
-                    if let Some((stack_id, sp_off)) = self
-                        .pointer_state
-                        .state
-                        .get_register(&self.stack_pointer)
-                        .get_if_unique_target()
-                    {
-                        //eprintln!("{:?}", self.pointer_state.memory.get_upp(stack_id))
-                        /*
-                        if let Ok(curr_size) = sp_off.try_to_offset() {
-                            if (-curr_size) < (-curr_offset) {
-                                warn!(
-                                    "Accessing stack offset {} when size is {}",
-                                    curr_offset, curr_size
-                                );
-                            }
-                            info!(
-                                "Updating offset {} by {} to {}",
-                                curr_offset,
-                                -curr_size,
-                                curr_offset - curr_size
-                            );
-                            curr_offset -= curr_size;
-                        }*/
-                    }
+                if let Some(min_depth) = self.stack_depths.get(object_id) {
+                    curr_offset += -min_depth;
                 }
 
-                /* if curr_offset.is_negative() {
+                if curr_offset.is_negative() {
                     warn!(
                         "Unhandled negative offset {:?} {} stack_id: {},",
                         object_id.to_string(),
                         curr_offset,
-                        self.pointer_state.stack_id,
+                        self.pointer_state.state.stack_id,
                     );
-                    None*
-                } else {*/
-                Some(curr_offset)
-                //}
+                    None
+                } else {
+                    Some(curr_offset)
+                }
             }),
             ty_var: TypeVariable::new(
                 object_id
