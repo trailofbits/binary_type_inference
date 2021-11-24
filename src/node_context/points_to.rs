@@ -10,7 +10,7 @@ use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
 use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Project, Variable};
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
-use log::{info, warn};
+use log::warn;
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
@@ -18,6 +18,7 @@ use std::sync::Arc;
 /// Wrpas a pointer state such that successor states can be generated.
 #[derive(Clone)]
 pub struct PointerState {
+    /// The inner pointer inference state
     pub state: pointer_inference::State,
     rt_mem: Arc<RuntimeMemoryImage>,
 }
@@ -30,9 +31,11 @@ impl NodeContextMapping for PointerState {
             // TODO(ian): dont unwrap
             Def::Load { var, address } => new_ptr_state
                 .handle_load(var, address, &self.rt_mem)
-                .unwrap(),
+                .expect("Could not handle load"),
             Def::Store { address, value } => {
-                new_ptr_state.handle_store(address, value, &self.rt_mem);
+                new_ptr_state
+                    .handle_store(address, value, &self.rt_mem)
+                    .expect("Could not handle store");
             }
         };
 

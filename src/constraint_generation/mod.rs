@@ -1,9 +1,12 @@
 use cwe_checker_lib::{
-    analysis::graph::{Graph, Node},
-    intermediate_representation::{Arg, Blk, Def, Jmp, Sub, Term},
+    analysis::graph::{Edge, Graph, Node},
+    intermediate_representation::{Arg, Blk, Def, ExternSymbol, Jmp, Sub, Term},
 };
 use log::{info, warn};
-use petgraph::graph::NodeIndex;
+use petgraph::{
+    graph::{Edges, IndexType, NodeIndex},
+    EdgeDirection, EdgeType,
+};
 
 use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variable};
 
@@ -14,7 +17,10 @@ use crate::constraints::{
     VariableManager,
 };
 
-use std::collections::{btree_set::BTreeSet, HashMap};
+use std::{
+    collections::{btree_set::BTreeSet, BTreeMap, HashMap},
+    hash::Hash,
+};
 
 /// Gets a type variable for a [Tid] where multiple type variables need to exist at that [Tid] which are distinguished by which [Variable] they operate over.
 pub fn tid_indexed_by_variable(tid: &Tid, var: &Variable) -> TypeVariable {
@@ -48,7 +54,7 @@ pub trait RegisterMapping: NodeContextMapping {
     fn access(&self, var: &Variable, vman: &mut VariableManager) -> (TypeVariable, ConstraintSet);
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 /// Describes a [TypeVariable] for an abstract memory location where the acess may occur at some fixed offset into the type variable's cell.
 pub struct TypeVariableAccess {
     /// The type variable which is accessed
@@ -266,7 +272,10 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
         match &df.term {
-            Def::Load { var, address } => self.apply_load(&df.tid, var, address, vman),
+            Def::Load { var, address } => {
+                let cons = self.apply_load(&df.tid, var, address, vman);
+                cons
+            }
             Def::Store { address, value } => self.apply_store(&df.tid, value, address, vman),
             Def::Assign { var, value } => self.apply_assign(&df.tid, var, value, vman),
         }
@@ -285,19 +294,19 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         }
     }
 
-    fn create_formal_tvar(
+    fn create_formal_tvar<T>(
         indx: usize,
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
-        sub: &Term<Sub>,
+        sub: &Term<T>,
     ) -> DerivedTypeVar {
         let mut base = DerivedTypeVar::new(term_to_tvar(&sub));
         base.add_field_label(index_to_field_label(indx));
         base
     }
 
-    fn make_constraints(
+    fn make_constraints<T>(
         &self,
-        sub: &Term<Sub>,
+        sub: &Term<T>,
         args: &[Arg],
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
         arg_is_written: bool,
@@ -318,7 +327,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             start_constraints.insert_all(&add_cons);
 
             for arg_repr_tvar in arg_tvars {
-                let dt = Self::argtvar_to_dtv(arg_repr_tvar, true);
+                let dt = Self::argtvar_to_dtv(arg_repr_tvar, arg_is_written);
                 let new_cons = if arg_is_written {
                     SubtypeConstraint::new(formal_tv.clone(), dt)
                 } else {
@@ -371,6 +380,20 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             vman,
         )
     }
+
+    fn handle_extern_actuals(
+        &self,
+        sub: &Term<ExternSymbol>,
+        vman: &mut VariableManager,
+    ) -> ConstraintSet {
+        self.make_constraints(
+            sub,
+            &sub.term.parameters,
+            &|i| FieldLabel::In(i),
+            false,
+            vman,
+        )
+    }
 }
 
 /// Thread the blk context through an inner state computation, monad like.
@@ -403,6 +426,7 @@ where
 {
     graph: &'a Graph<'a>,
     node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
+    extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
 }
 
 impl<'a, R, P, S> Context<'a, R, P, S>
@@ -415,10 +439,12 @@ where
     pub fn new(
         graph: &'a Graph<'a>,
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
+        extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
     ) -> Context<'a, R, P, S> {
         Context {
             graph,
             node_contexts,
+            extern_symbols,
         }
     }
 
@@ -448,6 +474,34 @@ where
                 curr_constraints
             },
         )
+    }
+
+    fn collect_extern_call_constraints(
+        &self,
+        edges: &[Term<Jmp>],
+        nd_ctxt: &NodeContext<R, P, S>,
+        vman: &mut VariableManager,
+    ) -> ConstraintSet {
+        let called_externs = edges.iter().filter_map(|jmp| {
+            if let Jmp::Call { target, .. } = &jmp.term {
+                return self.extern_symbols.get(target).map(|t| Term {
+                    term: t.clone(),
+                    tid: target.clone(),
+                });
+            }
+
+            None
+        });
+
+        called_externs
+            .map(|ext| {
+                let cons = nd_ctxt.handle_extern_actuals(&ext, vman);
+                cons
+            })
+            .fold(ConstraintSet::default(), |mut prev, nxt| {
+                prev.insert_all(&nxt);
+                prev
+            })
     }
 
     fn generate_constraints_for_node(
@@ -481,12 +535,18 @@ where
                 } => nd_cont.handle_call_actual(target_func, vman),
                 // block post conditions arent needed to generate constraints
                 Node::BlkEnd(blk, sub) => {
+                    let mut cs = ConstraintSet::default();
+
+                    let add_cons =
+                        self.collect_extern_call_constraints(&blk.term.jmps, nd_cont, vman);
+                    cs.insert_all(&add_cons);
+
                     // TODO(ian): if there is an outgoing extern call then we need to add the actual args
                     if Self::blk_does_return(blk) {
-                        nd_cont.handle_retun_formals(&sub, vman)
-                    } else {
-                        ConstraintSet::default()
+                        cs.insert_all(&nd_cont.handle_retun_formals(&sub, vman));
                     }
+
+                    cs
                 }
             }
         } else {

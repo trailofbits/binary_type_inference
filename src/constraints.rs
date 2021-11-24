@@ -176,6 +176,7 @@ impl Display for SubtypeConstraint {
 }
 
 /// A set of [SubtypeConstraint]
+#[derive(Debug)]
 pub struct ConstraintSet(BTreeSet<SubtypeConstraint>);
 
 impl ConstraintSet {

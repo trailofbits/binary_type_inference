@@ -49,7 +49,8 @@ fn main() -> anyhow::Result<()> {
         &rt_mem,
     )?;
 
-    let ctx = constraint_generation::Context::new(&graph, nd_context);
+    let ctx =
+        constraint_generation::Context::new(&graph, nd_context, &ir.program.term.extern_symbols);
     let constraints = ctx.generate_constraints();
 
     print!("{}", constraints);
