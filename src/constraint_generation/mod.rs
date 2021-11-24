@@ -36,7 +36,7 @@ pub fn arg_tvar(index: usize, target_sub: &Tid) -> TypeVariable {
     TypeVariable::new(format!("arg_{}_{}", target_sub.get_str_repr(), index))
 }
 
-pub trait NodeContextMapping {
+pub trait NodeContextMapping: Clone {
     fn apply_def(&self, term: &Term<Def>) -> Self;
 }
 
@@ -137,6 +137,7 @@ pub trait SubprocedureLocators: NodeContextMapping {
 /// The register mapping provides constraints and type variables to represent a register when it is accessed via some notion of reaching definitions.
 /// The PointsToMapping determines the set of a type variables a load or store points to in order to generate constraints.
 /// Finally the SubprocedureLocators are used to link actual and formal arguments and returns within constraints.
+#[derive(Clone)]
 pub struct NodeContext<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> {
     reg_map: R,
     points_to: P,
@@ -416,10 +417,16 @@ where
         blk: &Term<Blk>,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        blk.term.defs.iter().fold(
+        let (constraints, last_nd_ctxt) = blk.term.defs.iter().fold(
             (ConstraintSet::default(), nd_ctxt),
-            |df: &Term<Def>, (constraints, new_ctxt)| {},
-        )
+            |(mut constraints, new_ctxt), df: &Term<Def>| {
+                constraints.insert_all(&new_ctxt.handle_def(df, vman));
+                let next_ctxt = new_ctxt.apply_def(df);
+                (constraints, next_ctxt)
+            },
+        );
+
+        constraints
     }
 
     fn generate_constraints_for_node(
@@ -439,8 +446,8 @@ where
                         let ent_cons = nd_cont.handle_entry_formals(sub, vman);
                         total_cons.insert_all(&ent_cons);
                     }
-
-                    total_cons.insert_all(&nd_cont.handle_block_start(blk, vman));
+                    let new_context: NodeContext<R, P, S> = (*nd_cont).clone();
+                    total_cons.insert_all(&Self::handle_block_start(new_context, blk, vman));
                     total_cons
                 }
                 Node::CallReturn {

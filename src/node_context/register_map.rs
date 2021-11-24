@@ -17,6 +17,7 @@ use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, pointer_infere
 use cwe_checker_lib::intermediate_representation::Def;
 
 /// The context of register definitions for a given program ICFG node.
+#[derive(Clone)]
 pub struct RegisterContext {
     mapping: BTreeMap<Variable, TermSet>,
 }

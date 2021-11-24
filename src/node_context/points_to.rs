@@ -15,6 +15,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
 /// Holds a pointer_inference state for a node in order to mantain a type variable mapping for pointers.
+#[derive(Clone)]
 pub struct PointsToContext {
     pointer_state: pointer_inference::State,
     /// Stack pointer for the program, used to determine the stack offset
