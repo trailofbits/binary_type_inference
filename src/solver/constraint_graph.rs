@@ -11,7 +11,7 @@ mod tests {
     #[test]
     fn constraints_linked_list() {
         /*
-           constraints.add(SchemaParser.parse_constraint("F.in_0 ⊑ δ"))
+        constraints.add(SchemaParser.parse_constraint("F.in_0 ⊑ δ"))
         constraints.add(SchemaParser.parse_constraint("α ⊑ φ"))
         constraints.add(SchemaParser.parse_constraint("δ ⊑ φ"))
         constraints.add(SchemaParser.parse_constraint("φ.load.σ4@0 ⊑ α"))

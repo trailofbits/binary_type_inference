@@ -95,6 +95,8 @@ impl<'a> Context<'a> {
             }
         }
 
+        eprintln!("stack analysis {:?}", min_stack_depth);
+
         min_stack_depth
     }
 }

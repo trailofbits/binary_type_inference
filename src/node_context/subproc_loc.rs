@@ -40,6 +40,12 @@ impl SubprocedureLocators for ProcedureContext {
                 (tvset, cons)
             }
             Arg::Stack { offset, size, .. } => {
+                // Reason this is ok in the case of actuals: at an actual call site the stack pointer is going to be below the newly pushed EIP which is the 0 offset of the new frame.
+                // Therefore the offset is safe for our current frame.
+
+                // If it's a formal this is still valid because we add the base for that frame but the frame still points to the same 0 point.
+                // Returns are less clear
+                // TODO(ian): examine returns (returns cant be on the stack so do we care)?
                 let accessed_pointers = points_to.points_to(
                     &Expression::Var(self.stack_pointer.clone()).plus_const(*offset),
                     *size,
