@@ -193,7 +193,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         &self,
         value: &Self::Value,
         _call: &Term<Jmp>,
-        target: &Node<'_>,
+        _target: &Node<'_>,
     ) -> Option<Self::Value> {
         Some(value.clone())
     }

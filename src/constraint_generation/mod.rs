@@ -5,7 +5,6 @@ use cwe_checker_lib::{
 use log::{info, warn};
 use petgraph::{
     graph::{Edges, IndexType, NodeIndex},
-    visit::IntoEdges,
     EdgeDirection, EdgeType,
 };
 
@@ -18,10 +17,7 @@ use crate::constraints::{
     VariableManager,
 };
 
-use std::{
-    collections::{btree_set::BTreeSet, BTreeMap, HashMap},
-    hash::Hash,
-};
+use std::collections::{btree_set::BTreeSet, BTreeMap, HashMap};
 
 /// Gets a type variable for a [Tid] where multiple type variables need to exist at that [Tid] which are distinguished by which [Variable] they operate over.
 pub fn tid_indexed_by_variable(tid: &Tid, var: &Variable) -> TypeVariable {
@@ -43,7 +39,10 @@ pub fn arg_tvar(index: usize, target_sub: &Tid) -> TypeVariable {
     TypeVariable::new(format!("arg_{}_{}", target_sub.get_str_repr(), index))
 }
 
+/// A [NodeContextMapping] provides information about the program state at a given CFG node. Because basic blocks contain multiple defs
+/// contexts must be capable of reapplying def terms to compute the intermediate states.
 pub trait NodeContextMapping: Clone {
+    /// Applys the given definition term to the state to compute the state after this def's affects have been applied to the state.
     fn apply_def(&self, term: &Term<Def>) -> Self;
 }
 

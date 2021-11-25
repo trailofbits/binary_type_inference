@@ -6,9 +6,7 @@ struct Transducer {}
 
 #[cfg(test)]
 mod tests {
-    use crate::constraints::{
-        ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable,
-    };
+    use crate::constraints::{DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable};
 
     #[test]
     fn constraints_linked_list() {
@@ -44,7 +42,7 @@ mod tests {
         // in the example the list is a non memory object so we'll get a fresh type variable to represent it since there is no points to
         //let list_tv = DerivedTypeVar::new()
 
-        let cons = vec![
+        let _cons = vec![
             SubtypeConstraint::new(param_0.clone(), arg_0.clone()),
             SubtypeConstraint::new(arg_0.clone(), arg_0_locator.clone()),
             SubtypeConstraint::new(arg_0_locator_load, edx0),
