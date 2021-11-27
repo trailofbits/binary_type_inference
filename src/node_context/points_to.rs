@@ -168,7 +168,7 @@ pub fn run_analysis<'a>(
     cfg: &'a Graph<'a>,
     rt_mem: &'a RuntimeMemoryImage,
 ) -> Result<HashMap<NodeIndex, PointsToContext>> {
-    let pointer_res = pointer_inference::run(proj, &rt_mem, cfg, config, false, false);
+    let pointer_res = pointer_inference::run(proj, rt_mem, cfg, config, false, false);
 
     let rt_mem = Arc::new(rt_mem.clone());
 

@@ -23,11 +23,10 @@ fn merge_into(
     for (k, v) in from_map.iter() {
         into_map.insert(
             k.clone(),
-            into_map
+            *into_map
                 .get(k)
                 .map(|other| if other < v { other } else { v })
-                .unwrap_or(v)
-                .clone(),
+                .unwrap_or(v),
         );
     }
 }
@@ -85,12 +84,9 @@ impl<'a> Context<'a> {
         for nd_idx in self.graph.node_indices() {
             let nd_ctx = self.node_contexts.get(&nd_idx);
             if let Some(nd_ctx) = nd_ctx {
-                match self.graph[nd_idx] {
-                    Node::BlkStart(blk, _sub) => {
-                        let new_offsets = self.compute_min_depth_for_blk(nd_ctx.clone(), blk);
-                        merge_into(&mut min_stack_depth, &new_offsets);
-                    }
-                    _ => (),
+                if let Node::BlkStart(blk, _sub) = self.graph[nd_idx] {
+                    let new_offsets = self.compute_min_depth_for_blk(nd_ctx.clone(), blk);
+                    merge_into(&mut min_stack_depth, &new_offsets);
                 }
             }
         }

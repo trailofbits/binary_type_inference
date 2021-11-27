@@ -2,7 +2,7 @@ use cwe_checker_lib::{
     analysis::graph::{Edge, Graph, Node},
     intermediate_representation::{Arg, Blk, Def, ExternSymbol, Jmp, Sub, Term},
 };
-use log::{info, warn};
+use log::warn;
 use petgraph::{
     graph::{Edges, IndexType, NodeIndex},
     EdgeDirection, EdgeType,
@@ -87,44 +87,6 @@ pub enum ArgTvar {
     VariableTvar(TypeVariable),
 }
 
-struct Memop {
-    sz: ByteSize,
-    addr: Expression,
-    reg_value: TypeVariable,
-    reg_constraints: ConstraintSet,
-}
-
-impl Memop {
-    fn apply_mem_op(
-        &self,
-        points_to: &impl PointsToMapping,
-        vman: &mut VariableManager,
-        make_type_var: impl Fn(TypeVariableAccess) -> DerivedTypeVar,
-        memop_is_upcasted: bool,
-    ) -> ConstraintSet {
-        let mut new_cons = self.reg_constraints.clone();
-        let all_tvars = points_to.points_to(&self.addr, self.sz, vman);
-        let all_dtvars: BTreeSet<DerivedTypeVar> =
-            all_tvars.into_iter().map(|tv| make_type_var(tv)).collect();
-
-        all_dtvars
-            .into_iter()
-            .map(|memop_tvar| {
-                let reg_tvar = DerivedTypeVar::new(self.reg_value.clone());
-                if memop_is_upcasted {
-                    SubtypeConstraint::new(memop_tvar, reg_tvar)
-                } else {
-                    SubtypeConstraint::new(reg_tvar, memop_tvar)
-                }
-            })
-            .for_each(|cons| {
-                info!("{}", cons);
-                new_cons.insert(cons);
-            });
-        ConstraintSet::from(new_cons)
-    }
-}
-
 /// Links formal parameters with the type variable for their actual argument at callsites.
 /// Additionally, links actual returns to formal returns at return sites.
 pub trait SubprocedureLocators: NodeContextMapping {
@@ -137,6 +99,11 @@ pub trait SubprocedureLocators: NodeContextMapping {
         points_to: &impl PointsToMapping,
         vm: &mut VariableManager,
     ) -> (BTreeSet<ArgTvar>, ConstraintSet);
+}
+
+struct BaseValueDomain {
+    pub repr_var: DerivedTypeVar,
+    pub additional_constriants: ConstraintSet,
 }
 
 /// Represents the flow-sensitive context needed by flow-insensitive constraint generation to generate type variables and constraints at a given program point.
@@ -188,20 +155,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         }
     }
 
-    fn generate_expression_constraint(
-        &self,
-        lhs_type_var: TypeVariable,
-        value: &Expression,
-        vman: &mut VariableManager,
-    ) -> ConstraintSet {
-        let (rhs_type_var, mut constraints) = self.evaluate_expression(value, vman);
-        constraints.insert(SubtypeConstraint::new(
-            DerivedTypeVar::new(rhs_type_var),
-            DerivedTypeVar::new(lhs_type_var),
-        ));
-        constraints
-    }
-
     fn apply_assign(
         &self,
         tid: &Tid,
@@ -209,10 +162,9 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         value: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        let mut constraints = ConstraintSet::default();
-        let typ_var = tid_indexed_by_variable(tid, var);
-        let new_cons = self.generate_expression_constraint(typ_var, value, vman);
-        constraints.insert_all(&new_cons);
+        let (rhs_type_var, mut constraints) = self.evaluate_expression(value, vman);
+        let cons = Self::reg_update(tid, var, DerivedTypeVar::new(rhs_type_var));
+        constraints.insert_all(&cons);
         constraints
     }
 
@@ -228,6 +180,16 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         Self::make_mem_tvar(var, FieldLabel::Load)
     }
 
+    fn reg_update(at_term: &Tid, v_into: &Variable, value_repr: DerivedTypeVar) -> ConstraintSet {
+        let reg_tv = tid_indexed_by_variable(at_term, v_into);
+        let mut cons = ConstraintSet::default();
+        cons.insert(SubtypeConstraint::new(
+            value_repr,
+            DerivedTypeVar::new(reg_tv),
+        ));
+        cons
+    }
+
     fn apply_load(
         &self,
         tid: &Tid,
@@ -235,47 +197,107 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         address: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        let constraints = ConstraintSet::default();
-        let typ_var = tid_indexed_by_variable(tid, v_into);
-        let memop = Memop {
-            sz: v_into.size,
-            addr: address.clone(),
-            reg_value: typ_var,
-            reg_constraints: constraints,
-        };
-        memop.apply_mem_op(&self.points_to, vman, Self::make_loaded_tvar, true)
+        let bv = self.memaccess(address, v_into.size, vman);
+
+        let cons = bv.additional_constriants;
+        let addr_repr = bv.repr_var;
+
+        let mut base_set = Self::reg_update(tid, v_into, addr_repr);
+        base_set.insert_all(&cons);
+        base_set
     }
 
     fn make_store_tvar(var: TypeVariableAccess) -> DerivedTypeVar {
         Self::make_mem_tvar(var, FieldLabel::Store)
     }
 
+    fn build_addressing_representation(
+        &self,
+        adressing_expr: &Expression,
+        sz: ByteSize,
+        field_label: FieldLabel,
+        address_is_subtype: bool,
+        vman: &mut VariableManager,
+    ) -> BaseValueDomain {
+        let tv_access = self.points_to.points_to(adressing_expr, sz, vman);
+        let (reg_repr, mut cons) = self.evaluate_expression(adressing_expr, vman);
+
+        let mut representation = DerivedTypeVar::new(reg_repr);
+        representation.add_field_label(field_label);
+        representation.add_field_label(FieldLabel::Field(Field::new(0, sz.as_bit_length())));
+
+        for acc in tv_access.iter() {
+            let mut dt_repr = DerivedTypeVar::new(acc.ty_var.clone());
+            if let Some(off) = acc.offset {
+                dt_repr.add_field_label(FieldLabel::Field(Field::new(off, acc.sz.as_bit_length())));
+            }
+
+            let new_cons = if address_is_subtype {
+                SubtypeConstraint::new(representation.clone(), dt_repr)
+            } else {
+                SubtypeConstraint::new(dt_repr, representation.clone())
+            };
+            cons.insert(new_cons);
+        }
+
+        BaseValueDomain {
+            repr_var: representation,
+            additional_constriants: cons,
+        }
+    }
+
+    fn memaccess(
+        &self,
+        adressing_expr: &Expression,
+        sz: ByteSize,
+        vman: &mut VariableManager,
+    ) -> BaseValueDomain {
+        self.build_addressing_representation(adressing_expr, sz, FieldLabel::Load, false, vman)
+    }
+
+    /// A memupdate is side effectings so has no repr
+    fn memupdate(
+        &self,
+        addressing_expr: &Expression,
+        value_expr: &Expression,
+        vman: &mut VariableManager,
+    ) -> ConstraintSet {
+        let bv_dom = self.build_addressing_representation(
+            addressing_expr,
+            value_expr.bytesize(),
+            FieldLabel::Load,
+            false,
+            vman,
+        );
+
+        let mut cons = bv_dom.additional_constriants;
+        let ptr_repr = bv_dom.repr_var;
+
+        let (value_repr, value_cons) = self.evaluate_expression(value_expr, vman);
+
+        cons.insert_all(&value_cons);
+
+        cons.insert(SubtypeConstraint::new(
+            DerivedTypeVar::new(value_repr),
+            ptr_repr,
+        ));
+
+        cons
+    }
+
     fn apply_store(
         &self,
-        tid: &Tid,
+        _tid: &Tid,
         value_from: &Expression,
         address_into: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
-        info!("{}: store", tid);
-        let (reg_val, constraints) = self.evaluate_expression(value_from, vman);
-        info!("{}: store {}", tid, reg_val);
-
-        let memop = Memop {
-            sz: value_from.bytesize(),
-            addr: address_into.clone(),
-            reg_value: reg_val,
-            reg_constraints: constraints,
-        };
-        memop.apply_mem_op(&self.points_to, vman, Self::make_store_tvar, false)
+        self.memupdate(address_into, value_from, vman)
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
         match &df.term {
-            Def::Load { var, address } => {
-                let cons = self.apply_load(&df.tid, var, address, vman);
-                cons
-            }
+            Def::Load { var, address } => self.apply_load(&df.tid, var, address, vman),
             Def::Store { address, value } => self.apply_store(&df.tid, value, address, vman),
             Def::Assign { var, value } => self.apply_assign(&df.tid, var, value, vman),
         }
@@ -299,7 +321,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
         sub: &Term<T>,
     ) -> DerivedTypeVar {
-        let mut base = DerivedTypeVar::new(term_to_tvar(&sub));
+        let mut base = DerivedTypeVar::new(term_to_tvar(sub));
         base.add_field_label(index_to_field_label(indx));
         base
     }
@@ -463,13 +485,10 @@ where
     }
 
     fn blk_does_return(blk: &Term<Blk>) -> bool {
-        blk.term.jmps.iter().any(|jmp| {
-            if let Jmp::Return(_) = jmp.term {
-                true
-            } else {
-                false
-            }
-        })
+        blk.term
+            .jmps
+            .iter()
+            .any(|jmp| matches!(jmp.term, Jmp::Return(_)))
     }
 
     fn handle_block_start(
@@ -508,10 +527,7 @@ where
         });
 
         called_externs
-            .map(|ext| {
-                let cons = nd_ctxt.handle_extern_actual_params(&ext, vman);
-                cons
-            })
+            .map(|ext| nd_ctxt.handle_extern_actual_params(&ext, vman))
             .fold(ConstraintSet::default(), |mut prev, nxt| {
                 prev.insert_all(&nxt);
                 prev
@@ -598,7 +614,7 @@ where
 
                     // TODO(ian): if there is an outgoing extern call then we need to add the actual args
                     if Self::blk_does_return(blk) {
-                        cs.insert_all(&nd_cont.handle_retun_formals(&sub, vman));
+                        cs.insert_all(&nd_cont.handle_retun_formals(sub, vman));
                     }
 
                     cs
