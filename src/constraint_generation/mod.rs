@@ -1,6 +1,8 @@
 use cwe_checker_lib::{
     analysis::graph::{Edge, Graph, Node},
-    intermediate_representation::{Arg, Blk, Def, ExternSymbol, Jmp, Sub, Term},
+    intermediate_representation::{
+        Arg, BinOpType, Bitvector, Blk, Def, ExternSymbol, Jmp, Sub, Term, UnOpType,
+    },
 };
 use log::warn;
 use petgraph::{
@@ -13,8 +15,8 @@ use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variabl
 use cwe_checker_lib::intermediate_representation::Tid;
 
 use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable,
-    VariableManager,
+    AddConstraint, ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint,
+    TyConstraint, TypeVariable, VariableManager,
 };
 
 use std::collections::{btree_set::BTreeSet, BTreeMap, HashMap};
@@ -101,9 +103,40 @@ pub trait SubprocedureLocators: NodeContextMapping {
     ) -> (BTreeSet<ArgTvar>, ConstraintSet);
 }
 
+// TODO(ian): this should have some sort of function on it that takes a lambda and basically joins constraints together to acess the derived type variable or something to prevent
+// issues where constraints are forgetten, this is perhaps a functor tbh
 struct BaseValueDomain {
     pub repr_var: DerivedTypeVar,
     pub additional_constriants: ConstraintSet,
+}
+
+impl BaseValueDomain {
+    fn merge(
+        self,
+        BaseValueDomain {
+            repr_var,
+            mut additional_constriants,
+        }: BaseValueDomain,
+        f: &impl Fn(DerivedTypeVar, DerivedTypeVar, ConstraintSet) -> BaseValueDomain,
+    ) -> BaseValueDomain {
+        additional_constriants.insert_all(&self.additional_constriants);
+        f(self.repr_var, repr_var, additional_constriants)
+    }
+}
+
+impl From<(DerivedTypeVar, ConstraintSet)> for BaseValueDomain {
+    fn from(t: (DerivedTypeVar, ConstraintSet)) -> Self {
+        BaseValueDomain {
+            repr_var: t.0,
+            additional_constriants: t.1,
+        }
+    }
+}
+
+impl Into<(DerivedTypeVar, ConstraintSet)> for BaseValueDomain {
+    fn into(self) -> (DerivedTypeVar, ConstraintSet) {
+        (self.repr_var, self.additional_constriants)
+    }
 }
 
 /// Represents the flow-sensitive context needed by flow-insensitive constraint generation to generate type variables and constraints at a given program point.
@@ -138,19 +171,90 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         }
     }
 
+    fn generate_const_add_repr(bv: Bitvector, mut expr_repr: BaseValueDomain) -> BaseValueDomain {
+        let constant = bv
+            .try_to_i128()
+            .expect("unable to get constant addition as i128");
+
+        expr_repr
+            .repr_var
+            .add_field_label(FieldLabel::Add(constant));
+        expr_repr
+    }
+
+    fn eval_add(
+        &self,
+        lhs: &Expression,
+        rhs: &Expression,
+        vman: &mut VariableManager,
+    ) -> (DerivedTypeVar, ConstraintSet) {
+        match (lhs, rhs) {
+            (Expression::Const(lhs_const), other_e) => Self::generate_const_add_repr(
+                lhs_const.to_owned(),
+                BaseValueDomain::from(self.evaluate_expression(other_e, vman)),
+            )
+            .into(),
+            (other_e, Expression::Const(rhs_const)) => Self::generate_const_add_repr(
+                rhs_const.to_owned(),
+                BaseValueDomain::from(self.evaluate_expression(other_e, vman)),
+            )
+            .into(),
+            (exp_lhs, exp_rhs) => {
+                let exp1_repr = BaseValueDomain::from(self.evaluate_expression(exp_lhs, vman));
+                let exp2_rep = BaseValueDomain::from(self.evaluate_expression(exp_rhs, vman));
+                let nvar = DerivedTypeVar::new(vman.fresh());
+                exp1_repr
+                    .merge(exp2_rep, &|lhs, rhs, mut cons| {
+                        let add_const = AddConstraint::new(lhs, rhs, nvar.clone());
+                        cons.insert(TyConstraint::AddCons(add_const));
+                        BaseValueDomain {
+                            repr_var: nvar.clone(),
+                            additional_constriants: cons,
+                        }
+                    })
+                    .into()
+            }
+        }
+    }
+
+    fn evaluate_binop(
+        &self,
+        op: &BinOpType,
+        lhs: &Expression,
+        rhs: &Expression,
+        vman: &mut VariableManager,
+    ) -> (DerivedTypeVar, ConstraintSet) {
+        match op {
+            BinOpType::IntAdd => self.eval_add(lhs, rhs, vman),
+            BinOpType::IntSub => self.eval_add(
+                lhs,
+                &Expression::UnOp {
+                    op: UnOpType::IntNegate,
+                    arg: Box::new(rhs.clone()),
+                },
+                vman,
+            ),
+            _ => {
+                warn!("Unhandled binop type: {:?}", op);
+                (DerivedTypeVar::new(vman.fresh()), ConstraintSet::default())
+            }
+        }
+    }
+
     fn evaluate_expression(
         &self,
         value: &Expression,
         vman: &mut VariableManager,
-    ) -> (TypeVariable, ConstraintSet) {
+    ) -> (DerivedTypeVar, ConstraintSet) {
         match &value {
             Expression::Var(v2) => {
                 let (rhs_type_var, additional_constraints) = self.reg_map.access(v2, vman);
-                (rhs_type_var, additional_constraints)
+                (DerivedTypeVar::new(rhs_type_var), additional_constraints)
             }
+            Expression::BinOp { op, lhs, rhs } => self.evaluate_binop(op, lhs, rhs, vman),
             _ => {
                 warn!("Unhandled expression: {:?}", value);
-                (vman.fresh(), ConstraintSet::empty())
+                (DerivedTypeVar::new(vman.fresh()), ConstraintSet::empty())
             } // TODO(ian) handle additional constraints, add/sub
         }
     }
@@ -163,7 +267,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         vman: &mut VariableManager,
     ) -> ConstraintSet {
         let (rhs_type_var, mut constraints) = self.evaluate_expression(value, vman);
-        let cons = Self::reg_update(tid, var, DerivedTypeVar::new(rhs_type_var));
+        let cons = Self::reg_update(tid, var, rhs_type_var);
         constraints.insert_all(&cons);
         constraints
     }
@@ -183,10 +287,10 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     fn reg_update(at_term: &Tid, v_into: &Variable, value_repr: DerivedTypeVar) -> ConstraintSet {
         let reg_tv = tid_indexed_by_variable(at_term, v_into);
         let mut cons = ConstraintSet::default();
-        cons.insert(SubtypeConstraint::new(
+        cons.insert(TyConstraint::SubTy(SubtypeConstraint::new(
             value_repr,
             DerivedTypeVar::new(reg_tv),
-        ));
+        )));
         cons
     }
 
@@ -222,7 +326,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         let tv_access = self.points_to.points_to(adressing_expr, sz, vman);
         let (reg_repr, mut cons) = self.evaluate_expression(adressing_expr, vman);
 
-        let mut representation = DerivedTypeVar::new(reg_repr);
+        let mut representation = reg_repr;
         representation.add_field_label(field_label);
         representation.add_field_label(FieldLabel::Field(Field::new(0, sz.as_bit_length())));
 
@@ -237,7 +341,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             } else {
                 SubtypeConstraint::new(dt_repr, representation.clone())
             };
-            cons.insert(new_cons);
+            cons.insert(TyConstraint::SubTy(new_cons));
         }
 
         BaseValueDomain {
@@ -277,10 +381,9 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
         cons.insert_all(&value_cons);
 
-        cons.insert(SubtypeConstraint::new(
-            DerivedTypeVar::new(value_repr),
-            ptr_repr,
-        ));
+        cons.insert(TyConstraint::SubTy(SubtypeConstraint::new(
+            value_repr, ptr_repr,
+        )));
 
         cons
     }
@@ -355,7 +458,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                 } else {
                     SubtypeConstraint::new(dt, formal_tv.clone())
                 };
-                start_constraints.insert(new_cons);
+                start_constraints.insert(TyConstraint::SubTy(new_cons));
             }
         }
         start_constraints
@@ -633,7 +736,7 @@ where
             cs = ConstraintSet::from(
                 cs.union(&self.generate_constraints_for_node(nd_ind, &mut vman))
                     .cloned()
-                    .collect::<BTreeSet<SubtypeConstraint>>(),
+                    .collect::<BTreeSet<TyConstraint>>(),
             );
         }
         cs

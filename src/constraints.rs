@@ -1,6 +1,6 @@
 use log::error;
 use std::collections::BTreeSet;
-use std::fmt::{Display, Write};
+use std::fmt::{write, Debug, Display, Write};
 use std::ops::{Deref, DerefMut};
 use std::vec::Vec;
 
@@ -92,6 +92,8 @@ pub enum FieldLabel {
     Out(usize),
     /// A field with the specified bit width and byte offset
     Field(Field),
+    ///The type variable with the addition of a constant offset
+    Add(i128),
 }
 
 impl Display for FieldLabel {
@@ -99,6 +101,7 @@ impl Display for FieldLabel {
         match self {
             FieldLabel::Load => f.write_str("load"),
             FieldLabel::Store => f.write_str("store"),
+            &FieldLabel::Add(offset) => f.write_fmt(format_args!("+{}", offset)),
             FieldLabel::In(ind) => f.write_fmt(format_args!("in_{}", ind)),
             FieldLabel::Out(ind) => {
                 if *ind != 0 {
@@ -106,7 +109,7 @@ impl Display for FieldLabel {
                 }
                 f.write_str("out")
             }
-            FieldLabel::Field(field) => field.fmt(f),
+            FieldLabel::Field(field) => write!(f, "{}", field),
         }
     }
 }
@@ -124,10 +127,10 @@ pub struct DerivedTypeVar {
 
 impl Display for DerivedTypeVar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.var.fmt(f)?;
+        write!(f, "{}", self.var)?;
         for l in self.labels.iter() {
             f.write_char('.')?;
-            l.fmt(f)?;
+            write!(f, "{}", l)?;
         }
         Ok(())
     }
@@ -177,7 +180,56 @@ impl Display for SubtypeConstraint {
 
 /// A set of [SubtypeConstraint]
 #[derive(Debug)]
-pub struct ConstraintSet(BTreeSet<SubtypeConstraint>);
+pub struct ConstraintSet(BTreeSet<TyConstraint>);
+
+/// Constraints the representation type variable to the addition of two dynamic ty vars
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AddConstraint {
+    /// lhs added type repr
+    lhs_ty: DerivedTypeVar,
+    /// rhs added type var
+    rhs_ty: DerivedTypeVar,
+    /// the type variable of the result
+    repr_ty: DerivedTypeVar,
+}
+
+impl AddConstraint {
+    pub fn new(
+        lhs_ty: DerivedTypeVar,
+        rhs_ty: DerivedTypeVar,
+        repr_ty: DerivedTypeVar,
+    ) -> AddConstraint {
+        AddConstraint {
+            lhs_ty,
+            rhs_ty,
+            repr_ty,
+        }
+    }
+}
+
+impl Display for AddConstraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Add({},{},{})", self.lhs_ty, self.rhs_ty, self.repr_ty)
+    }
+}
+
+/// A constraint on type variables
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TyConstraint {
+    /// lhs is a subtype of rhs
+    SubTy(SubtypeConstraint),
+    /// repr is the type resulting from the addition of two types added together
+    AddCons(AddConstraint),
+}
+
+impl Display for TyConstraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            &Self::SubTy(sub) => write!(f, "{}", sub),
+            &Self::AddCons(add_cons) => write!(f, "{}", add_cons),
+        }
+    }
+}
 
 impl ConstraintSet {
     /// Insert all the constraints from [cons] into this constraint set.
@@ -190,7 +242,7 @@ impl ConstraintSet {
     /// A singleton constraint set with one subtyping relation.
     pub fn singleton(cons: SubtypeConstraint) -> ConstraintSet {
         let mut emp = ConstraintSet::empty();
-        emp.insert(cons);
+        emp.insert(TyConstraint::SubTy(cons));
         emp
     }
 
@@ -200,8 +252,8 @@ impl ConstraintSet {
     }
 }
 
-impl From<BTreeSet<SubtypeConstraint>> for ConstraintSet {
-    fn from(c: BTreeSet<SubtypeConstraint>) -> Self {
+impl From<BTreeSet<TyConstraint>> for ConstraintSet {
+    fn from(c: BTreeSet<TyConstraint>) -> Self {
         ConstraintSet(c)
     }
 }
@@ -223,7 +275,7 @@ impl Display for ConstraintSet {
 }
 
 impl Deref for ConstraintSet {
-    type Target = BTreeSet<SubtypeConstraint>;
+    type Target = BTreeSet<TyConstraint>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

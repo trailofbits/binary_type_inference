@@ -12,7 +12,9 @@ use petgraph::EdgeDirection::Incoming;
 use crate::analysis;
 use crate::analysis::reaching_definitions::{Context, Definition, TermSet};
 use crate::constraint_generation::{self, NodeContextMapping, RegisterMapping};
-use crate::constraints::{ConstraintSet, DerivedTypeVar, SubtypeConstraint, TypeVariable};
+use crate::constraints::{
+    ConstraintSet, DerivedTypeVar, SubtypeConstraint, TyConstraint, TypeVariable,
+};
 use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, pointer_inference};
 use cwe_checker_lib::intermediate_representation::Def;
 
@@ -53,8 +55,14 @@ impl RegisterContext {
         let constraints = ConstraintSet::from(
             defs.0
                 .iter()
-                .map(|tid| RegisterContext::create_def_constraint(repr.clone(), defined_var, tid))
-                .collect::<BTreeSet<SubtypeConstraint>>(),
+                .map(|tid| {
+                    TyConstraint::SubTy(RegisterContext::create_def_constraint(
+                        repr.clone(),
+                        defined_var,
+                        tid,
+                    ))
+                })
+                .collect::<BTreeSet<TyConstraint>>(),
         );
         (repr, constraints)
     }
