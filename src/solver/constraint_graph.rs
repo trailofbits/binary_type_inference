@@ -1,8 +1,69 @@
+use crate::constraints::{ConstraintSet, DerivedTypeVar, TyConstraint, Variance};
+use petgraph::{data::Build, graph::NodeIndex, Directed, Graph};
+use std::{collections::HashMap, rc::Rc};
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Direction {
+    Lhs,
+    Rhs,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum TypeVariable {
+    Interesting(DerivedTypeVar, Direction),
+    Uninteresting(DerivedTypeVar),
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct TypeVarControlState {
+    dt_var: TypeVariable,
+    variance: Variance,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum ControlState {
+    Start,
+    End,
+    TypeVarControlState,
+}
+
 /// The constructed Transducer recogonizes the following relation:
 /// Let V = Vi U Vu where Vi are the interesting type variables and Vu are the uninnteresting type varaibles. (all proofs are done under the normal form described in Appendix B.)
 /// Then given a constraint set C that derives the following judgement C ⊢ X.u ⊑ Y.v:
-///
-struct Transducer {}
+struct Transducer {
+    /// You might say... why not just have this be a reference in a graphmap? You'd be correct but then we'd need some place to hold
+    /// type variables that are generated during loop breaking.
+    grph: Graph<ControlState, (), Directed>,
+    nd_to_index: HashMap<ControlState, NodeIndex>,
+}
+
+impl Transducer {
+    pub fn new(cons: &ConstraintSet) -> Transducer {
+        let mut grph = Graph::new();
+        let mut nd_to_index: HashMap<DerivedTypeVar, NodeIndex> = HashMap::new();
+
+        for constraint in cons.iter() {
+            //TODO:(ian) Add constraints should be handled during the second pass of sketch generation I think
+            if let TyConstraint::SubTy(sub) = constraint {
+                let src = *nd_to_index
+                    .entry(sub.lhs.clone())
+                    .or_insert_with(|| grph.add_node(sub.lhs.clone()));
+
+                let dst = nd_to_index
+                    .entry(sub.rhs.clone())
+                    .or_insert_with(|| grph.add_node(sub.rhs.clone()));
+
+                grph.add_edge(src, *dst, ());
+            }
+        }
+
+        Transducer { grph, nd_to_index }
+    }
+
+    pub fn saturate(&mut self) {}
+
+    pub fn break_loops(&mut self) {}
+}
 
 #[cfg(test)]
 mod tests {

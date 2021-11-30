@@ -1,11 +1,18 @@
+use alga::general::{
+    AbstractMagma, AbstractSemigroup, Identity, MultiplicativeGroup, MultiplicativeMonoid,
+    MultiplicativeSemigroup, TwoSidedInverse,
+};
 use log::error;
 use std::collections::BTreeSet;
-use std::fmt::{write, Debug, Display, Write};
+use std::fmt::{Debug, Display, Write};
 use std::ops::{Deref, DerefMut};
 use std::vec::Vec;
 
+use alga::general::Multiplicative;
+use alga_derive::Alga;
+
 /// A static type variable with a name
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TypeVariable {
     name: String,
 }
@@ -51,7 +58,7 @@ impl Default for VariableManager {
 }
 
 /// A field constraint of the form .σN@k where N is the bit-width of the field at byte offset k
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Field {
     offset: i64,
     size: usize,
@@ -80,7 +87,7 @@ pub struct In {
 }
 
 /// A field label specifies the capabilities of a [DerivedTypeVar]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FieldLabel {
     /// The previous label can be loaded from
     Load,
@@ -94,6 +101,20 @@ pub enum FieldLabel {
     Field(Field),
     ///The type variable with the addition of a constant offset
     Add(i128),
+}
+
+impl FieldLabel {
+    /// Gets the variance of this field label
+    pub fn variance(&self) -> Variance {
+        match self {
+            Self::Load => Variance::Covariant,
+            Self::Store => Variance::Contravariant,
+            Self::Field(_) => Variance::Covariant,
+            Self::In(_) => Variance::Contravariant,
+            Self::Out(_) => Variance::Covariant,
+            Self::Add(_) => Variance::Covariant,
+        }
+    }
 }
 
 impl Display for FieldLabel {
@@ -113,13 +134,43 @@ impl Display for FieldLabel {
         }
     }
 }
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Alga)]
+#[alga_traits(Monoid(Multiplicative))]
+pub enum Variance {
+    Covariant,
+    Contravariant,
+}
+
+impl AbstractMagma<Multiplicative> for Variance {
+    fn operate(&self, right: &Self) -> Self {
+        if self == right {
+            Self::Covariant
+        } else {
+            Self::Contravariant
+        }
+    }
+}
+
+impl Identity<Multiplicative> for Variance {
+    fn identity() -> Self {
+        Self::Covariant
+    }
+}
+
+impl TwoSidedInverse<Multiplicative> for Variance {
+    fn two_sided_inverse(&self) -> Self {
+        Self::Contravariant
+    }
+}
+
+impl AbstractSemigroup<Multiplicative> for Variance {}
 
 /// A derived type variable that contains the base [TypeVariable] and an ordered vector of [FieldLabel].
 /// Each label is applied in order to determine the expressed capability on the base type variable.
 /// Variance is determined by the sign monoid of the component [FieldLabel] variances ⊕·⊕ = ⊖·⊖ = ⊕ and ⊕·⊖ = ⊖·⊕ = ⊖
 /// [DerivedTypeVar] forms the expression αw where α ∈ V and w ∈ Σ^*
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash, Ord)]
 pub struct DerivedTypeVar {
     var: TypeVariable,
     labels: Vec<FieldLabel>,
@@ -145,6 +196,15 @@ impl DerivedTypeVar {
         }
     }
 
+    /// computes the path variance, an epsilon is by default covariant
+    pub fn path_variance(&self) -> Variance {
+        self.labels
+            .iter()
+            .map(|x| x.variance())
+            .reduce(|x, y| x.operate(&y))
+            .unwrap_or(Variance::Covariant)
+    }
+
     /// Immutably add label.
     pub fn create_with_label(&self, lab: FieldLabel) -> DerivedTypeVar {
         let mut n = self.clone();
@@ -161,8 +221,10 @@ impl DerivedTypeVar {
 /// Expresses a subtyping constraint of the form lhs ⊑ rhs
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SubtypeConstraint {
-    lhs: DerivedTypeVar,
-    rhs: DerivedTypeVar,
+    /// The left hand side of the subtyping constraint
+    pub lhs: DerivedTypeVar,
+    /// The right hand side of the subtyping constraint
+    pub rhs: DerivedTypeVar,
 }
 
 impl SubtypeConstraint {
