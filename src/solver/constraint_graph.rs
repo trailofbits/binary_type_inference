@@ -9,40 +9,40 @@ use std::{collections::{BTreeSet, HashMap, VecDeque}, rc::Rc, vec};
 
 use alga::general::AbstractMagma;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 enum Direction {
     Lhs,
     Rhs,
 }
 
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-struct InterestingVar {
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+pub struct InterestingVar {
     tv: TypeVariable,
     dir: Direction
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 enum VHat {
     Interesting(InterestingVar),
     Uninteresting(TypeVariable),
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 struct TypeVarControlState {
     dt_var: VHat,
     variance: Variance,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 enum ControlState {
     Start,
     End,
     TypeVar(TypeVarControlState),
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum StackSymbol {
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum StackSymbol {
     Label(FieldLabel),
     InterestingVar(InterestingVar, Variance),
 }
@@ -56,12 +56,13 @@ impl StackSymbol {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 struct PushDownState {
     st: ControlState,
     stack: Vec<StackSymbol>,
 }
 
+#[derive(Debug)]
 struct Rule {
     lhs: PushDownState,
     rhs: PushDownState,
@@ -71,7 +72,14 @@ pub struct RuleContext {
     interesting: BTreeSet<TypeVariable>,
 }
 
+
 impl RuleContext {
+    pub fn new(interesting: BTreeSet<TypeVariable>) -> RuleContext {
+        RuleContext {
+            interesting
+        }
+    }
+
     fn lhs(&self, ty: TypeVariable) -> VHat {
         if self.interesting.contains(&ty) {
             VHat::Interesting(InterestingVar {tv: ty,dir: Direction::Lhs})
@@ -100,7 +108,7 @@ impl RuleContext {
         });
 
         let control_state_rhs = ControlState::TypeVar(TypeVarControlState {
-            dt_var: self.lhs(curr_rhs.get_base_variable().clone()),
+            dt_var: self.rhs(curr_rhs.get_base_variable().clone()),
             variance: variance_modifier(curr_rhs.path_variance()),
         });
 
@@ -204,20 +212,20 @@ impl RuleContext {
 
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-struct TypeVarNode {
+pub struct TypeVarNode {
     base_var: TypeVarControlState,
     access_path: Vec<FieldLabel>,
 }
 
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-enum FiniteState {
+pub enum FiniteState {
     Tv(TypeVarNode),
     Start,
     End,
 }
 
-enum FSAEdge {
+pub enum FSAEdge {
     Push(StackSymbol),
     Pop(StackSymbol),
     /// 1
@@ -242,7 +250,9 @@ struct EdgeDefinition {
 }
 
 impl FSA {
-
+    pub fn get_graph(&self) ->  &Graph<FiniteState, FSAEdge>{
+       &self.grph
+    }
     fn get_or_insert_nd(&mut self, nd: FiniteState) -> NodeIndex {
         if let Some(idx) = self.mp.get(&nd) {
             idx.clone()
@@ -357,7 +367,7 @@ impl FSA {
 
     fn sub_type_edge(rule: &Rule) -> Result<EdgeDefinition> {
         let flds_lhs: Vec<FieldLabel> = Self::iterate_over_field_labels_in_stack(&rule.lhs.stack)?.into_iter().collect();
-        let flds_rhs: Vec<FieldLabel> = Self::iterate_over_field_labels_in_stack(&rule.lhs.stack)?.into_iter().collect();
+        let flds_rhs: Vec<FieldLabel> = Self::iterate_over_field_labels_in_stack(&rule.rhs.stack)?.into_iter().collect();
         if let (ControlState::TypeVar(tv1),ControlState::TypeVar(tv2)) = (&rule.lhs.st, &rule.rhs.st) {
             let src = FiniteState::Tv(TypeVarNode {
                 base_var: tv1.clone(),
@@ -394,7 +404,6 @@ impl FSA {
             .collect();
 
         let constraint_rules = context.generate_constraint_based_rules(subs.as_ref());
-
         let edges= constraint_rules.iter().map(|rule| Self::lhs_of_constraint_rule(&rule.lhs).and_then(|mut lhs_defs| {
             let mut rhs_edge_def = Self::rhs_of_constraint_rule(&rule.rhs)?;
             rhs_edge_def.append(&mut lhs_defs);
@@ -419,46 +428,49 @@ impl FSA {
 
 #[cfg(test)]
 mod tests {
-    use crate::constraints::{DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable};
+    use std::{collections::BTreeSet, iter::FromIterator};
+
+    use crate::{constraints::{ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable}, solver::constraint_graph::{FSA, RuleContext}};
 
     #[test]
-    fn constraints_linked_list() {
+    fn constraints_simple_pointer_passing() {
         /*
-        constraints.add(SchemaParser.parse_constraint("F.in_0 ⊑ δ"))
-        constraints.add(SchemaParser.parse_constraint("α ⊑ φ"))
-        constraints.add(SchemaParser.parse_constraint("δ ⊑ φ"))
-        constraints.add(SchemaParser.parse_constraint("φ.load.σ4@0 ⊑ α"))
-        constraints.add(SchemaParser.parse_constraint("φ.load.σ4@4 ⊑ α'"))
-        constraints.add(SchemaParser.parse_constraint("α' ⊑ close.in_0"))
-        constraints.add(SchemaParser.parse_constraint("close.out ⊑ F.out"))
-        constraints.add(SchemaParser.parse_constraint("close.in_0 ⊑ #FileDescriptor"))
-        constraints.add(SchemaParser.parse_constraint("#SuccessZ ⊑ close.out"))
+        y ⊑ p 
+        p ⊑ x
+        A ⊑ x.store
+        y.load ⊑ B
         */
-        let proc_stack = TypeVariable::new("closed_last@sp".to_owned());
-        let fvar = TypeVariable::new("closed_last".to_owned());
-        let arg_tv = TypeVariable::new("closed_last_arg0".to_owned());
 
-        let param_0 = DerivedTypeVar::new(fvar).create_with_label(FieldLabel::In(0));
+        let ytvar = TypeVariable::new("y".to_owned());
+        let pvar = TypeVariable::new("p".to_owned());
+        let xvar = TypeVariable::new("x".to_owned());
+        let Avar = TypeVariable::new("A".to_owned());
+        let Bvar = TypeVariable::new("B".to_owned());
 
-        let arg_0 = DerivedTypeVar::new(arg_tv);
+        let cons1 =  TyConstraint::SubTy(SubtypeConstraint::new(DerivedTypeVar::new(ytvar.clone()), DerivedTypeVar::new(pvar.clone())));
+        let cons2 =  TyConstraint::SubTy(SubtypeConstraint::new(DerivedTypeVar::new(pvar.clone()), DerivedTypeVar::new(xvar.clone())));
 
-        let edx0 = DerivedTypeVar::new(TypeVariable::new("closed_last_edx0".to_owned()));
 
-        let arg_0_locator = DerivedTypeVar::new(proc_stack.clone())
-            .create_with_label(FieldLabel::Store)
-            .create_with_label(FieldLabel::Field(Field::new(12, 32)));
+        let mut xstore = DerivedTypeVar::new(xvar.clone());
+        xstore.add_field_label(FieldLabel::Store);
 
-        let arg_0_locator_load = DerivedTypeVar::new(proc_stack)
-            .create_with_label(FieldLabel::Load)
-            .create_with_label(FieldLabel::Field(Field::new(12, 32)));
+        let cons3 =  TyConstraint::SubTy(SubtypeConstraint::new(DerivedTypeVar::new(Avar.clone()), xstore));
 
-        // in the example the list is a non memory object so we'll get a fresh type variable to represent it since there is no points to
-        //let list_tv = DerivedTypeVar::new()
+        let mut yload = DerivedTypeVar::new(ytvar.clone());
+        yload.add_field_label(FieldLabel::Load);
 
-        let _cons = vec![
-            SubtypeConstraint::new(param_0.clone(), arg_0.clone()),
-            SubtypeConstraint::new(arg_0.clone(), arg_0_locator.clone()),
-            SubtypeConstraint::new(arg_0_locator_load, edx0),
-        ];
+        let cons4 = TyConstraint::SubTy(SubtypeConstraint::new(DerivedTypeVar::new(Bvar.clone()), yload));
+
+
+            
+        let constraints = ConstraintSet::from(BTreeSet::from_iter(vec![cons1,cons2,cons3,cons4].into_iter()));
+
+        let mut interesting = BTreeSet::new();
+        interesting.insert(Avar);
+        interesting.insert(Bvar);
+
+        let context = RuleContext::new(interesting);
+
+        let fsa_res = FSA::new(&constraints, &context).unwrap();
     }
 }

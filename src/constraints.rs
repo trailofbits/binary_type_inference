@@ -134,7 +134,7 @@ impl Display for FieldLabel {
         }
     }
 }
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Alga)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Alga, Debug)]
 #[alga_traits(Monoid(Multiplicative))]
 pub enum Variance {
     Covariant,
