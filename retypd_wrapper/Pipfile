@@ -8,6 +8,7 @@ retypd = { path = "../external/retypd" }
 
 [dev-packages]
 autopep8 = "*"
+pip-audit = "*"
 
 [requires]
 python_version = "3.9"

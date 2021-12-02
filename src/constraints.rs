@@ -212,6 +212,14 @@ impl DerivedTypeVar {
         n
     }
 
+    pub fn get_field_labels(&self) -> &[FieldLabel] {
+        &self.labels
+    }
+
+    pub fn get_base_variable(&self) -> &TypeVariable {
+        &self.var
+    }
+
     /// Adds a field label to this derived type variable's list of field lables. Adds to the end of the list.
     pub fn add_field_label(&mut self, lab: FieldLabel) {
         self.labels.push(lab);
