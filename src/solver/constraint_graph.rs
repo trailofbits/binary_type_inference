@@ -4,9 +4,9 @@ use crate::constraints::{
 };
 use anyhow::{anyhow, Result};
 use cwe_checker_lib::{analysis::graph::Edge, pcode::Variable};
-use petgraph::{data::Build, graph::NodeIndex, Directed, Graph};
-use std::{collections::{BTreeSet, HashMap, VecDeque}, fmt::{Display, Write, write}, rc::Rc, vec};
-
+use petgraph::{Directed, Graph, data::Build, graph::NodeIndex, visit::{EdgeRef, IntoEdgesDirected}};
+use std::{collections::{BTreeSet, HashMap, HashSet, VecDeque}, fmt::{Display, Write, write}, rc::Rc, vec};
+use petgraph::visit::IntoNodeReferences;
 use alga::general::AbstractMagma;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
@@ -277,6 +277,17 @@ pub struct TypeVarNode {
     access_path: Vec<FieldLabel>,
 }
 
+impl Display for TypeVarNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}", self.base_var)?;
+        for fl in self.access_path.iter() {
+            write!(f,".{}", fl)?;
+        }
+
+        Ok(())
+    }
+}
+
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum FiniteState {
@@ -284,6 +295,31 @@ pub enum FiniteState {
     Start,
     End,
 }
+
+impl Display for FiniteState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Self::Start => write!(f, "START"),
+            Self::End => write!(f, "END"),
+            Self::Tv(tv) => write!(f, "{}", tv)
+        }
+    }
+}
+
+
+impl FiniteState {
+    pub fn not(&self) -> FiniteState {
+        match &self {
+            Self::Start => Self::End,
+            Self::End => Self::Start,
+            Self::Tv(tv) => Self::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: tv.base_var.dt_var.clone(), variance: tv.base_var.variance.operate(&Variance::Covariant) },
+                access_path: tv.access_path.clone()
+            })
+        }
+    }
+}
+
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum FSAEdge {
@@ -295,6 +331,17 @@ pub enum FSAEdge {
     Failed,
 }
 
+impl Display for FSAEdge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Self::Push(s) => write!(f,"push_{}",s),
+            Self::Pop(s) => write!(f,"pop_{}",s),
+            Self::Success => write!(f,"1"),
+            Self::Failed => write!(f,"0")
+        }
+    }
+}
+
 /// The constructed Transducer recogonizes the following relation:
 /// Let V = Vi U Vu where Vi are the interesting type variables and Vu are the uninnteresting type varaibles. (all proofs are done under the normal form described in Appendix B.)
 /// Then given a constraint set C that derives the following judgement C ⊢ X.u ⊑ Y.v:
@@ -304,13 +351,103 @@ pub struct FSA {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
-struct EdgeDefinition {
+pub struct EdgeDefinition {
     src: FiniteState,
     dst: FiniteState,
     edge_weight: FSAEdge
 }
 
 impl FSA {
+    pub fn get_saturation_edges(&self) -> Vec<EdgeDefinition> {
+        let mut new_edges = Vec::new();
+        let mut reaching_pushes: HashMap<FiniteState,HashMap<StackSymbol, HashSet<FiniteState>>> = HashMap::new();
+        let mut all_edges: HashSet<EdgeDefinition> = self.grph.edge_references().map(|x| EdgeDefinition {edge_weight: x.weight().clone(),src: self.grph.node_weight(x.source()).unwrap().clone(), dst:self.grph.node_weight(x.target()).unwrap().clone()}).collect();
+        
+        for (_nd_idx,weight) in self.grph.node_references() {
+            reaching_pushes.insert(weight.clone(), HashMap::new());
+        }
+
+        for edge in all_edges.iter() {
+            if let FSAEdge::Push(l) = &edge.edge_weight {
+                let dst_pushes = reaching_pushes.get_mut(&edge.dst).unwrap();
+                dst_pushes.entry(l.clone()).or_insert(HashSet::new()).insert(edge.src.clone());
+            }
+        }
+
+        
+        // do while
+        while {
+            let saved_state = (&reaching_pushes.clone(), &all_edges.clone());
+
+            // merge trivial predecessor nodes reaching push set with the dests reaching set
+            for edg in all_edges.iter() {
+                if let FSAEdge::Success = edg.edge_weight {
+                    let src_pushes: HashMap<StackSymbol, HashSet<FiniteState>>  = reaching_pushes.get(&edg.src).unwrap().clone();
+                    let dst_pushes = reaching_pushes.get_mut(&edg.dst).unwrap();
+        
+                    src_pushes.into_iter().for_each(|(k,v)| {
+                        if let Some(add_to) = dst_pushes.get_mut(&k) {
+                            add_to.extend(v);
+                        } else {
+                            dst_pushes.insert(k, v);
+                        }
+                    });
+                }
+            }
+
+            let mut additional_edges = HashSet::new();
+            for edg in all_edges.iter() {
+                if let FSAEdge::Pop(l) = &edg.edge_weight {
+                    let rpushes = reaching_pushes.get_mut(&edg.src).unwrap();
+                    for definer in rpushes.entry(l.clone()).or_insert_with(HashSet::new).iter() {
+                        let new_edge = EdgeDefinition {
+                            src: definer.clone(),
+                            dst: edg.dst.clone(),
+                            edge_weight: FSAEdge::Success
+                        };
+                        new_edges.push(new_edge.clone());
+                        additional_edges.insert(new_edge);
+                    }
+                }
+            }
+            all_edges.extend(additional_edges);
+
+            for v_contra in self.grph.node_references().into_iter().map(|(_, fs)| fs).filter(|fs|if let FiniteState::Tv(tv) = fs {
+                tv.base_var.variance == Variance::Contravariant
+            } else {
+                false
+            }) {
+                for definer in reaching_pushes.get_mut(v_contra).unwrap().entry(StackSymbol::Label(FieldLabel::Store)).or_insert_with(HashSet::new).iter().cloned().collect::<HashSet<FiniteState>>() {
+                    let equiv_ptr = v_contra.not();
+                    let def_map = reaching_pushes.get_mut(&equiv_ptr).unwrap();
+                    def_map.entry(StackSymbol::Label(FieldLabel::Load)).or_insert_with(HashSet::new).insert(definer);
+                }
+
+                for definer in reaching_pushes.get_mut(v_contra).unwrap().entry(StackSymbol::Label(FieldLabel::Load)).or_insert_with(HashSet::new).iter().cloned().collect::<HashSet<FiniteState>>() {
+                    let equiv_ptr = v_contra.not();
+                    let def_map = reaching_pushes.get_mut(&equiv_ptr).unwrap();
+                    def_map.entry(StackSymbol::Label(FieldLabel::Store)).or_insert_with(HashSet::new).insert(definer);
+                }
+            }
+
+            // Check fixpoint
+            let did_not_reach_fixpoint = saved_state != (&reaching_pushes,&all_edges);
+            did_not_reach_fixpoint
+        } {};
+        
+        reaching_pushes.iter().for_each(|(k, symb_map)| {
+            println!("{}:", k);
+            for (k,v) in symb_map.iter() {
+                println!("\t{}:",k);
+                for definer in v.iter() {
+                    println!("\t\t{}",definer);
+                }
+            }
+
+        });
+         new_edges
+    }
+
     pub fn get_graph(&self) ->  &Graph<FiniteState, FSAEdge>{
        &self.grph
     }
@@ -869,6 +1006,16 @@ mod tests {
 
 
     #[test]
+    fn saturated_edges() {
+        let (constraints,context) = get_constraint_set();
+
+
+        let fsa = FSA::new(&constraints, &context).unwrap();
+        
+        assert_eq!(fsa.get_saturation_edges(), vec![]);
+    }
+
+    #[test]
     fn indirect_constraint_edges() {
         /*
         y ⊑ p 
@@ -998,6 +1145,6 @@ mod tests {
         let fsa_res = FSA::new(&constraints, &context).unwrap();
 
 
-        eprintln!("{:?}", Dot::new(fsa_res.get_graph()));
+        eprintln!("{}", Dot::new(fsa_res.get_graph()));
     }
 }
