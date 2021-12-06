@@ -258,7 +258,7 @@ impl FiniteState {
             Self::Start => Self::End,
             Self::End => Self::Start,
             Self::Tv(tv) => Self::Tv(TypeVarNode {
-                base_var: TypeVarControlState { dt_var: tv.base_var.dt_var.clone(), variance: tv.base_var.variance.operate(&Variance::Covariant) },
+                base_var: TypeVarControlState { dt_var: tv.base_var.dt_var.clone(), variance: tv.base_var.variance.operate(&Variance::Contravariant) },
                 access_path: tv.access_path.clone()
             })
         }
@@ -391,6 +391,7 @@ impl FSA {
 
                 for definer in reaching_pushes.get_mut(v_contra).unwrap().entry(StackSymbol::Label(FieldLabel::Load)).or_insert_with(HashSet::new).iter().cloned().collect::<HashSet<FiniteState>>() {
                     let equiv_ptr = v_contra.not();
+                    println!("not {}", equiv_ptr);
                     let def_map = reaching_pushes.get_mut(&equiv_ptr).unwrap();
                     def_map.entry(StackSymbol::Label(FieldLabel::Store)).or_insert_with(HashSet::new).insert(definer);
                 }
