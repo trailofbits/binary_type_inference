@@ -140,6 +140,14 @@ pub enum Variance {
     Covariant,
     Contravariant,
 }
+impl Display for Variance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_char(match &self {
+            Variance::Covariant => '⊕',
+            Variance::Contravariant => '⊖',
+        })
+    }
+}
 
 impl AbstractMagma<Multiplicative> for Variance {
     fn operate(&self, right: &Self) -> Self {

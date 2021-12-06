@@ -62,7 +62,7 @@ struct PushDownState {
     stack: Vec<StackSymbol>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 struct Rule {
     lhs: PushDownState,
     rhs: PushDownState,
@@ -211,20 +211,21 @@ impl RuleContext {
 }
 
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TypeVarNode {
     base_var: TypeVarControlState,
     access_path: Vec<FieldLabel>,
 }
 
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum FiniteState {
     Tv(TypeVarNode),
     Start,
     End,
 }
 
+#[derive(Debug)]
 pub enum FSAEdge {
     Push(StackSymbol),
     Pop(StackSymbol),
@@ -428,19 +429,16 @@ impl FSA {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeSet, iter::FromIterator};
+    use std::{collections::{BTreeSet, HashSet}, iter::FromIterator, vec};
+    use super::{ControlState, Rule, TypeVarControlState, VHat};
+    use super::StackSymbol;
+    use petgraph::dot::{Dot, Config};
+    use pretty_assertions::{assert_eq, assert_ne};
 
-    use crate::{constraints::{ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable}, solver::constraint_graph::{FSA, RuleContext}};
+    use crate::{constraints::{ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable, Variance}, solver::constraint_graph::{Direction, FSA, InterestingVar, PushDownState, RuleContext}};
 
-    #[test]
-    fn constraints_simple_pointer_passing() {
-        /*
-        y ⊑ p 
-        p ⊑ x
-        A ⊑ x.store
-        y.load ⊑ B
-        */
-
+    
+    fn get_constraint_set() -> (ConstraintSet, RuleContext) {
         let ytvar = TypeVariable::new("y".to_owned());
         let pvar = TypeVariable::new("p".to_owned());
         let xvar = TypeVariable::new("x".to_owned());
@@ -459,7 +457,7 @@ mod tests {
         let mut yload = DerivedTypeVar::new(ytvar.clone());
         yload.add_field_label(FieldLabel::Load);
 
-        let cons4 = TyConstraint::SubTy(SubtypeConstraint::new(DerivedTypeVar::new(Bvar.clone()), yload));
+        let cons4 = TyConstraint::SubTy(SubtypeConstraint::new(yload,DerivedTypeVar::new(Bvar.clone())));
 
 
             
@@ -470,7 +468,196 @@ mod tests {
         interesting.insert(Bvar);
 
         let context = RuleContext::new(interesting);
+        (constraints, context)
+    }
+
+    fn get_subtys(cons: &ConstraintSet) -> Vec<&SubtypeConstraint> {
+        cons.iter().filter_map(|x| if let TyConstraint::SubTy(x) = x {
+            Some(x)
+        } else {
+            None
+        }).collect()
+    }
+
+    #[test]
+    fn get_constraint_rules() {
+        /*
+        y ⊑ p 
+        p ⊑ x
+        A ⊑ x.store
+        y.load ⊑ B
+        */
+
+       let (constraints,context) = get_constraint_set();
+
+       let mut actual: Vec<Rule>  = context.generate_constraint_based_rules(get_subtys(&constraints).as_ref());
+
+        let covar_cons1 = Rule {
+            lhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
+                    variance: Variance::Covariant,
+                }),
+                stack: vec![]
+            },
+            rhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
+                    variance: Variance::Covariant,
+                }),
+                stack: vec![]
+            }
+        };
+
+        let contravar_cons1 = Rule {
+            lhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
+                    variance: Variance::Contravariant,
+                }),
+                stack: vec![]
+            },
+            rhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
+                    variance: Variance::Contravariant,
+                }),
+                stack: vec![]
+            }
+        };
+
+        let covar_cons2 = Rule {
+            lhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
+                    variance: Variance::Covariant,
+                }),
+                stack: vec![]
+            },
+            rhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
+                    variance: Variance::Covariant,
+                }),
+                stack: vec![]
+            }
+        };
+
+        let contravar_cons2 = Rule {
+            lhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
+                    variance: Variance::Contravariant,
+                }),
+                stack: vec![]
+            },
+            rhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
+                    variance: Variance::Contravariant,
+                }),
+                stack: vec![]
+            }
+        };
+
+        let covar_cons3 = Rule {
+            lhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var:VHat::Interesting(InterestingVar { 
+                        tv: TypeVariable::new("A".to_owned()),
+                    dir: Direction::Lhs}),
+                    variance: Variance::Covariant,
+                }),
+                stack: vec![]
+            },
+            rhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
+                    variance: Variance::Contravariant,
+                }),
+                stack: vec![StackSymbol::Label(FieldLabel::Store)]
+            }
+        };
+
+        let contravar_cons3 = Rule {
+            lhs:PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
+                    variance: Variance::Covariant,
+                }),
+                stack: vec![StackSymbol::Label(FieldLabel::Store)]
+            },
+            rhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var:VHat::Interesting(InterestingVar { 
+                        tv: TypeVariable::new("A".to_owned()),
+                    dir: Direction::Rhs}),
+                    variance: Variance::Contravariant,
+                }),
+                stack: vec![]
+            }
+        };
+
+        let covar_cons4 = Rule {
+            lhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
+                    variance: Variance::Covariant,
+                }),
+                stack: vec![StackSymbol::Label(FieldLabel::Load)]
+            },
+            rhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var:VHat::Interesting(InterestingVar { 
+                        tv: TypeVariable::new("B".to_owned()),
+                    dir: Direction::Rhs}),
+                    variance: Variance::Covariant,
+                }),
+                stack: vec![]
+            },
+        };
+
+        let contravar_cons4 = Rule {
+            lhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var:VHat::Interesting(InterestingVar { 
+                        tv: TypeVariable::new("B".to_owned()),
+                    dir: Direction::Lhs}),
+                    variance: Variance::Contravariant,
+                }),
+                stack: vec![]
+            },
+            rhs: PushDownState {
+                st: ControlState::TypeVar(TypeVarControlState {
+                    dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
+                    variance: Variance::Contravariant,
+                }),
+                stack: vec![StackSymbol::Label(FieldLabel::Load)]
+            }
+        };
+
+        let mut expected = vec![covar_cons1,contravar_cons1, covar_cons2, contravar_cons2, covar_cons3, contravar_cons3, covar_cons4, contravar_cons4];
+        expected.sort();
+
+        actual.sort();
+
+        assert_eq!(actual,expected)
+    }
+    
+    #[test]
+    fn constraints_simple_pointer_passing() {
+        /*
+        y ⊑ p 
+        p ⊑ x
+        A ⊑ x.store
+        y.load ⊑ B
+        */
+
+       let (constraints,context) = get_constraint_set();
 
         let fsa_res = FSA::new(&constraints, &context).unwrap();
+
+
+        eprintln!("{:?}", Dot::new(fsa_res.get_graph()));
     }
 }
