@@ -124,6 +124,7 @@ impl Display for PushDownState {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 struct Rule {
+    orig_variance: Variance,
     lhs: PushDownState,
     rhs: PushDownState,
 }
@@ -173,6 +174,7 @@ impl RuleContext {
         });
 
         Rule {
+            orig_variance: variance_modifier(Variance::Covariant),
             lhs: PushDownState {
                 st: control_state_lhs,
                 stack: curr_lhs
@@ -211,63 +213,6 @@ impl RuleContext {
             .collect()
     }
 
-    fn create_start_state_rule(iv: &TypeVariable, var: Variance) -> Rule {
-        Rule {
-            lhs: PushDownState {
-                st: ControlState::Start,
-                stack: vec![StackSymbol::InterestingVar(InterestingVar{ tv: iv.clone(), dir: Direction::Lhs}, var.clone())],
-            },
-            rhs: PushDownState {
-                st: ControlState::TypeVar(TypeVarControlState {
-                    dt_var: VHat::Interesting(InterestingVar{ tv: iv.clone(), dir: Direction::Lhs}),
-                    variance: var,
-                }),
-                stack: vec![],
-            },
-        }
-    }
-
-    fn create_end_state_rule(iv: &TypeVariable, var: Variance) -> Rule {
-        Rule {
-            lhs: PushDownState {
-                st: ControlState::TypeVar(TypeVarControlState {
-                    dt_var: VHat::Interesting(InterestingVar{ tv: iv.clone(), dir: Direction::Rhs}),
-                    variance: var.clone(),
-                }),
-                stack: vec![],
-            },
-            rhs: PushDownState {
-                st: ControlState::End,
-                stack: vec![StackSymbol::InterestingVar(InterestingVar{ tv: iv.clone(), dir: Direction::Rhs}, var)],
-            },
-        }
-    }
-
-    /// generate Δstart
-    fn generate_start_rules(&self) -> Vec<Rule> {
-        self.interesting
-            .iter()
-            .map(|iv| {
-                let r1 = Self::create_start_state_rule(iv, Variance::Covariant);
-                let r2 = Self::create_start_state_rule(iv, Variance::Contravariant);
-                vec![r1, r2]
-            })
-            .flatten()
-            .collect()
-    }
-
-    /// generate Δend
-    fn generate_end_rules(&self) -> Vec<Rule> {
-        self.interesting
-            .iter()
-            .map(|iv| {
-                let r1 = Self::create_end_state_rule(iv, Variance::Covariant);
-                let r2 = Self::create_end_state_rule(iv, Variance::Contravariant);
-                vec![r1, r2]
-            })
-            .flatten()
-            .collect()
-    }
 }
 
 
@@ -331,6 +276,17 @@ pub enum FSAEdge {
     Failed,
 }
 
+impl FSAEdge {
+    pub fn flip(&self) -> FSAEdge {
+        match &self {
+            FSAEdge::Push(s) => FSAEdge::Pop(s.clone()),
+            FSAEdge::Pop(s) => FSAEdge::Push(s.clone()),
+            Self::Success => Self::Failed,
+            Self::Failed => Self::Success
+        }
+    }
+}
+
 impl Display for FSAEdge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
@@ -357,9 +313,19 @@ pub struct EdgeDefinition {
     edge_weight: FSAEdge
 }
 
+impl EdgeDefinition {
+    pub fn flip_edge(&self) -> EdgeDefinition {
+        EdgeDefinition {
+            src: self.dst.clone(),
+            dst: self.src.clone(),  
+            edge_weight: self.edge_weight.flip()
+        }
+    }
+}
+
 impl FSA {
-    pub fn get_saturation_edges(&self) -> Vec<EdgeDefinition> {
-        let mut new_edges = Vec::new();
+    pub fn get_saturation_edges(&self) -> HashSet<EdgeDefinition> {
+        let mut new_edges = HashSet::new();
         let mut reaching_pushes: HashMap<FiniteState,HashMap<StackSymbol, HashSet<FiniteState>>> = HashMap::new();
         let mut all_edges: HashSet<EdgeDefinition> = self.grph.edge_references().map(|x| EdgeDefinition {edge_weight: x.weight().clone(),src: self.grph.node_weight(x.source()).unwrap().clone(), dst:self.grph.node_weight(x.target()).unwrap().clone()}).collect();
         
@@ -405,7 +371,7 @@ impl FSA {
                             dst: edg.dst.clone(),
                             edge_weight: FSAEdge::Success
                         };
-                        new_edges.push(new_edge.clone());
+                        new_edges.insert(new_edge.clone());
                         additional_edges.insert(new_edge);
                     }
                 }
@@ -445,7 +411,8 @@ impl FSA {
             }
 
         });
-         new_edges
+        // remove reflexive edges
+        new_edges.into_iter().filter(|x| x.src != x.dst).collect()
     }
 
     pub fn get_graph(&self) ->  &Graph<FiniteState, FSAEdge>{
@@ -545,7 +512,9 @@ impl FSA {
                     access_path.push(popped);
                     let end = Self::create_finite_state_from_pushdownstate(s.clone(), field_labels.iter(), access_path.clone());
                     let ed = build_definition(prev, edge, end);
+                    edges.push(ed.flip_edge());
                     edges.push(ed);
+                    
                 }
 
                 Ok(edges)
@@ -568,12 +537,12 @@ impl FSA {
         let flds_rhs: Vec<FieldLabel> = Self::iterate_over_field_labels_in_stack(&rule.rhs.stack)?.into_iter().collect();
         if let (ControlState::TypeVar(tv1),ControlState::TypeVar(tv2)) = (&rule.lhs.st, &rule.rhs.st) {
             let src = FiniteState::Tv(TypeVarNode {
-                base_var: tv1.clone(),
+                base_var: TypeVarControlState { dt_var: tv1.dt_var.clone(), variance: rule.orig_variance.clone() },
                 access_path: flds_lhs
             });
 
             let dst = FiniteState::Tv(TypeVarNode {
-                base_var: tv2.clone(),
+                base_var: TypeVarControlState { dt_var: tv2.dt_var.clone(), variance: rule.orig_variance.clone() },
                 access_path: flds_rhs
             });
 
@@ -698,6 +667,7 @@ mod tests {
        let mut actual: Vec<Rule>  = context.generate_constraint_based_rules(get_subtys(&constraints).as_ref());
 
         let covar_cons1 = Rule {
+            orig_variance: Variance::Covariant,
             lhs: PushDownState {
                 st: ControlState::TypeVar(TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
@@ -715,6 +685,7 @@ mod tests {
         };
 
         let contravar_cons1 = Rule {
+            orig_variance: Variance::Contravariant,
             lhs: PushDownState {
                 st: ControlState::TypeVar(TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
@@ -732,6 +703,7 @@ mod tests {
         };
 
         let covar_cons2 = Rule {
+            orig_variance: Variance::Covariant,
             lhs: PushDownState {
                 st: ControlState::TypeVar(TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
@@ -749,6 +721,7 @@ mod tests {
         };
 
         let contravar_cons2 = Rule {
+            orig_variance: Variance::Contravariant,
             lhs: PushDownState {
                 st: ControlState::TypeVar(TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
@@ -766,6 +739,7 @@ mod tests {
         };
 
         let covar_cons3 = Rule {
+            orig_variance: Variance::Covariant,
             lhs: PushDownState {
                 st: ControlState::TypeVar(TypeVarControlState {
                     dt_var:VHat::Interesting(InterestingVar { 
@@ -785,6 +759,7 @@ mod tests {
         };
 
         let contravar_cons3 = Rule {
+            orig_variance: Variance::Contravariant,
             lhs:PushDownState {
                 st: ControlState::TypeVar(TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
@@ -804,6 +779,7 @@ mod tests {
         };
 
         let covar_cons4 = Rule {
+            orig_variance: Variance::Covariant,
             lhs: PushDownState {
                 st: ControlState::TypeVar(TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
@@ -823,6 +799,7 @@ mod tests {
         };
 
         let contravar_cons4 = Rule {
+            orig_variance: Variance::Contravariant,
             lhs: PushDownState {
                 st: ControlState::TypeVar(TypeVarControlState {
                     dt_var:VHat::Interesting(InterestingVar { 
@@ -1011,8 +988,41 @@ mod tests {
 
 
         let fsa = FSA::new(&constraints, &context).unwrap();
-        
-        assert_eq!(fsa.get_saturation_edges(), vec![]);
+
+        /*let new_edge = EdgeDefinition {
+                src: FiniteState::Tv(
+                        TypeVarNode {
+                            base_var: TypeVarControlState {
+                                dt_var: VHat::Uninteresting(
+                                    TypeVariable::new("x".to_owned()),
+                                ),
+                                variance: Variance::Covariant,
+                            },
+                            access_path: [
+                                Store,
+                            ],
+                        },
+                    ),
+                    dst: Tv(
+                        TypeVarNode {
+                            base_var: TypeVarControlState {
+                                dt_var: Uninteresting(
+                                    TypeVariable {
+                                        name: "y",
+                                    },
+                                ),
+                                variance: Contravariant,
+                            },
+                            access_path: [
+                                Load,
+                            ],
+                        },
+                    ),
+                    edge_weight: Success,
+                };
+            
+        */
+        assert_eq!(fsa.get_saturation_edges().into_iter().collect::<Vec<_>>(), vec![]);
     }
 
     #[test]
