@@ -572,6 +572,10 @@ impl FSA {
         constraint_rules.iter().map(|r| Self::sub_type_edge(r)).collect::<Result<Vec<EdgeDefinition>>>()
     }
 
+    pub fn saturate(&mut self) { 
+        self.get_saturation_edges().into_iter().for_each(|x| self.insert_edge(x));
+    }
+
     /// Create a non-saturated FSA for the constraint set and RuleContext
     pub fn new(cons: &ConstraintSet, context: &RuleContext) -> Result<FSA> {
         let subs: Vec<&SubtypeConstraint> = cons
@@ -1153,8 +1157,8 @@ mod tests {
 
        let (constraints,context) = get_constraint_set();
 
-        let fsa_res = FSA::new(&constraints, &context).unwrap();
-
+        let mut fsa_res = FSA::new(&constraints, &context).unwrap();
+        fsa_res.saturate();
 
         eprintln!("{}", Dot::new(fsa_res.get_graph()));
     }
