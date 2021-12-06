@@ -5,7 +5,7 @@ use crate::constraints::{
 use anyhow::{anyhow, Result};
 use cwe_checker_lib::{analysis::graph::Edge, pcode::Variable};
 use petgraph::{data::Build, graph::NodeIndex, Directed, Graph};
-use std::{collections::{BTreeSet, HashMap, VecDeque}, rc::Rc, vec};
+use std::{collections::{BTreeSet, HashMap, VecDeque}, fmt::{Display, Write, write}, rc::Rc, vec};
 
 use alga::general::AbstractMagma;
 
@@ -15,11 +15,26 @@ enum Direction {
     Rhs,
 }
 
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_char(match &self {
+            Self::Lhs => 'L',
+            Self::Rhs => 'R'
+        })
+    }
+}
+
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct InterestingVar {
     tv: TypeVariable,
     dir: Direction
+}
+
+impl Display for InterestingVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.tv, self.dir)
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
@@ -28,10 +43,25 @@ enum VHat {
     Uninteresting(TypeVariable),
 }
 
+impl Display for VHat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Self::Interesting(iv) => write!(f,"{}", iv),
+            Self::Uninteresting(uv) => write!(f,"{}", uv)
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 struct TypeVarControlState {
     dt_var: VHat,
     variance: Variance,
+}
+
+impl Display for TypeVarControlState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}{}",self.dt_var, self.variance)
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -41,10 +71,29 @@ enum ControlState {
     TypeVar(TypeVarControlState),
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+impl Display for ControlState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Self::Start => write!(f,"START"),
+            Self::End => write!(f, "END"),
+            Self::TypeVar(ctr) => write!(f,"{}", ctr)
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum StackSymbol {
     Label(FieldLabel),
     InterestingVar(InterestingVar, Variance),
+}
+
+impl Display for StackSymbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Self::Label(l) => write!(f,"{}", l),
+            Self::InterestingVar(iv,var) => write!(f,"{}{}", iv, var)
+        }
+    }
 }
 
 impl StackSymbol {
@@ -60,6 +109,17 @@ impl StackSymbol {
 struct PushDownState {
     st: ControlState,
     stack: Vec<StackSymbol>,
+}
+
+impl Display for PushDownState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<{};", self.st)?;
+        for st in self.stack.iter() {
+            write!(f, "{}", st)?;
+        }
+
+        write!(f,">")
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -225,7 +285,7 @@ pub enum FiniteState {
     End,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum FSAEdge {
     Push(StackSymbol),
     Pop(StackSymbol),
@@ -243,7 +303,7 @@ pub struct FSA {
     mp: HashMap<FiniteState, NodeIndex>
 }
 
-
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 struct EdgeDefinition {
     src: FiniteState,
     dst: FiniteState,
@@ -347,8 +407,8 @@ impl FSA {
                     let edge = construct_fsa_edge(StackSymbol::Label(popped.clone()));
                     access_path.push(popped);
                     let end = Self::create_finite_state_from_pushdownstate(s.clone(), field_labels.iter(), access_path.clone());
-
-                    edges.push(build_definition(prev, edge, end));
+                    let ed = build_definition(prev, edge, end);
+                    edges.push(ed);
                 }
 
                 Ok(edges)
@@ -391,6 +451,20 @@ impl FSA {
         }
     }
 
+    fn get_constraint_push_pop_edges(constraint_rules: &Vec<Rule>) -> Result<Vec<EdgeDefinition>> {
+        let edges= constraint_rules.iter().map(|rule| Self::lhs_of_constraint_rule(&rule.lhs).and_then(|mut lhs_defs| {
+            let mut rhs_edge_def = Self::rhs_of_constraint_rule(&rule.rhs)?;
+            rhs_edge_def.append(&mut lhs_defs);
+            Ok(rhs_edge_def)
+        })).collect::<Result<Vec<Vec<EdgeDefinition>>>>();
+
+        edges.map(|x|x.into_iter().flatten().collect())
+    }
+
+    fn get_direct_rule_edges(constraint_rules: &Vec<Rule>) -> Result<Vec<EdgeDefinition>> {
+        constraint_rules.iter().map(|r| Self::sub_type_edge(r)).collect::<Result<Vec<EdgeDefinition>>>()
+    }
+
     /// Create a non-saturated FSA for the constraint set and RuleContext
     pub fn new(cons: &ConstraintSet, context: &RuleContext) -> Result<FSA> {
         let subs: Vec<&SubtypeConstraint> = cons
@@ -405,15 +479,9 @@ impl FSA {
             .collect();
 
         let constraint_rules = context.generate_constraint_based_rules(subs.as_ref());
-        let edges= constraint_rules.iter().map(|rule| Self::lhs_of_constraint_rule(&rule.lhs).and_then(|mut lhs_defs| {
-            let mut rhs_edge_def = Self::rhs_of_constraint_rule(&rule.rhs)?;
-            rhs_edge_def.append(&mut lhs_defs);
-            Ok(rhs_edge_def)
-        })).collect::<Result<Vec<Vec<EdgeDefinition>>>>()?;
+        let indirect_edges = Self::get_constraint_push_pop_edges(&constraint_rules)?;
 
-        let indirect_edges: Vec<EdgeDefinition> = edges.into_iter().flatten().collect();
-
-        let direct_edges = constraint_rules.iter().map(|r| Self::sub_type_edge(r)).collect::<Result<Vec<EdgeDefinition>>>()?;
+        let direct_edges = Self::get_direct_rule_edges(&constraint_rules)?;
 
         let mut new_fsa = FSA {
             grph: Graph::new(),
@@ -435,7 +503,7 @@ mod tests {
     use petgraph::dot::{Dot, Config};
     use pretty_assertions::{assert_eq, assert_ne};
 
-    use crate::{constraints::{ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable, Variance}, solver::constraint_graph::{Direction, FSA, InterestingVar, PushDownState, RuleContext}};
+    use crate::{constraints::{ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable, Variance}, solver::constraint_graph::{Direction, EdgeDefinition, FSA, FSAEdge, FiniteState, InterestingVar, PushDownState, RuleContext, TypeVarNode}};
 
     
     fn get_constraint_set() -> (ConstraintSet, RuleContext) {
@@ -642,6 +710,278 @@ mod tests {
         actual.sort();
 
         assert_eq!(actual,expected)
+    }
+    
+    #[test]
+    fn direct_constraint_edges() {
+        /*
+        y ⊑ p 
+        p ⊑ x
+        A ⊑ x.store
+        y.load ⊑ B
+        */
+
+
+        let (constraints,context) = get_constraint_set();
+
+        let rules: Vec<Rule>  = context.generate_constraint_based_rules(get_subtys(&constraints).as_ref());
+
+        let mut actual_edges = FSA::get_direct_rule_edges(&rules).expect("error in generating direct edges");
+        actual_edges.sort();
+
+
+        let covar_cons1 = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
+                variance: Variance::Covariant
+            },
+            access_path: vec![]
+        }),
+            dst: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
+                variance: Variance::Covariant
+            },
+            access_path: vec![]
+        }),
+            edge_weight: FSAEdge::Success
+        };
+
+        let contravar_cons1 = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
+                variance: Variance::Contravariant
+            },
+            access_path: vec![]
+        }),
+            dst: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
+                variance: Variance::Contravariant
+            },
+            access_path: vec![]
+        }),
+            edge_weight: FSAEdge::Success
+        };
+
+        let covar_cons2 = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
+                variance: Variance::Covariant
+            },
+            access_path: vec![]
+        }),
+            dst: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
+                variance: Variance::Covariant
+            },
+            access_path: vec![]
+        }),
+            edge_weight: FSAEdge::Success
+        };
+
+        let contravar_cons2 = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
+                variance: Variance::Contravariant
+            },
+            access_path: vec![]
+        }),
+            dst: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("p".to_owned())),
+                variance: Variance::Contravariant
+            },
+            access_path: vec![]
+        }),
+            edge_weight: FSAEdge::Success
+        };
+
+        let covar_cons3 = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Interesting(InterestingVar {tv: TypeVariable::new("A".to_owned()),dir: Direction::Lhs}),
+                variance: Variance::Covariant
+            },
+            access_path: vec![]
+        }),
+            dst: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
+                variance: Variance::Contravariant
+            },
+            access_path: vec![FieldLabel::Store]
+        }),
+            edge_weight: FSAEdge::Success
+        };
+
+        let contravar_cons3 = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
+                variance: Variance::Covariant
+            },
+            access_path: vec![FieldLabel::Store]
+        }),
+        dst: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+            dt_var: VHat::Interesting(InterestingVar {tv: TypeVariable::new("A".to_owned()),dir: Direction::Rhs}),
+            variance: Variance::Contravariant
+        },
+        access_path: vec![]
+        }),
+            edge_weight: FSAEdge::Success
+        };
+
+        let covar_cons4 = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
+                variance: Variance::Covariant
+            },
+            access_path: vec![FieldLabel::Load]
+        }),
+        dst: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+            dt_var: VHat::Interesting(InterestingVar {tv: TypeVariable::new("B".to_owned()),dir: Direction::Rhs}),
+            variance: Variance::Covariant
+        },
+        access_path: vec![]
+        }),
+            edge_weight: FSAEdge::Success
+        };
+
+        let contravar_cons4 = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Interesting(InterestingVar {tv: TypeVariable::new("B".to_owned()),dir: Direction::Lhs}),
+                variance: Variance::Contravariant
+            },
+            access_path: vec![]
+            }),
+            dst: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
+                dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())),
+                variance: Variance::Contravariant
+            },
+            access_path: vec![FieldLabel::Load]
+        }),
+
+            edge_weight: FSAEdge::Success
+        };
+
+
+        let mut expected_edges: Vec<EdgeDefinition> = vec![covar_cons1,contravar_cons1, covar_cons2, contravar_cons2, covar_cons3, contravar_cons3, covar_cons4, contravar_cons4];
+        expected_edges.sort();
+
+        assert_eq!(actual_edges, expected_edges)
+
+    }
+
+
+    #[test]
+    fn indirect_constraint_edges() {
+        /*
+        y ⊑ p 
+        p ⊑ x
+        A ⊑ x.store
+        y.load ⊑ B
+        */
+
+
+        let (constraints,context) = get_constraint_set();
+
+        let rules: Vec<Rule>  = context.generate_constraint_based_rules(get_subtys(&constraints).as_ref());
+
+        let mut actual_edges = FSA::get_constraint_push_pop_edges(&rules).expect("error in generating direct edges");
+        actual_edges.sort();
+
+
+        let rule3_cov_start_rule = EdgeDefinition {
+            src: FiniteState::Start,
+            dst: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Interesting(InterestingVar {tv:TypeVariable::new("A".to_owned()), dir: Direction::Lhs} ), variance: Variance::Covariant },
+                access_path: vec![]
+            }),
+            edge_weight: FSAEdge::Pop(StackSymbol::InterestingVar(InterestingVar {tv: TypeVariable::new("A".to_owned()), dir: Direction::Lhs}, Variance::Covariant))
+        };
+
+        let rule3_contra_end_rule = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Interesting(InterestingVar {tv:TypeVariable::new("A".to_owned()), dir: Direction::Rhs} ), variance: Variance::Contravariant },
+                access_path: vec![]
+            }),
+            dst: FiniteState::End,
+            edge_weight: FSAEdge::Push(StackSymbol::InterestingVar(InterestingVar {tv: TypeVariable::new("A".to_owned()), dir: Direction::Rhs}, Variance::Contravariant))
+        };
+
+
+        let rule4_cov_end_rule = EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Interesting(InterestingVar {tv:TypeVariable::new("B".to_owned()), dir: Direction::Rhs} ), variance: Variance::Covariant },
+                access_path: vec![]
+            }),
+            dst: FiniteState::End,
+            edge_weight: FSAEdge::Push(StackSymbol::InterestingVar(InterestingVar {tv: TypeVariable::new("B".to_owned()), dir: Direction::Rhs}, Variance::Covariant))
+        };
+
+        let rule4_contra_start_rule = EdgeDefinition {
+            src: FiniteState::Start,
+            dst: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Interesting(InterestingVar {tv:TypeVariable::new("B".to_owned()), dir: Direction::Lhs} ), variance: Variance::Contravariant },
+                access_path: vec![]
+            }),
+
+            edge_weight: FSAEdge::Pop(StackSymbol::InterestingVar(InterestingVar {tv: TypeVariable::new("B".to_owned()), dir: Direction::Lhs}, Variance::Contravariant))
+        };
+
+
+        let rule_3_cov_push =  EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Uninteresting(TypeVariable::new( "x".to_owned())), variance: Variance::Contravariant },
+                access_path: vec![FieldLabel::Store]
+            }),
+            dst: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())), variance: Variance::Covariant },
+                access_path: vec![]
+            }),
+
+            edge_weight: FSAEdge::Push(StackSymbol::Label(FieldLabel::Store))
+        };
+
+        let rule_3_contra_pop =  EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())), variance: Variance::Contravariant },
+                access_path: vec![]
+            }),
+            dst: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Uninteresting(TypeVariable::new( "x".to_owned())), variance: Variance::Covariant },
+                access_path: vec![FieldLabel::Store]
+            }),
+            edge_weight: FSAEdge::Pop(StackSymbol::Label(FieldLabel::Store))
+        };
+
+        let rule_4_cov_pop =  EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())), variance: Variance::Covariant },
+                access_path: vec![]
+            }),
+            dst: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Uninteresting(TypeVariable::new( "y".to_owned())), variance: Variance::Covariant },
+                access_path: vec![FieldLabel::Load]
+            }),
+            edge_weight: FSAEdge::Pop(StackSymbol::Label(FieldLabel::Load))
+        };
+
+        let rule_4_contra_push =  EdgeDefinition {
+            src: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Uninteresting(TypeVariable::new( "y".to_owned())), variance: Variance::Contravariant },
+                access_path: vec![FieldLabel::Load]
+            }),
+            dst: FiniteState::Tv(TypeVarNode {
+                base_var: TypeVarControlState { dt_var: VHat::Uninteresting(TypeVariable::new("y".to_owned())), variance: Variance::Contravariant },
+                access_path: vec![]
+            }),
+            edge_weight: FSAEdge::Push(StackSymbol::Label(FieldLabel::Load))
+        };
+
+
+
+
+        let mut expected_edges: Vec<EdgeDefinition> = vec![rule3_cov_start_rule, rule3_contra_end_rule, rule4_cov_end_rule, rule4_contra_start_rule, rule_3_cov_push, rule_3_contra_pop, rule_4_cov_pop, rule_4_contra_push];
+        expected_edges.sort();
+
+        assert_eq!(actual_edges, expected_edges)
+
     }
     
     #[test]
