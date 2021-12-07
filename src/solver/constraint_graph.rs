@@ -15,6 +15,15 @@ enum Direction {
     Rhs,
 }
 
+impl Direction  {
+    pub fn not(&self) -> Direction {
+        match &self {
+            Self::Lhs => Self::Rhs,
+            Self::Rhs => Self::Lhs
+        }
+    }
+}
+
 impl Display for Direction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_char(match &self {
@@ -41,6 +50,15 @@ impl Display for InterestingVar {
 enum VHat {
     Interesting(InterestingVar),
     Uninteresting(TypeVariable),
+}
+
+impl VHat {
+    pub fn not(&self) -> VHat {
+        match &self {
+            Self::Interesting(InterestingVar { tv, dir }) => Self::Interesting(InterestingVar { tv: tv.clone(), dir: dir.not() }),
+            Self::Uninteresting(x) => Self::Uninteresting(x.clone())
+        }
+    }
 }
 
 impl Display for VHat {
@@ -258,7 +276,7 @@ impl FiniteState {
             Self::Start => Self::End,
             Self::End => Self::Start,
             Self::Tv(tv) => Self::Tv(TypeVarNode {
-                base_var: TypeVarControlState { dt_var: tv.base_var.dt_var.clone(), variance: tv.base_var.variance.operate(&Variance::Contravariant) },
+                base_var: TypeVarControlState { dt_var: tv.base_var.dt_var.not(), variance: tv.base_var.variance.operate(&Variance::Contravariant) },
                 access_path: tv.access_path.clone()
             })
         }
@@ -303,7 +321,8 @@ impl Display for FSAEdge {
 /// Then given a constraint set C that derives the following judgement C ⊢ X.u ⊑ Y.v:
 pub struct FSA {
     grph: Graph<FiniteState, FSAEdge>,
-    mp: HashMap<FiniteState, NodeIndex>
+    mp: HashMap<FiniteState, NodeIndex>,
+    cant_pop_nodes: HashMap<FiniteState, NodeIndex>
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
@@ -565,6 +584,42 @@ impl FSA {
         self.get_saturation_edges().into_iter().for_each(|x| self.insert_edge(x));
     }
 
+
+    fn add_cant_push_node(&mut self, old_node: &FiniteState) -> NodeIndex {
+        self.cant_pop_nodes.get(&old_node).cloned().unwrap_or_else(||{
+            let nd_idx = self.grph.add_node(old_node.clone());
+            self.cant_pop_nodes.insert(old_node.clone(), nd_idx);
+            nd_idx
+        })
+    }
+
+    pub fn intersect_with_pop_push(&mut self) {
+
+        for edge_ind in self.grph.edge_indices(){
+            let edge = self.grph.edge_weight(edge_ind).unwrap().clone();
+            let (src,dst) = self.grph.edge_endpoints(edge_ind).unwrap().clone();
+            let old_src_node = self.grph.node_weight(src).unwrap().clone();
+            let old_dst_node = self.grph.node_weight(dst).unwrap().clone();
+
+            if let FSAEdge::Push(x) = &edge {
+                    // replace edge
+                    let new_nd = self.add_cant_push_node(&old_dst_node);
+                    self.grph.add_edge(src, new_nd, FSAEdge::Push(x.clone()));
+                    self.grph.remove_edge(edge_ind);
+            }
+
+            match edge {
+                FSAEdge::Push(_) | FSAEdge::Success => {
+                    let nsrc =  self.add_cant_push_node(&old_src_node);
+                    let ndst =  self.add_cant_push_node(&old_dst_node);
+                    self.grph.add_edge(nsrc, ndst, edge);
+                }
+                FSAEdge::Pop(_) => (),
+                FSAEdge::Failed => ()
+            };
+        }
+    }
+
     /// Create a non-saturated FSA for the constraint set and RuleContext
     pub fn new(cons: &ConstraintSet, context: &RuleContext) -> Result<FSA> {
         let subs: Vec<&SubtypeConstraint> = cons
@@ -585,11 +640,17 @@ impl FSA {
 
         let mut new_fsa = FSA {
             grph: Graph::new(),
-            mp: HashMap::new()
+            mp: HashMap::new(),
+            cant_pop_nodes: HashMap::new()
         };
 
-        indirect_edges.into_iter().for_each(|x| new_fsa.insert_edge(x));
-        direct_edges.into_iter().for_each(|x|new_fsa.insert_edge(x));
+
+        let mut edges = HashSet::new();
+        indirect_edges.into_iter().for_each(|x|{ edges.insert(x);});
+        direct_edges.into_iter().for_each(|x|{edges.insert(x);});
+
+        edges.into_iter().for_each(|x| new_fsa.insert_edge(x));
+
         Ok(new_fsa)
     }
 }
@@ -1189,7 +1250,16 @@ mod tests {
 
         let mut fsa_res = FSA::new(&constraints, &context).unwrap();
         fsa_res.saturate();
+        fsa_res.intersect_with_pop_push();
 
         eprintln!("{}", Dot::new(fsa_res.get_graph()));
     }
 }
+/*
+Next steps: generate a new simplified constraint set that is over interesting variables and fixed types only
+
+From that constraint set, generate initial sketches, using the unification algorithm.
+
+Label initial sketches by performing lattice operations on the nodes when the transducer recogonizes a relationship between X.u and an uninterpretted lattice.
+
+*/

@@ -1,6 +1,16 @@
-use binary_type_inference::{constraint_generation, node_context, util};
+use std::collections::BTreeSet;
+
+use binary_type_inference::{
+    constraint_generation,
+    constraints::TyConstraint,
+    node_context,
+    solver::constraint_graph::{RuleContext, FSA},
+    util,
+};
 use clap::{App, Arg};
 use cwe_checker_lib::{analysis::pointer_inference::Config, utils::binary::RuntimeMemoryImage};
+use petgraph::dot::Dot;
+use regex::Regex;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -53,7 +63,32 @@ fn main() -> anyhow::Result<()> {
         constraint_generation::Context::new(&graph, nd_context, &ir.program.term.extern_symbols);
     let constraints = ctx.generate_constraints();
 
-    print!("{}", constraints);
+    for cons in constraints.iter() {
+        eprintln!("{}", cons);
+    }
+    eprintln!("done cons");
+
+    let mut interestings = BTreeSet::new();
+    let reg = Regex::new(r"sub_(\d+)(@ESP)?").unwrap();
+    for cons in constraints.iter() {
+        if let TyConstraint::SubTy(s) = cons {
+            if reg.is_match(s.rhs.get_base_variable().get_name()) {
+                interestings.insert(s.rhs.get_base_variable().clone());
+            }
+
+            if reg.is_match(s.lhs.get_base_variable().get_name()) {
+                interestings.insert(s.lhs.get_base_variable().clone());
+            }
+        }
+    }
+
+    let context = RuleContext::new(interestings);
+
+    let mut fsa_res = FSA::new(&constraints, &context).unwrap();
+    fsa_res.saturate();
+    fsa_res.intersect_with_pop_push();
+
+    println!("{}", Dot::new(fsa_res.get_graph()));
 
     Ok(())
 }

@@ -1,6 +1,7 @@
 use crate::analysis::stack_depth_analysis;
 use crate::constraint_generation::{NodeContextMapping, PointsToMapping, TypeVariableAccess};
 use crate::constraints::TypeVariable;
+use crate::util;
 use anyhow::Result;
 use cwe_checker_lib::abstract_domain::{
     AbstractIdentifier, DataDomain, IntervalDomain, TryToBitvec,
@@ -9,6 +10,7 @@ use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
 use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Project, Variable};
+use cwe_checker_lib::utils;
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
 use log::warn;
 use petgraph::graph::NodeIndex;
@@ -29,13 +31,15 @@ impl NodeContextMapping for PointerState {
         match &term.term {
             Def::Assign { var, value } => new_ptr_state.handle_register_assign(var, value),
             // TODO(ian): dont unwrap
-            Def::Load { var, address } => new_ptr_state
-                .handle_load(var, address, &self.rt_mem)
-                .expect("Could not handle load"),
+            Def::Load { var, address } => {
+                if let Err(x) = new_ptr_state.handle_load(var, address, &self.rt_mem) {
+                    warn!("{}", x.to_string());
+                }
+            }
             Def::Store { address, value } => {
-                new_ptr_state
-                    .handle_store(address, value, &self.rt_mem)
-                    .expect("Could not handle store");
+                if let Err(x) = new_ptr_state.handle_store(address, value, &self.rt_mem) {
+                    warn!("{}", x.to_string());
+                }
             }
         };
 

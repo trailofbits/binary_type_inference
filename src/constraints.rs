@@ -23,6 +23,10 @@ impl TypeVariable {
         //TODO(ian): Maybe we should check the validity of the name here.
         TypeVariable { name }
     }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl Display for TypeVariable {
