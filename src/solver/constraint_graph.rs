@@ -391,7 +391,6 @@ impl FSA {
 
                 for definer in reaching_pushes.get_mut(v_contra).unwrap().entry(StackSymbol::Label(FieldLabel::Load)).or_insert_with(HashSet::new).iter().cloned().collect::<HashSet<FiniteState>>() {
                     let equiv_ptr = v_contra.not();
-                    println!("not {}", equiv_ptr);
                     let def_map = reaching_pushes.get_mut(&equiv_ptr).unwrap();
                     def_map.entry(StackSymbol::Label(FieldLabel::Store)).or_insert_with(HashSet::new).insert(definer);
                 }
@@ -402,16 +401,6 @@ impl FSA {
             did_not_reach_fixpoint
         } {};
         
-        reaching_pushes.iter().for_each(|(k, symb_map)| {
-            println!("{}:", k);
-            for (k,v) in symb_map.iter() {
-                println!("\t{}:",k);
-                for definer in v.iter() {
-                    println!("\t\t{}",definer);
-                }
-            }
-
-        });
         // remove reflexive edges
         new_edges.into_iter().filter(|x| x.src != x.dst).collect()
     }
@@ -922,7 +911,7 @@ mod tests {
         }),
             dst: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
                 dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
-                variance: Variance::Contravariant
+                variance: Variance::Covariant
             },
             access_path: vec![FieldLabel::Store]
         }),
@@ -932,7 +921,7 @@ mod tests {
         let contravar_cons3 = EdgeDefinition {
             src: FiniteState::Tv(TypeVarNode{base_var: TypeVarControlState {
                 dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
-                variance: Variance::Covariant
+                variance: Variance::Contravariant
             },
             access_path: vec![FieldLabel::Store]
         }),
@@ -994,7 +983,7 @@ mod tests {
 
         let fsa = FSA::new(&constraints, &context).unwrap();
 
-        /*let new_edge = EdgeDefinition {
+        let new_edge_cov = EdgeDefinition {
                 src: FiniteState::Tv(
                         TypeVarNode {
                             base_var: TypeVarControlState {
@@ -1003,31 +992,56 @@ mod tests {
                                 ),
                                 variance: Variance::Covariant,
                             },
-                            access_path: [
-                                Store,
-                            ],
+                            access_path:vec![FieldLabel::Store]
                         },
                     ),
-                    dst: Tv(
+                    dst: FiniteState::Tv(
                         TypeVarNode {
                             base_var: TypeVarControlState {
-                                dt_var: Uninteresting(
-                                    TypeVariable {
-                                        name: "y",
-                                    },
+                                dt_var: VHat::Uninteresting(
+                                    TypeVariable::new("y".to_owned())
                                 ),
-                                variance: Contravariant,
+                                variance: Variance::Covariant,
                             },
-                            access_path: [
-                                Load,
-                            ],
+                            access_path:vec![FieldLabel::Load],
                         },
                     ),
-                    edge_weight: Success,
+                    edge_weight: FSAEdge::Success,
                 };
+
+        let new_edge_contra = EdgeDefinition {
+                src: FiniteState::Tv(
+                    TypeVarNode {
+                        base_var: TypeVarControlState {
+                            dt_var: VHat::Uninteresting(
+                                TypeVariable::new("y".to_owned())
+                            ),
+                            variance: Variance::Contravariant,
+                        },
+                        access_path:vec![FieldLabel::Load],
+                    },
+                ),
+                dst: FiniteState::Tv(
+                    TypeVarNode {
+                        base_var: TypeVarControlState {
+                            dt_var: VHat::Uninteresting(
+                                TypeVariable::new("x".to_owned()),
+                            ),
+                            variance: Variance::Contravariant,
+                        },
+                        access_path:vec![FieldLabel::Store]
+                    },
+                ),
+                edge_weight: FSAEdge::Success,
+            };
             
-        */
-        assert_eq!(fsa.get_saturation_edges().into_iter().collect::<Vec<_>>(), vec![]);
+        let mut expected = vec![new_edge_cov,new_edge_contra];
+        expected.sort();
+
+        let mut actual = fsa.get_saturation_edges().into_iter().collect::<Vec<_>>();
+        actual.sort();
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -1140,6 +1154,22 @@ mod tests {
 
 
         let mut expected_edges: Vec<EdgeDefinition> = vec![rule3_cov_start_rule, rule3_contra_end_rule, rule4_cov_end_rule, rule4_contra_start_rule, rule_3_cov_push, rule_3_contra_pop, rule_4_cov_pop, rule_4_contra_push];
+        
+        // add reverse edges for all push pop
+        for edge in expected_edges.clone().iter() {
+            if let FSAEdge::Pop(_) = edge.edge_weight {
+                if edge.src != FiniteState::Start {
+                    expected_edges.push(edge.flip_edge());
+                }
+            }
+
+            if let FSAEdge::Push(_) = edge.edge_weight {
+                if edge.dst != FiniteState::End {
+                    expected_edges.push(edge.flip_edge());
+                }
+            }
+        }
+        
         expected_edges.sort();
 
         assert_eq!(actual_edges, expected_edges)
