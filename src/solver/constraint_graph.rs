@@ -1,10 +1,8 @@
-use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable,
-    Variance,
-};
+use crate::constraints::{ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable, Variance, parse_fields, parse_type_variable};
 use anyhow::{anyhow, Result};
 use cwe_checker_lib::{analysis::graph::Edge, pcode::Variable};
-use petgraph::{Directed, Graph, data::Build, graph::NodeIndex, visit::{EdgeRef, IntoEdgesDirected}};
+use nom::{IResult, branch::alt, bytes::complete::tag, sequence::tuple};
+use petgraph::{Directed, graph::EdgeIndex, data::Build, graph::NodeIndex, stable_graph::{StableDiGraph}, visit::{EdgeRef, IntoEdgesDirected, IntoEdgeReferences}};
 use std::{collections::{BTreeSet, HashMap, HashSet, VecDeque}, fmt::{Display, Write, write}, rc::Rc, vec};
 use petgraph::visit::IntoNodeReferences;
 use alga::general::AbstractMagma;
@@ -47,7 +45,7 @@ impl Display for InterestingVar {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
-enum VHat {
+pub enum VHat {
     Interesting(InterestingVar),
     Uninteresting(TypeVariable),
 }
@@ -71,7 +69,7 @@ impl Display for VHat {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
-struct TypeVarControlState {
+pub struct TypeVarControlState {
     dt_var: VHat,
     variance: Variance,
 }
@@ -251,6 +249,42 @@ impl Display for TypeVarNode {
     }
 }
 
+use nom::combinator::map;
+
+pub fn parse_interesting_variable(input: &str) -> IResult<&str, VHat> {
+   map(tuple((parse_type_variable, alt((map(tag("_L"),|_| Direction::Lhs), map(tag("_R"), |_| Direction::Rhs))))), |(tv,dir)| {
+        VHat::Interesting(InterestingVar {
+            dir,
+            tv
+        })
+    })(input)
+ }
+
+pub fn parse_vhat(input: &str) -> IResult<&str, VHat> {
+    alt((parse_interesting_variable, map(parse_type_variable,|tv| VHat::Uninteresting(tv))))(input)
+}
+
+pub fn parse_variance(input: &str) -> IResult<&str, Variance> {
+    alt((map(tag("⊕"),|_| Variance::Covariant),map(tag("⊖"), |_| Variance::Contravariant)))(input)
+}
+
+pub fn parse_type_var_control_state(input: &str) -> IResult<&str, TypeVarControlState> {
+    map(tuple((parse_vhat, parse_variance)), |(vhat, var)| TypeVarControlState { dt_var: vhat, variance: var })(input)
+}
+
+
+pub fn parse_typvarnode(input: &str) -> IResult<&str, FiniteState> {
+    map(tuple((parse_type_var_control_state ,parse_fields)), |(cont, fields)| FiniteState::Tv(TypeVarNode {
+        base_var: cont,
+        access_path: fields
+    }))(input)
+}
+
+pub fn parse_finite_state(input: &str) -> IResult<&str, FiniteState> {
+    alt((map(tag("start"),|_| FiniteState::Start),map(tag("end"),|_| FiniteState::End), parse_typvarnode))(input)
+
+}
+
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum FiniteState {
@@ -320,7 +354,7 @@ impl Display for FSAEdge {
 /// Let V = Vi U Vu where Vi are the interesting type variables and Vu are the uninnteresting type varaibles. (all proofs are done under the normal form described in Appendix B.)
 /// Then given a constraint set C that derives the following judgement C ⊢ X.u ⊑ Y.v:
 pub struct FSA {
-    grph: Graph<FiniteState, FSAEdge>,
+    grph: StableDiGraph<FiniteState, FSAEdge>,
     mp: HashMap<FiniteState, NodeIndex>,
     cant_pop_nodes: HashMap<FiniteState, NodeIndex>
 }
@@ -343,6 +377,22 @@ impl EdgeDefinition {
 }
 
 impl FSA {
+    // Replaces all type vars that are exactly equal (name and variance) with a type variable that is covariant
+    fn replace_nodes_with_interesting_variable(&mut self, to_replace: TypeVarNode, tv: TypeVariable)  {
+        
+     /*let it_var_l = TypeVarNode {
+         // So the key here with variance is this: we essentially want to pretend we always had the constraint 
+         // each node in the set <= tau
+         // and tau <= all the things each node
+         // These are all success edges, is this true? maybe we also want to add back edges.
+
+
+         base_var: TypeVarControlState { dt_var: (), variance: Variance::Covariant }
+         access_path: vec![],
+     };*/
+    }
+
+
     pub fn get_saturation_edges(&self) -> HashSet<EdgeDefinition> {
         let mut new_edges = HashSet::new();
         let mut reaching_pushes: HashMap<FiniteState,HashMap<StackSymbol, HashSet<FiniteState>>> = HashMap::new();
@@ -424,7 +474,7 @@ impl FSA {
         new_edges.into_iter().filter(|x| x.src != x.dst).collect()
     }
 
-    pub fn get_graph(&self) ->  &Graph<FiniteState, FSAEdge>{
+    pub fn get_graph(&self) ->  &StableDiGraph<FiniteState, FSAEdge>{
        &self.grph
     }
     fn get_or_insert_nd(&mut self, nd: FiniteState) -> NodeIndex {
@@ -595,7 +645,7 @@ impl FSA {
 
     pub fn intersect_with_pop_push(&mut self) {
 
-        for edge_ind in self.grph.edge_indices(){
+        for edge_ind in self.grph.edge_indices().collect::<Vec<EdgeIndex>>().into_iter() {
             let edge = self.grph.edge_weight(edge_ind).unwrap().clone();
             let (src,dst) = self.grph.edge_endpoints(edge_ind).unwrap().clone();
             let old_src_node = self.grph.node_weight(src).unwrap().clone();
@@ -639,7 +689,7 @@ impl FSA {
         let direct_edges = Self::get_direct_rule_edges(&constraint_rules)?;
 
         let mut new_fsa = FSA {
-            grph: Graph::new(),
+            grph: StableDiGraph::new(),
             mp: HashMap::new(),
             cant_pop_nodes: HashMap::new()
         };
@@ -653,13 +703,23 @@ impl FSA {
 
         Ok(new_fsa)
     }
+    /*
+    Ok the lemma: if you replace a set of nodes with a left node at start and a right node at end, ignoring which subgraph you came from, it cant possibly create pop edge that is in the push subgraph or a push edge that is in the pop subgraph. 
+
+    Proof: A_L is in the pop subgraph, all outgoing edges from each node are added to A_L. If the edge is a pop transition then that edges destination is also in the pop subgraph. If the edge is a push transition then the destination is the push transition, so no pops can occur afterwards. Proof is symmetric wrt A_R
+    */
+    
+    /// Remove SCCs 
+    fn replace_sccs_with_repr_tvars(&self) {
+
+    }
 }
 
 
 #[cfg(test)]
 mod tests {
     use std::{collections::{BTreeSet, HashSet}, iter::FromIterator, vec};
-    use super::{ControlState, Rule, TypeVarControlState, VHat};
+    use super::{ControlState, Rule, TypeVarControlState, VHat, parse_finite_state};
     use super::StackSymbol;
     use petgraph::dot::{Dot, Config};
     use pretty_assertions::{assert_eq, assert_ne};
@@ -1236,7 +1296,7 @@ mod tests {
         assert_eq!(actual_edges, expected_edges)
 
     }
-    
+    use crate::constraints;
     #[test]
     fn constraints_simple_pointer_passing() {
         /*
@@ -1253,6 +1313,42 @@ mod tests {
         fsa_res.intersect_with_pop_push();
 
         eprintln!("{}", Dot::new(fsa_res.get_graph()));
+    }
+
+    #[test]
+    fn test_node_parser() {
+        let fstate = FiniteState::Tv(TypeVarNode {
+            base_var: TypeVarControlState { dt_var: VHat::Interesting(InterestingVar {
+                dir: Direction::Lhs,
+                tv: TypeVariable::new("A".to_owned())
+            }), variance: Variance::Contravariant},
+            access_path: vec![FieldLabel::Load]
+        });
+
+
+        assert_eq!(parse_finite_state("A_L⊖.load"), Ok(("",fstate)));
+
+    }
+
+    #[test]
+    fn test_simple_reduction() {
+        let (_,cs_set) = constraints::parse_constraint_set("
+        a <= x
+        y.load <= b
+        y.load <= x 
+        x.load <= y.load
+        
+        ").unwrap();
+
+    
+        let rc = RuleContext::new(BTreeSet::from_iter(vec![TypeVariable::new("a".to_owned()), TypeVariable::new("b".to_owned())].into_iter()));
+    
+        let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
+        fsa_res.saturate();
+        fsa_res.intersect_with_pop_push();
+       // fsa_res.generate_recursive_type_variables();
+        
+        println!("{}", Dot::new(fsa_res.get_graph()));
     }
 }
 /*

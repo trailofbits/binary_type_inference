@@ -23,5 +23,8 @@ pub mod util;
 /// Contains an implementation of constraint solving, type sketch generation, and c type generation.
 pub mod solver;
 
+/// custom petagraph algos, specifically dense path expression from (FAST ALGORITHMS FOR SOLVING PATH PROBLEMS)[http://i.stanford.edu/pub/cstr/reports/cs/tr/79/734/CS-TR-79-734.pdf]
+pub mod graph_algos;
+
 #[cfg(test)]
 mod tests {}

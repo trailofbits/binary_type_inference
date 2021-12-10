@@ -1,15 +1,106 @@
+use alga::general::Multiplicative;
 use alga::general::{
     AbstractMagma, AbstractSemigroup, Identity, MultiplicativeGroup, MultiplicativeMonoid,
     MultiplicativeSemigroup, TwoSidedInverse,
 };
+use alga_derive::Alga;
 use log::error;
+use nom::branch::alt;
+use nom::bytes::complete::take_while;
+use nom::character::complete::alphanumeric1;
+use nom::character::complete::{anychar, char, crlf, digit1, newline, space0, tab};
+use nom::character::is_newline;
+use nom::combinator::map_res;
+use nom::multi::{many0, many1, separated_list0};
+use nom::sequence::{delimited, preceded, Tuple};
+use nom::Parser;
+use nom::{bytes::complete::tag, character::is_space, combinator::map, sequence::tuple, IResult};
 use std::collections::BTreeSet;
 use std::fmt::{Debug, Display, Write};
+use std::iter::FromIterator;
+use std::num::ParseIntError;
 use std::ops::{Deref, DerefMut};
 use std::vec::Vec;
 
-use alga::general::Multiplicative;
-use alga_derive::Alga;
+pub fn parse_type_variable(input: &str) -> IResult<&str, TypeVariable> {
+    map(alphanumeric1, |s: &str| TypeVariable::new(s.to_owned()))(input)
+}
+
+fn parse_field_field(input: &str) -> IResult<&str, FieldLabel> {
+    //σ{}@{}
+    map_res::<_, _, _, _, ParseIntError, _, _>(
+        tuple((tag("σ"), digit1, tag("@"), digit1)),
+        |(_, field_size, _, offset): (&str, &str, &str, &str)| {
+            let field_size: usize = field_size.parse()?;
+            let offset = offset.parse()?;
+            Ok(FieldLabel::Field(Field {
+                size: field_size,
+                offset,
+            }))
+        },
+    )(input)
+}
+
+fn parse_add_field(input: &str) -> IResult<&str, FieldLabel> {
+    map_res::<_, _, _, _, ParseIntError, _, _>(preceded(tag("+"), digit1), |x: &str| {
+        let cons = x.parse()?;
+        Ok(FieldLabel::Add(cons))
+    })(input)
+}
+
+fn parse_field_label(input: &str) -> IResult<&str, FieldLabel> {
+    alt((
+        map(tag("load"), |_| FieldLabel::Load),
+        map(tag("store"), |_| FieldLabel::Store),
+        map(tag("out"), |_| FieldLabel::Out(0)),
+        parse_field_field,
+        parse_add_field,
+    ))(input)
+}
+
+pub fn parse_fields(input: &str) -> IResult<&str, Vec<FieldLabel>> {
+    many0(preceded(tag("."), parse_field_label))(input)
+}
+
+pub fn parse_derived_type_variable(input: &str) -> IResult<&str, DerivedTypeVar> {
+    map(
+        tuple((parse_type_variable, parse_fields)),
+        |(tv, fields)| {
+            let mut dv = DerivedTypeVar::new(tv);
+            fields.into_iter().for_each(|x| dv.add_field_label(x));
+            dv
+        },
+    )(input)
+}
+
+pub fn parse_subtype_cons(input: &str) -> IResult<&str, SubtypeConstraint> {
+    let parser = tuple((
+        parse_derived_type_variable,
+        space0,
+        tag("<="),
+        space0,
+        parse_derived_type_variable,
+    ));
+    map(parser, |(x, _, _, _, y)| SubtypeConstraint::new(x, y))(input)
+}
+
+fn parse_whitespace_delim(input: &str) -> IResult<&str, &str> {
+    preceded(
+        alt((tag(" "), tag("\n"), tag("\t"), tag("\r\n"))),
+        take_while(|x: char| x == ' ' || x == '\n' || x == '\t'),
+    )(input)
+}
+
+pub fn parse_constraint_set(input: &str) -> IResult<&str, ConstraintSet> {
+    map(
+        separated_list0(parse_whitespace_delim, parse_subtype_cons),
+        |x| {
+            ConstraintSet(BTreeSet::from_iter(
+                x.into_iter().map(|x| TyConstraint::SubTy(x)),
+            ))
+        },
+    )(input.trim())
+}
 
 /// A static type variable with a name
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -367,5 +458,45 @@ impl Deref for ConstraintSet {
 impl DerefMut for ConstraintSet {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{
+        parse_derived_type_variable, parse_subtype_cons, DerivedTypeVar, FieldLabel,
+        SubtypeConstraint, TypeVariable,
+    };
+
+    #[test]
+    fn parse_simple_derived_tvar() {
+        #[test]
+        fn parse_simple_constraint() {
+            assert_eq!(
+                Ok(("", DerivedTypeVar::new(TypeVariable::new("x".to_owned())),)),
+                parse_derived_type_variable("x"),
+            );
+        }
+    }
+
+    #[test]
+    fn parse_dt_var() {
+        let mut dt = DerivedTypeVar::new(TypeVariable::new("x".to_owned()));
+        dt.add_field_label(FieldLabel::Load);
+        assert_eq!(Ok(("", dt)), parse_derived_type_variable("x.load"));
+    }
+
+    #[test]
+    fn parse_simple_constraint() {
+        assert_eq!(
+            Ok((
+                "",
+                SubtypeConstraint::new(
+                    DerivedTypeVar::new(TypeVariable::new("x".to_owned())),
+                    DerivedTypeVar::new(TypeVariable::new("y".to_owned())),
+                )
+            )),
+            parse_subtype_cons("x <= y"),
+        );
     }
 }
