@@ -48,7 +48,7 @@ fn parse_add_field(input: &str) -> IResult<&str, FieldLabel> {
     })(input)
 }
 
-fn parse_field_label(input: &str) -> IResult<&str, FieldLabel> {
+pub fn parse_field_label(input: &str) -> IResult<&str, FieldLabel> {
     alt((
         map(tag("load"), |_| FieldLabel::Load),
         map(tag("store"), |_| FieldLabel::Store),
@@ -84,7 +84,7 @@ pub fn parse_subtype_cons(input: &str) -> IResult<&str, SubtypeConstraint> {
     map(parser, |(x, _, _, _, y)| SubtypeConstraint::new(x, y))(input)
 }
 
-fn parse_whitespace_delim(input: &str) -> IResult<&str, &str> {
+pub fn parse_whitespace_delim(input: &str) -> IResult<&str, &str> {
     preceded(
         alt((tag(" "), tag("\n"), tag("\t"), tag("\r\n"))),
         take_while(|x: char| x == ' ' || x == '\n' || x == '\t'),

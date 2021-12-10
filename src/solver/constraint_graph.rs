@@ -1,8 +1,8 @@
-use crate::constraints::{ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable, Variance, parse_fields, parse_type_variable};
+use crate::constraints::{ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable, Variance, parse_field_label, parse_fields, parse_type_variable, parse_whitespace_delim};
 use anyhow::{anyhow, Result};
 use cwe_checker_lib::{analysis::graph::Edge, pcode::Variable};
-use nom::{IResult, branch::alt, bytes::complete::tag, sequence::tuple};
-use petgraph::{Directed, graph::EdgeIndex, data::Build, graph::NodeIndex, stable_graph::{StableDiGraph}, visit::{EdgeRef, IntoEdgesDirected, IntoEdgeReferences}};
+use nom::{IResult, branch::alt, bytes::complete::tag, combinator::success, multi::separated_list0, sequence::{delimited, tuple}};
+use petgraph::{Directed, data::Build, graph::EdgeIndex, graph::NodeIndex, stable_graph::{StableDiGraph}, visit::{EdgeRef, IntoEdgeReferences, IntoEdges, IntoEdgesDirected}};
 use std::{collections::{BTreeSet, HashMap, HashSet, VecDeque}, fmt::{Display, Write, write}, rc::Rc, vec};
 use petgraph::visit::IntoNodeReferences;
 use alga::general::AbstractMagma;
@@ -251,17 +251,17 @@ impl Display for TypeVarNode {
 
 use nom::combinator::map;
 
-pub fn parse_interesting_variable(input: &str) -> IResult<&str, VHat> {
+pub fn parse_interesting_variable(input: &str) -> IResult<&str, InterestingVar> {
    map(tuple((parse_type_variable, alt((map(tag("_L"),|_| Direction::Lhs), map(tag("_R"), |_| Direction::Rhs))))), |(tv,dir)| {
-        VHat::Interesting(InterestingVar {
+        InterestingVar {
             dir,
             tv
-        })
+        }
     })(input)
  }
 
 pub fn parse_vhat(input: &str) -> IResult<&str, VHat> {
-    alt((parse_interesting_variable, map(parse_type_variable,|tv| VHat::Uninteresting(tv))))(input)
+    alt((map(parse_interesting_variable, |iv| VHat::Interesting(iv)), map(parse_type_variable,|tv| VHat::Uninteresting(tv))))(input)
 }
 
 pub fn parse_variance(input: &str) -> IResult<&str, Variance> {
@@ -283,6 +283,52 @@ pub fn parse_typvarnode(input: &str) -> IResult<&str, FiniteState> {
 pub fn parse_finite_state(input: &str) -> IResult<&str, FiniteState> {
     alt((map(tag("start"),|_| FiniteState::Start),map(tag("end"),|_| FiniteState::End), parse_typvarnode))(input)
 
+}
+
+pub fn parse_stack_symbol(input: &str) -> IResult<&str, StackSymbol> {
+    let parse_iv =  map(tuple((parse_interesting_variable, parse_variance)), |(iv, var)| StackSymbol::InterestingVar(iv, var));
+    let parse_fl = map(parse_field_label, |x| StackSymbol::Label(x));
+    alt(
+     (parse_iv,
+     parse_fl)
+    )(input)
+}
+
+pub fn parse_edge_type(input: &str) -> IResult<&str, FSAEdge> {
+    let parse_push = map(tuple((tag("push_"), parse_stack_symbol)), |(_, symb)| FSAEdge::Push(symb));
+    let parse_pop = map(tuple((tag("pop_"), parse_stack_symbol)), |(_, symb)| FSAEdge::Pop(symb));
+    let parse_push_pop = alt((parse_pop,parse_push));
+
+    alt((map(tag("1"), |_| FSAEdge::Success), map(tag("1"), |_| FSAEdge::Failed), parse_push_pop))(input)
+}
+
+pub enum StateLabel {
+    Orig, 
+    Copy
+}
+
+pub struct LabeledState  {
+    label: StateLabel,
+    state: FiniteState,
+}
+
+pub fn parse_labeled_state(input: &str) -> IResult<&str, LabeledState> {
+    let copy_lab = map(tag("'"), |_| StateLabel::Copy);
+    let norm_lab = map(tag(""), |_| StateLabel::Orig);
+    map(tuple((parse_finite_state, alt((copy_lab, norm_lab)))), |(st, label)| LabeledState {
+        state: st,
+        label
+    })(input)
+}
+
+pub fn parse_edge(input: &str) -> IResult<&str, (LabeledState,FSAEdge, LabeledState)> {
+    let parse_edge_type = map(tuple((tag("("), parse_edge_type, tag(")"))), |(_,et,_)|et);
+
+    tuple((parse_labeled_state, parse_edge_type, parse_labeled_state))(input)
+}
+
+pub fn parse_edges(input: &str) -> IResult<&str, Vec<(LabeledState,FSAEdge, LabeledState)>> {
+    separated_list0(parse_whitespace_delim, parse_edge)(input.trim())
 }
 
 
@@ -392,6 +438,36 @@ impl FSA {
      };*/
     }
 
+    fn lstate_to_nd_index(&self ,st: &LabeledState) -> Option<NodeIndex> {
+        match &st.label {
+            &StateLabel::Copy => self.cant_pop_nodes.get(&st.state).cloned(),
+            &StateLabel::Orig => self.mp.get(&st.state).cloned()
+        }
+    }
+
+
+    pub fn get_edge_set(&self) -> HashSet<(NodeIndex, FSAEdge, NodeIndex)> {
+        self.grph.edge_references().map(|e| (e.source(),e.weight().clone(),e.target())).collect::<HashSet<_>>()
+    }
+
+    pub fn equal_edges(&self, edges: &Vec<(LabeledState, FSAEdge, LabeledState)>) -> bool {
+        let edges = edges.iter().map(|(s1,e, s2)| {
+            let ops = self.lstate_to_nd_index(s1);
+            let opd = self.lstate_to_nd_index(s2);
+
+            ops.and_then(|src| opd.map(|dst| (src, e.clone() ,dst)))
+        }).collect::<Vec<_>>();
+
+        if edges.iter().any(|o| o.is_none()) {
+            return false;
+        }
+
+        let edge_set = edges.into_iter().map(|x| x.unwrap()).collect::<HashSet<_>>();
+
+        let self_edge_set = self.get_edge_set();
+
+        edge_set == self_edge_set
+    }
 
     pub fn get_saturation_edges(&self) -> HashSet<EdgeDefinition> {
         let mut new_edges = HashSet::new();
@@ -719,7 +795,7 @@ impl FSA {
 #[cfg(test)]
 mod tests {
     use std::{collections::{BTreeSet, HashSet}, iter::FromIterator, vec};
-    use super::{ControlState, Rule, TypeVarControlState, VHat, parse_finite_state};
+    use super::{ControlState, Rule, TypeVarControlState, VHat, parse_edges, parse_finite_state};
     use super::StackSymbol;
     use petgraph::dot::{Dot, Config};
     use pretty_assertions::{assert_eq, assert_ne};
@@ -1330,13 +1406,17 @@ mod tests {
 
     }
 
+    fn assert_edges(graph: &FSA, edges: &str) {
+        assert!(graph.equal_edges(&parse_edges(edges).unwrap().1));
+    }
+
     #[test]
     fn test_simple_reduction() {
         let (_,cs_set) = constraints::parse_constraint_set("
-        a <= x
-        y.load <= b
-        y.load <= x 
-        x.load <= y.load
+        x.store <= a.store
+        x <= y.store
+        y <= x.store 
+        y.store <= b
         
         ").unwrap();
 
@@ -1349,6 +1429,10 @@ mod tests {
        // fsa_res.generate_recursive_type_variables();
         
         println!("{}", Dot::new(fsa_res.get_graph()));
+
+ //       assert_edges(&fsa_res, "
+ //
+   //     ");
     }
 }
 /*
