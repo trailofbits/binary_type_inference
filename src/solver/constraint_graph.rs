@@ -843,38 +843,46 @@ impl FSA {
         additional_edges
     }
 
-    fn generate_edges_for_state(s: &FiniteState) -> Vec<EdgeDefinition> {
+    fn generate_push_pop_edges_for_state(s: &FiniteState) -> Vec<EdgeDefinition> {
         match &s {
             &FiniteState::Start => vec![],
             &FiniteState::End => vec![],
             &FiniteState::Tv(tv) => {
                 if !tv.access_path.is_empty() {
                     Self::generate_push_pop_edges(tv.clone())
-                } else if let VHat::Interesting(itv) = tv.base_var.dt_var.clone() {
-                    let x = match itv.dir {
-                        Direction::Lhs => EdgeDefinition {
-                            src: FiniteState::Start,
-                            edge_weight: FSAEdge::Pop(StackSymbol::InterestingVar(
-                                itv,
-                                tv.base_var.variance.clone(),
-                            )),
-                            dst: s.clone(),
-                        },
-                        Direction::Rhs => EdgeDefinition {
-                            src: s.clone(),
-                            edge_weight: FSAEdge::Push(StackSymbol::InterestingVar(
-                                itv,
-                                tv.base_var.variance.clone(),
-                            )),
-                            dst: FiniteState::End,
-                        },
-                    };
-                    vec![x]
                 } else {
                     vec![]
                 }
             }
         }
+    }
+
+    fn generate_start_and_stop_edges_for_state(s: &FiniteState) -> Option<EdgeDefinition> {
+        if let FiniteState::Tv(tv) = s {
+            if let VHat::Interesting(itv) = tv.base_var.dt_var.clone() {
+                let x = match itv.dir {
+                    Direction::Lhs => EdgeDefinition {
+                        src: FiniteState::Start,
+                        edge_weight: FSAEdge::Pop(StackSymbol::InterestingVar(
+                            itv,
+                            tv.base_var.variance.clone(),
+                        )),
+                        dst: s.clone(),
+                    },
+                    Direction::Rhs => EdgeDefinition {
+                        src: s.clone(),
+                        edge_weight: FSAEdge::Push(StackSymbol::InterestingVar(
+                            itv,
+                            tv.base_var.variance.clone(),
+                        )),
+                        dst: FiniteState::End,
+                    },
+                };
+
+                return Some(x);
+            }
+        }
+        None
     }
 
     /// Create a non-saturated FSA for the constraint set and RuleContext
@@ -897,14 +905,26 @@ impl FSA {
         let indirect_edges = total_edges
             .iter()
             .map(|e| {
-                let mut f = Self::generate_edges_for_state(&e.src);
-                f.extend(Self::generate_edges_for_state(&e.dst));
+                let mut f = Self::generate_push_pop_edges_for_state(&e.src);
+                f.extend(Self::generate_push_pop_edges_for_state(&e.dst));
                 f
             })
             .flatten()
             .collect::<Vec<_>>();
 
         total_edges.extend(indirect_edges.into_iter());
+
+        let start_stop_edges = total_edges
+            .iter()
+            .map(|e| {
+                Self::generate_start_and_stop_edges_for_state(&e.src)
+                    .into_iter()
+                    .chain(Self::generate_start_and_stop_edges_for_state(&e.dst).into_iter())
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+
+        total_edges.extend(start_stop_edges.into_iter());
 
         let mut new_fsa = FSA {
             grph: StableDiGraph::new(),
@@ -1458,12 +1478,24 @@ mod tests {
         let mut actual_edges = dir
             .iter()
             .map(|e| {
-                FSA::generate_edges_for_state(&e.src)
+                FSA::generate_push_pop_edges_for_state(&e.src)
                     .into_iter()
-                    .chain(FSA::generate_edges_for_state(&e.dst))
+                    .chain(FSA::generate_push_pop_edges_for_state(&e.dst))
             })
             .flatten()
             .collect::<Vec<_>>();
+
+        let startstop = actual_edges
+            .iter()
+            .chain(dir.iter())
+            .map(|x| {
+                FSA::generate_start_and_stop_edges_for_state(&x.src)
+                    .into_iter()
+                    .chain(FSA::generate_start_and_stop_edges_for_state(&x.dst).into_iter())
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        actual_edges.extend(startstop.into_iter());
         actual_edges.sort();
 
         let rule3_cov_start_rule = EdgeDefinition {
@@ -1699,7 +1731,7 @@ mod tests {
             "
         x.store <= a.store
         x <= y.store
-        y <= x.store 
+        x.store <= y
         y.store <= b
         
         ",
