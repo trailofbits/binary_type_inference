@@ -13,15 +13,18 @@ use nom::{
     sequence::{delimited, tuple},
     IResult,
 };
-use petgraph::visit::IntoNodeReferences;
 use petgraph::{
     data::Build,
     graph::EdgeIndex,
     graph::NodeIndex,
     stable_graph::StableDiGraph,
-    visit::{EdgeRef, IntoEdgeReferences, IntoEdges, IntoEdgesDirected},
+    visit::{
+        EdgeRef, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNodeIdentifiers, Reversed,
+        Walker,
+    },
     Directed,
 };
+use petgraph::{data::DataMap, visit::IntoNodeReferences};
 use std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
     fmt::{write, Display, Write},
@@ -481,23 +484,189 @@ impl EdgeDefinition {
 }
 
 impl FSA {
+    pub fn remove_unreachable(&mut self) {
+        let mut reachable_from_start = HashSet::new();
+
+        let dfs = petgraph::visit::Dfs::new(&self.grph, *self.mp.get(&FiniteState::Start).unwrap());
+        dfs.iter(&self.grph).for_each(|x| {
+            reachable_from_start.insert(x);
+        });
+
+        let rev_graph = Reversed(&self.grph);
+        let dfs = petgraph::visit::Dfs::new(
+            &rev_graph,
+            *self.cant_pop_nodes.get(&FiniteState::End).unwrap(),
+        );
+
+        let reachable_from_end = dfs.iter(&rev_graph).collect();
+        let reachable: HashSet<_> = reachable_from_start
+            .intersection(&reachable_from_end)
+            .collect();
+
+        for nd_id in self.grph.node_indices().collect::<Vec<_>>().into_iter() {
+            if !reachable.contains(&nd_id) {
+                self.grph.remove_node(nd_id);
+            }
+        }
+    }
+
+    fn get_entries_to_scc(&self, idxs: &Vec<NodeIndex>) -> HashSet<NodeIndex> {
+        let canidates = idxs.clone().into_iter().collect::<HashSet<_>>();
+
+        idxs.iter()
+            .cloned()
+            .filter(|idx: &NodeIndex| {
+                let edges = self
+                    .grph
+                    .edges_directed(idx.clone(), petgraph::EdgeDirection::Incoming);
+                for e in edges {
+                    if !canidates.contains(&e.source()) {
+                        return true;
+                    }
+                }
+
+                false
+            })
+            .collect()
+    }
+
+    fn get_root_type_var(st: FiniteState) -> Option<DerivedTypeVar> {
+        if let FiniteState::Tv(tv) = st {
+            let TypeVarNode {
+                access_path,
+                base_var,
+            } = tv;
+
+            let base_var = match base_var.dt_var {
+                VHat::Interesting(it) => it.tv,
+                VHat::Uninteresting(ut) => ut,
+            };
+
+            let mut dt = DerivedTypeVar::new(base_var);
+            access_path.into_iter().for_each(|x| dt.add_field_label(x));
+            Some(dt)
+        } else {
+            None
+        }
+    }
+
+    // todo this is slow, use a trie
+    fn select_entry_reprs(&self, it: HashSet<NodeIndex>) -> HashSet<NodeIndex> {
+        let repr_vars: HashSet<DerivedTypeVar> = it
+            .iter()
+            .map(|x| {
+                let root = Self::get_root_type_var(self.grph.node_weight(*x).unwrap().clone())
+                    .expect("All scc entries should be tvs");
+                root
+            })
+            .collect();
+
+        it.into_iter()
+            .filter(|curr_node| {
+                let root =
+                    Self::get_root_type_var(self.grph.node_weight(*curr_node).unwrap().clone())
+                        .expect("All scc entries should be tvs");
+
+                repr_vars.iter().all(|x| !x.is_prefix_of(&root))
+            })
+            .collect()
+    }
+
+    pub fn generate_recursive_type_variables(&mut self) {
+        let mut ctr: usize = 0;
+
+        loop {
+            let cond = petgraph::algo::tarjan_scc(&self.grph);
+            let mut did_change = false;
+            for scc in cond.into_iter() {
+                if scc.len() != 1 {
+                    did_change = true;
+                    let entries = self.get_entries_to_scc(&scc);
+                    assert!(entries.len() != 0);
+                    let non_redundant_removes = self.select_entry_reprs(entries);
+                    assert!(non_redundant_removes.len() != 0);
+                    for idx in non_redundant_removes.into_iter() {
+                        let tv = TypeVariable::new(format!("loop_breaker{}", ctr));
+                        println!("replacing! {}", self.grph.node_weight(idx).unwrap());
+                        self.replace_nodes_with_interesting_variable(idx, tv);
+                        println!("{}", petgraph::dot::Dot::new(&self.grph));
+                        ctr += 1;
+                    }
+                }
+            }
+
+            if !did_change {
+                break;
+            }
+        }
+    }
+
     // Replaces all type vars that are exactly equal (name and variance) with a type variable that is covariant
-    fn replace_nodes_with_interesting_variable(
-        &mut self,
-        to_replace: TypeVarNode,
-        tv: TypeVariable,
-    ) {
-
-        /*let it_var_l = TypeVarNode {
-            // So the key here with variance is this: we essentially want to pretend we always had the constraint
-            // each node in the set <= tau
-            // and tau <= all the things each node
-            // These are all success edges, is this true? maybe we also want to add back edges.
-
-
-            base_var: TypeVarControlState { dt_var: (), variance: Variance::Covariant }
+    fn replace_nodes_with_interesting_variable(&mut self, to_replace: NodeIndex, tv: TypeVariable) {
+        let ivlhs = InterestingVar {
+            tv: tv.clone(),
+            dir: Direction::Lhs,
+        };
+        let entry_node = FiniteState::Tv(TypeVarNode {
+            base_var: TypeVarControlState {
+                dt_var: VHat::Interesting(ivlhs.clone()),
+                variance: Variance::Covariant,
+            },
             access_path: vec![],
-        };*/
+        });
+
+        let ivrhs = InterestingVar {
+            tv,
+            dir: Direction::Rhs,
+        };
+        let exit_node = FiniteState::Tv(TypeVarNode {
+            base_var: TypeVarControlState {
+                dt_var: VHat::Interesting(ivrhs.clone()),
+                variance: Variance::Covariant,
+            },
+            access_path: vec![],
+        });
+
+        let entry = self.grph.add_node(entry_node.clone());
+        let exit = self.grph.add_node(exit_node.clone());
+        self.mp.insert(entry_node, entry);
+        self.cant_pop_nodes.insert(exit_node, exit);
+
+        let start_ind = self.mp.get(&FiniteState::Start).unwrap();
+        self.grph.add_edge(
+            *start_ind,
+            entry,
+            FSAEdge::Push(StackSymbol::InterestingVar(ivlhs, Variance::Covariant)),
+        );
+
+        let end_ind = self.cant_pop_nodes.get(&FiniteState::End).unwrap();
+        self.grph.add_edge(
+            exit,
+            *end_ind,
+            FSAEdge::Push(StackSymbol::InterestingVar(ivrhs, Variance::Covariant)),
+        );
+
+        for (edge_id, source_node, weight) in self
+            .grph
+            .edges_directed(to_replace, petgraph::EdgeDirection::Incoming)
+            .into_iter()
+            .map(|e| (e.id(), e.source(), e.weight().clone()))
+            .collect::<Vec<_>>()
+        {
+            self.grph.remove_edge(edge_id);
+            self.grph.add_edge(source_node, exit, weight);
+        }
+
+        for (edge_id, dest_node, weight) in self
+            .grph
+            .edges_directed(to_replace, petgraph::EdgeDirection::Incoming)
+            .into_iter()
+            .map(|e| (e.id(), e.target(), e.weight().clone()))
+            .collect::<Vec<_>>()
+        {
+            self.grph.remove_edge(edge_id);
+            self.grph.add_edge(entry, dest_node, weight);
+        }
     }
 
     fn lstate_to_nd_index(&self, st: &LabeledState) -> Option<NodeIndex> {
@@ -684,24 +853,6 @@ impl FSA {
         let src_idx = self.get_or_insert_nd(src);
         let dst_idx = self.get_or_insert_nd(dst);
         self.grph.add_edge(src_idx, dst_idx, edge_weight);
-    }
-
-    fn create_finite_state_from_pushdownstate<'a>(
-        pd_state: TypeVarControlState,
-        remaining_stack: impl Iterator<Item = &'a FieldLabel>,
-        access_path: Vec<FieldLabel>,
-    ) -> FiniteState {
-        let new_variance = remaining_stack
-            .map(|x| x.variance())
-            .reduce(|x, y| x.operate(&y))
-            .unwrap_or(Variance::Covariant);
-        FiniteState::Tv(TypeVarNode {
-            base_var: TypeVarControlState {
-                dt_var: pd_state.dt_var,
-                variance: new_variance.operate(&pd_state.variance),
-            },
-            access_path: access_path.to_vec(),
-        })
     }
 
     fn iterate_over_field_labels_in_stack(stack: &[StackSymbol]) -> Result<VecDeque<FieldLabel>> {
@@ -958,6 +1109,7 @@ mod tests {
     use cwe_checker_lib::analysis::graph::Edge;
     use petgraph::dot::{Config, Dot};
     use pretty_assertions::{assert_eq, assert_ne};
+    use std::os::unix::fs;
     use std::{
         collections::{BTreeSet, HashSet},
         iter::FromIterator,
@@ -1729,11 +1881,9 @@ mod tests {
     fn test_simple_reduction() {
         let (_, cs_set) = constraints::parse_constraint_set(
             "
-        x.store <= a.store
-        x <= y.store
+        x <= a
         x.store <= y
-        y.store <= b
-        
+        y <= b
         ",
         )
         .unwrap();
@@ -1749,13 +1899,18 @@ mod tests {
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         fsa_res.saturate();
         fsa_res.intersect_with_pop_push();
-        // fsa_res.generate_recursive_type_variables();
-
+        fsa_res.remove_unreachable();
+        fsa_res.generate_recursive_type_variables();
+        fsa_res.remove_unreachable();
         println!("{}", Dot::new(fsa_res.get_graph()));
 
-        //       assert_edges(&fsa_res, "
-        //
-        //     ");
+        /*assert_edges(
+            &fsa_res,
+            "
+                start(pop_a_L⊕)a_L⊕
+                start(pop_a_L⊕)a_L⊕
+             ",
+        );*/
     }
 }
 /*

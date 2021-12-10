@@ -27,9 +27,9 @@ if __name__ == "__main__":
         # interesting_tvars += [cons.base for cons in all_dt if re.fullmatch(
         #    "sub_[\da-z]*@sp", cons.base)]
 
-    print(interesting_tvars)
+    # print(interesting_tvars)
     solver = retypd.Solver(cons_set, interesting_tvars)
-    print(cons_set)
+    # print(cons_set)
     solver()
 
     for cons in solver.constraints:

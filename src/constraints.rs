@@ -299,6 +299,16 @@ impl DerivedTypeVar {
         }
     }
 
+    pub fn is_prefix_of(&self, other: &DerivedTypeVar) -> bool {
+        other.get_base_variable() == self.get_base_variable()
+            && self.labels.len() < other.labels.len()
+            && self
+                .labels
+                .iter()
+                .zip(other.labels.iter())
+                .all(|(x, y)| x == y)
+    }
+
     /// computes the path variance, an epsilon is by default covariant
     pub fn path_variance(&self) -> Variance {
         self.labels
