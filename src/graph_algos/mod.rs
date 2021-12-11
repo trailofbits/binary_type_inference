@@ -1,49 +1,45 @@
-#[cfg(test)]
-mod tests {
-    use petgraph::{Directed, Graph};
+use std::{hash::Hash, iter::FromIterator};
 
-    // I know this is botched terminology
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    enum EdgeLabel<A> {
-        AlphabetSymbol(A),
-        EmptyString,
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    enum Regex<A> {
-        Union(Box<Regex<A>>, Box<Regex<A>>),
-        Repeat(Box<Regex<A>>),
-        Concat(Box<Regex<A>>),
-        Edge(EdgeLabel<A>),
-        EmptySet,
-    }
-
-    fn compute_path_expression<N, E, Idx, A>(
-        grph: Graph<N, E, Directed, Idx>,
-        map_weight_to_symbol: &impl Fn(&E) -> EdgeLabel<A>,
-    ) {
-        todo!()
-    }
-
-    #[test]
-    fn path_expression_of_simple_graph() {
-        let mut graph: Graph<&str, &str> = Graph::new();
-        let st = graph.add_node("start");
-        let loop_pred = graph.add_node("loop_pred");
-        let h1 = graph.add_node("h1");
-        let h2 = graph.add_node("h2");
-        let exit = graph.add_node("exit");
-        let accept = graph.add_node("accept");
-
-        graph.extend_with_edges(&[
-            (st, loop_pred, ""),
-            (loop_pred, h1, "e"),
-            (loop_pred, h2, "f"),
-            (h2, h1, "d"),
-            (h1, exit, "a"),
-            (h2, exit, "b"),
-            (exit, h2, "c"),
-            (exit, accept, "g"),
-        ]);
-    }
+use indexmap::IndexSet;
+use petgraph::{
+    visit::{EdgeRef, IntoEdgesDirected, IntoNeighborsDirected, NodeCount},
+    Directed, Graph,
+};
+/// All simple paths that tracks edge paths instead of node paths
+pub fn all_simple_paths<TargetColl, G>(
+    graph: G,
+    from: G::NodeId,
+    to: G::NodeId,
+) -> impl Iterator<Item = TargetColl>
+where
+    G: NodeCount,
+    G: IntoEdgesDirected,
+    G::EdgeId: Eq + Hash,
+    TargetColl: FromIterator<G::EdgeId>,
+{
+    let mut visited: IndexSet<G::EdgeId> = IndexSet::from_iter(None);
+    let mut stack = vec![graph.edges_directed(from, petgraph::EdgeDirection::Outgoing)];
+    std::iter::from_fn(move || {
+        while let Some(children) = stack.last_mut() {
+            if let Some(child) = children.next() {
+                if child.target() == to {
+                    let path = visited
+                        .iter()
+                        .cloned()
+                        .chain(Some(child.id()))
+                        .collect::<TargetColl>();
+                    return Some(path);
+                } else if !visited.contains(&child.id()) {
+                    visited.insert(child.id());
+                    stack.push(
+                        graph.edges_directed(child.target(), petgraph::EdgeDirection::Outgoing),
+                    );
+                }
+            } else {
+                stack.pop();
+                visited.pop();
+            }
+        }
+        None
+    })
 }

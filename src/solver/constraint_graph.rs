@@ -4,7 +4,10 @@ use crate::constraints::{
 };
 use alga::general::AbstractMagma;
 use anyhow::{anyhow, Result};
-use cwe_checker_lib::{analysis::graph::Edge, pcode::Variable};
+use cwe_checker_lib::{
+    analysis::graph::{Edge, Node},
+    pcode::Variable,
+};
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -13,6 +16,8 @@ use nom::{
     sequence::{delimited, tuple},
     IResult,
 };
+
+use crate::graph_algos::all_simple_paths;
 use petgraph::{
     data::Build,
     graph::EdgeIndex,
@@ -25,6 +30,7 @@ use petgraph::{
     Directed,
 };
 use petgraph::{data::DataMap, visit::IntoNodeReferences};
+use serde_json::value::Index;
 use std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
     fmt::{write, Display, Write},
@@ -908,6 +914,14 @@ impl FSA {
             .collect::<Result<Vec<EdgeDefinition>>>()
     }
 
+    pub fn simplify_graph(&mut self) {
+        self.saturate();
+        self.intersect_with_pop_push();
+        self.remove_unreachable();
+        self.replace_sccs_with_repr_tvars();
+        self.remove_unreachable();
+    }
+
     pub fn saturate(&mut self) {
         self.get_saturation_edges()
             .into_iter()
@@ -954,6 +968,90 @@ impl FSA {
                 FSAEdge::Failed => (),
             };
         }
+    }
+
+    fn get_start(&self) -> NodeIndex {
+        *self.mp.get(&FiniteState::Start).unwrap()
+    }
+
+    fn get_end(&self) -> NodeIndex {
+        *self.cant_pop_nodes.get(&FiniteState::End).unwrap()
+    }
+
+    fn get_it_from_edge(
+        &self,
+        ed: &EdgeIndex,
+        pat_cons: &impl Fn(&FSAEdge) -> Option<&StackSymbol>,
+    ) -> Option<DerivedTypeVar> {
+        let opt = self.grph.edge_weight(*ed).and_then(|x| pat_cons(x));
+
+        if let Some(StackSymbol::InterestingVar(iv, var)) = opt {
+            if var == &Variance::Covariant {
+                Some(DerivedTypeVar::new(iv.tv.clone()))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn add_field_to_var(v: &mut DerivedTypeVar, symb: &StackSymbol) -> bool {
+        match &symb {
+            StackSymbol::InterestingVar(x, v) => false,
+            StackSymbol::Label(fl) => {
+                v.add_field_label(fl.clone());
+                true
+            }
+        }
+    }
+
+    fn path_to_constraint(&self, path: &Vec<EdgeIndex>) -> Option<SubtypeConstraint> {
+        let pop_it = path.get(0).and_then(|x| {
+            self.get_it_from_edge(x, &|x| {
+                if let FSAEdge::Pop(x) = x {
+                    Some(x)
+                } else {
+                    None
+                }
+            })
+        });
+
+        let push_it = path.last().and_then(|x| {
+            self.get_it_from_edge(x, &|x| {
+                if let FSAEdge::Push(x) = x {
+                    Some(x)
+                } else {
+                    None
+                }
+            })
+        });
+
+        pop_it.and_then(|mut lhs| {
+            push_it.and_then(|mut rhs| {
+                for edge_idx in &path[1..path.len() - 1] {
+                    let ew = self.grph.edge_weight(*edge_idx)?;
+                    if !match ew {
+                        FSAEdge::Pop(s) => Self::add_field_to_var(&mut lhs, s),
+                        FSAEdge::Push(s) => Self::add_field_to_var(&mut rhs, s),
+                        FSAEdge::Success => true,
+                        FSAEdge::Failed => unreachable!(),
+                    } {
+                        return None;
+                    }
+                }
+
+                Some(SubtypeConstraint::new(lhs, rhs))
+            })
+        })
+    }
+
+    pub fn walk_constraints(&self) -> ConstraintSet {
+        let paths = all_simple_paths::<Vec<_>, _>(&self.grph, self.get_start(), self.get_end());
+
+        for p in paths {}
+
+        ConstraintSet::default()
     }
 
     fn generate_push_pop_edges(tv: TypeVarNode) -> Vec<EdgeDefinition> {
@@ -1897,11 +1995,7 @@ mod tests {
         ));
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
-        fsa_res.saturate();
-        fsa_res.intersect_with_pop_push();
-        fsa_res.remove_unreachable();
-        fsa_res.generate_recursive_type_variables();
-        fsa_res.remove_unreachable();
+        fsa_res.simplify_graph();
         println!("{}", Dot::new(fsa_res.get_graph()));
 
         /*assert_edges(
