@@ -1053,9 +1053,14 @@ impl FSA {
     pub fn walk_constraints(&self) -> ConstraintSet {
         let paths = all_simple_paths::<Vec<_>, _>(&self.grph, self.get_start(), self.get_end());
 
-        for p in paths {}
+        let cons_set: BTreeSet<TyConstraint> = paths
+            .filter_map(|x| {
+                self.path_to_constraint(&x)
+                    .map(|sub| TyConstraint::SubTy(sub))
+            })
+            .collect();
 
-        ConstraintSet::default()
+        ConstraintSet::from(cons_set)
     }
 
     fn generate_push_pop_edges(tv: TypeVarNode) -> Vec<EdgeDefinition> {

@@ -4,7 +4,10 @@ use binary_type_inference::{
     constraint_generation,
     constraints::TyConstraint,
     node_context,
-    solver::constraint_graph::{RuleContext, FSA},
+    solver::{
+        constraint_graph::{RuleContext, FSA},
+        type_sketch::get_initial_sketches,
+    },
     util,
 };
 use clap::{App, Arg};
@@ -85,8 +88,15 @@ fn main() -> anyhow::Result<()> {
     let context = RuleContext::new(interestings);
 
     let mut fsa_res = FSA::new(&constraints, &context).unwrap();
-    fsa_res.saturate();
-    fsa_res.intersect_with_pop_push();
+    fsa_res.simplify_graph();
+    let new_cons = fsa_res.walk_constraints();
+
+    for cons in new_cons.iter() {
+        eprintln!("{}", cons);
+    }
+    eprintln!("done new cons");
+
+    //let sketches = get_initial_sketches(&new_cons, &context);
 
     println!("{}", Dot::new(fsa_res.get_graph()));
 
