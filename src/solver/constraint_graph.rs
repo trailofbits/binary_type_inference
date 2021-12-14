@@ -187,6 +187,10 @@ impl RuleContext {
         RuleContext { interesting }
     }
 
+    pub fn get_interesting(&self) -> &BTreeSet<TypeVariable> {
+        &self.interesting
+    }
+
     fn lhs(&self, ty: TypeVariable) -> VHat {
         if self.interesting.contains(&ty) {
             VHat::Interesting(InterestingVar {

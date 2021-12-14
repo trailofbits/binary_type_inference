@@ -13,7 +13,9 @@ use petgraph::{
     Directed,
 };
 
-use crate::constraints::{ConstraintSet, DerivedTypeVar, FieldLabel, TyConstraint};
+use crate::constraints::{ConstraintSet, DerivedTypeVar, FieldLabel, TyConstraint, TypeVariable};
+
+use super::constraint_graph::RuleContext;
 // TODO(ian): use this abstraction for the transducer
 struct NodeDefinedGraph<N: Clone + Hash + Eq, E: Hash + Eq> {
     grph: Graph<N, E>,
@@ -292,4 +294,22 @@ impl SketchGraph {
             None
         }
     }
+}
+
+/// Gets initial unlabeled sketches
+pub fn get_initial_sketches(
+    cons: &ConstraintSet,
+    rule_context: &RuleContext,
+) -> HashMap<TypeVariable, (NodeIndex, Graph<(), FieldLabel>)> {
+    let initial_sketch_builder = SketchGraph::new(cons);
+
+    rule_context
+        .get_interesting()
+        .iter()
+        .filter_map(|x| {
+            initial_sketch_builder
+                .get_repr_graph(&DerivedTypeVar::new(x.clone()))
+                .map(|scheme_def| (x.clone(), scheme_def))
+        })
+        .collect()
 }
