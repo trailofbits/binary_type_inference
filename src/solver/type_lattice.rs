@@ -13,6 +13,34 @@ use std::{
     rc::Rc,
 };
 
+trait NamedLattice<T: Lattice> {
+    fn bot(&self) -> T;
+
+    fn get_elem(&self, name: &str) -> Option<T>;
+
+    fn top(&self) -> CustomLatticeElement;
+}
+
+struct EnumeratedNamedLattice {
+    nds: HashMap<String, CustomLatticeElement>,
+    bottom: CustomLatticeElement,
+    top: CustomLatticeElement,
+}
+
+impl NamedLattice<CustomLatticeElement> for EnumeratedNamedLattice {
+    fn get_elem(&self, name: &str) -> Option<CustomLatticeElement> {
+        self.nds.get(name).cloned()
+    }
+
+    fn bot(&self) -> CustomLatticeElement {
+        self.bottom.clone()
+    }
+
+    fn top(&self) -> CustomLatticeElement {
+        self.top.clone()
+    }
+}
+
 /// User input that defines a complete lattice.
 #[derive(Debug, Deserialize, Serialize)]
 struct LatticeDefinition {
@@ -77,6 +105,8 @@ impl LatticeDefinition {
 
     // TODO(ian): I suspect this could be done around n^2 with a dynamic programming approach rather than just doing random node indeces.
     // The current iteration order demands a linear pass to determine the intersection
+
+    // we can just pregenerate each gt or lt list then check the minimum of the intersection between each node's set but in the worst case this is still n^3.
     fn create_table(
         &self,
         graph: &Graph<String, (), Directed>,
@@ -121,6 +151,34 @@ impl LatticeDefinition {
             })
             .collect()
     }
+
+    fn create_reachable_sets(g: &Graph<String, (), Directed>) -> HashMap<String, HashSet<String>> {
+        g.node_indices()
+            .map(|x| (x, Self::collect_reachable_nds(&g, x)))
+            .map(|(x, hset)| {
+                (
+                    g.node_weight(x).unwrap().to_string(),
+                    hset.into_iter()
+                        .map(|y| g.node_weight(y).unwrap().to_string())
+                        .collect::<HashSet<_>>(),
+                )
+            })
+            .collect()
+    }
+
+    fn create_less_than_sets(&self) -> HashMap<String, HashSet<String>> {
+        let lt_graph = self.get_lt_graph();
+        Self::create_reachable_sets(&lt_graph)
+    }
+
+    fn create_greater_than_sets(&self) -> HashMap<String, HashSet<String>> {
+        let gt_graph = self.get_gt_graph();
+        Self::create_reachable_sets(&gt_graph)
+    }
+    pub fn generate_lattice(&self) {
+        let join = Rc::new(self.create_join_table());
+        let meet = Rc::new(self.create_meet_table());
+    }
 }
 
 /// Sets up a lattice as described by the user's definition
@@ -131,7 +189,47 @@ struct CustomLatticeElement {
     elem: String,
     join_table: Rc<HashMap<(String, String), String>>,
     meet_table: Rc<HashMap<(String, String), String>>,
+    /// Sets of nodes less than x
+    orig_relation: HashMap<String, HashSet<String>>,
 }
+
+impl PartialEq for CustomLatticeElement {
+    fn eq(&self, other: &Self) -> bool {
+        self.elem == other.elem
+    }
+}
+
+impl PartialOrd for CustomLatticeElement {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self.elem == other.elem {
+            return Some(std::cmp::Ordering::Equal);
+        }
+
+        let is_less = self
+            .orig_relation
+            .get(&self.elem)
+            .unwrap()
+            .contains(&other.elem);
+
+        if is_less {
+            return Some(std::cmp::Ordering::Less);
+        }
+
+        let is_more = self
+            .orig_relation
+            .get(&other.elem)
+            .unwrap()
+            .contains(&self.elem);
+
+        if is_more {
+            return Some(std::cmp::Ordering::Greater);
+        }
+
+        None
+    }
+}
+
+impl Lattice for CustomLatticeElement {}
 
 impl JoinSemilattice for CustomLatticeElement {
     fn join(&self, other: &Self) -> Self {
@@ -141,6 +239,7 @@ impl JoinSemilattice for CustomLatticeElement {
                 elem: x.clone(),
                 join_table: self.join_table.clone(),
                 meet_table: self.meet_table.clone(),
+                orig_relation: self.orig_relation.clone(),
             })
             .expect("All relations should be defined in table")
     }
@@ -154,6 +253,7 @@ impl MeetSemilattice for CustomLatticeElement {
                 elem: x.clone(),
                 join_table: self.join_table.clone(),
                 meet_table: self.meet_table.clone(),
+                orig_relation: self.orig_relation.clone(),
             })
             .expect("All relations should be defined in table")
     }
