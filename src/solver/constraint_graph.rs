@@ -1031,7 +1031,7 @@ impl FSA {
             })
         });
 
-        pop_it.and_then(|mut lhs| {
+        let res = pop_it.and_then(|mut lhs| {
             push_it.and_then(|mut rhs| {
                 for edge_idx in &path[1..path.len() - 1] {
                     let ew = self.grph.edge_weight(*edge_idx)?;
@@ -1047,7 +1047,18 @@ impl FSA {
 
                 Some(SubtypeConstraint::new(lhs, rhs))
             })
-        })
+        });
+
+        if res.is_some() {
+            println!(
+                "{:?}",
+                path.iter()
+                    .map(|e| self.grph.edge_weight(*e).unwrap())
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        res
     }
 
     pub fn walk_constraints(&self) -> ConstraintSet {
@@ -1115,6 +1126,13 @@ impl FSA {
         }
     }
 
+    fn create_finite_state_from_itv(itv: TypeVarControlState) -> FiniteState {
+        FiniteState::Tv(TypeVarNode {
+            access_path: Vec::new(),
+            base_var: itv,
+        })
+    }
+
     fn generate_start_and_stop_edges_for_state(s: &FiniteState) -> Option<EdgeDefinition> {
         if let FiniteState::Tv(tv) = s {
             if let VHat::Interesting(itv) = tv.base_var.dt_var.clone() {
@@ -1125,10 +1143,10 @@ impl FSA {
                             itv,
                             tv.base_var.variance.clone(),
                         )),
-                        dst: s.clone(),
+                        dst: Self::create_finite_state_from_itv(tv.base_var.clone()),
                     },
                     Direction::Rhs => EdgeDefinition {
-                        src: s.clone(),
+                        src: Self::create_finite_state_from_itv(tv.base_var.clone()),
                         edge_weight: FSAEdge::Push(StackSymbol::InterestingVar(
                             itv,
                             tv.base_var.variance.clone(),
