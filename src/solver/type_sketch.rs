@@ -149,7 +149,7 @@ impl SketchGraph {
 
         let num_vars = grph;
         let mut uf: UnionFind<usize> =
-            UnionFind::new(grph.get_graph().node_indices().max().unwrap().index());
+            UnionFind::new(grph.get_graph().node_indices().max().unwrap().index() + 1);
 
         for cons in cons.iter() {
             if let TyConstraint::SubTy(sub_cons) = cons {

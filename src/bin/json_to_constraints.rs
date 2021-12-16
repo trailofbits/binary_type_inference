@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use binary_type_inference::{
     constraint_generation,
-    constraints::TyConstraint,
+    constraints::{TyConstraint, TypeVariable},
     node_context,
     solver::{
         constraint_graph::{RuleContext, FSA},
@@ -20,6 +20,7 @@ fn main() -> anyhow::Result<()> {
     let matches = App::new("json_to_constraints")
         .arg(Arg::with_name("input_bin").required(true).index(1))
         .arg(Arg::with_name("input_json").required(true).index(2))
+        .arg(Arg::with_name("target_var").required(false))
         .get_matches();
 
     let input_bin = matches.value_of("input_bin").unwrap();
@@ -96,9 +97,16 @@ fn main() -> anyhow::Result<()> {
     }
     eprintln!("done new cons");
 
-    //let sketches = get_initial_sketches(&new_cons, &context);
+    let sketches = get_initial_sketches(&new_cons, &context);
 
     println!("{}", Dot::new(fsa_res.get_graph()));
+
+    if let Some(target_var) = matches.value_of("target_var") {
+        let tv = TypeVariable::new(target_var.to_owned());
+        let (_root, grph) = sketches.get(&tv).expect("no sketch for target");
+
+        println!("{:?}", Dot::new(&grph));
+    }
 
     Ok(())
 }
