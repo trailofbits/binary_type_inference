@@ -4,7 +4,7 @@ use cwe_checker_lib::{
         Arg, BinOpType, Bitvector, Blk, Def, ExternSymbol, Jmp, Sub, Term, UnOpType,
     },
 };
-use log::warn;
+use log::{info, warn};
 use petgraph::{
     graph::{Edges, IndexType, NodeIndex},
     EdgeDirection, EdgeType,
@@ -266,7 +266,14 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         value: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
+        info!("Working on tid {}", tid);
+        info!("Assigning {:?} to {:?}", value, var);
         let (rhs_type_var, mut constraints) = self.evaluate_expression(value, vman);
+        info!("{}", rhs_type_var);
+        for repr_cons in constraints.iter() {
+            info!("{}", repr_cons);
+        }
+
         let cons = Self::reg_update(tid, var, rhs_type_var);
         constraints.insert_all(&cons);
         constraints
@@ -366,15 +373,23 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         value_expr: &Expression,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
+        info!("Addressing: {:?}", addressing_expr);
         let bv_dom = self.build_addressing_representation(
             addressing_expr,
             value_expr.bytesize(),
-            FieldLabel::Load,
-            false,
+            FieldLabel::Store,
+            true,
             vman,
         );
 
         let mut cons = bv_dom.additional_constriants;
+
+        cons.iter().for_each(|x| {
+            if let TyConstraint::SubTy(sy) = x {
+                info!("update cons {}", sy);
+            }
+        });
+
         let ptr_repr = bv_dom.repr_var;
 
         let (value_repr, value_cons) = self.evaluate_expression(value_expr, vman);
@@ -599,6 +614,11 @@ where
         blk: &Term<Blk>,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
+        info!("Starting block {}", blk.tid);
+        blk.term
+            .defs
+            .iter()
+            .for_each(|x| info!("Has {} {:?}", x.tid, x.term));
         fold_over_definition_states(
             nd_ctxt,
             blk,
@@ -693,6 +713,7 @@ where
 
                     if blk.tid == sub.term.blocks[0].tid {
                         let ent_cons = nd_cont.handle_entry_formals(sub, vman);
+                        info!("entry formals, {:?}", ent_cons);
                         total_cons.insert_all(&ent_cons);
                     }
                     let new_context: NodeContext<R, P, S> = (*nd_cont).clone();

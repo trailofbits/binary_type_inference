@@ -28,7 +28,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U9780",
+                          "name": "$U9800",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -87,7 +87,7 @@
                             "is_virtual": false
                           },
                           "input2": {
-                            "name": "$U9780",
+                            "name": "$U9800",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -252,7 +252,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$Ud900",
+                          "name": "$Ud980",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -278,14 +278,14 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$Ud980",
+                          "name": "$Uda00",
                           "size": 1,
                           "is_virtual": true
                         },
                         "rhs": {
                           "mnemonic": "POPCOUNT",
                           "input0": {
-                            "name": "$Ud900",
+                            "name": "$Ud980",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -299,14 +299,14 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$Uda00",
+                          "name": "$Uda80",
                           "size": 1,
                           "is_virtual": true
                         },
                         "rhs": {
                           "mnemonic": "INT_AND",
                           "input0": {
-                            "name": "$Ud980",
+                            "name": "$Uda00",
                             "size": 1,
                             "is_virtual": true
                           },
@@ -332,7 +332,7 @@
                         "rhs": {
                           "mnemonic": "INT_EQUAL",
                           "input0": {
-                            "name": "$Uda00",
+                            "name": "$Uda80",
                             "size": 1,
                             "is_virtual": true
                           },
@@ -377,7 +377,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7980",
+                          "name": "$U7a00",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -410,7 +410,7 @@
                         "rhs": {
                           "mnemonic": "COPY",
                           "input0": {
-                            "name": "$U7980",
+                            "name": "$U7a00",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -477,7 +477,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7980",
+                          "name": "$U7a00",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -510,7 +510,7 @@
                         "rhs": {
                           "mnemonic": "COPY",
                           "input0": {
-                            "name": "$U7980",
+                            "name": "$U7a00",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -524,7 +524,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7a00",
+                          "name": "$U7a80",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -557,7 +557,7 @@
                         "rhs": {
                           "mnemonic": "INT_LESS",
                           "input0": {
-                            "name": "$U7a00",
+                            "name": "$U7a80",
                             "size": 4,
                             "is_virtual": true
                           },
@@ -576,7 +576,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7a00",
+                          "name": "$U7a80",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -609,7 +609,7 @@
                         "rhs": {
                           "mnemonic": "INT_SBORROW",
                           "input0": {
-                            "name": "$U7a00",
+                            "name": "$U7a80",
                             "size": 4,
                             "is_virtual": true
                           },
@@ -628,7 +628,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7a00",
+                          "name": "$U7a80",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -654,14 +654,14 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U1e080",
+                          "name": "$U1e400",
                           "size": 4,
                           "is_virtual": true
                         },
                         "rhs": {
                           "mnemonic": "INT_SUB",
                           "input0": {
-                            "name": "$U7a00",
+                            "name": "$U7a80",
                             "size": 4,
                             "is_virtual": true
                           },
@@ -687,7 +687,7 @@
                         "rhs": {
                           "mnemonic": "INT_SLESS",
                           "input0": {
-                            "name": "$U1e080",
+                            "name": "$U1e400",
                             "size": 4,
                             "is_virtual": true
                           },
@@ -713,7 +713,7 @@
                         "rhs": {
                           "mnemonic": "INT_EQUAL",
                           "input0": {
-                            "name": "$U1e080",
+                            "name": "$U1e400",
                             "size": 4,
                             "is_virtual": true
                           },
@@ -732,14 +732,14 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$Ud900",
+                          "name": "$Ud980",
                           "size": 4,
                           "is_virtual": true
                         },
                         "rhs": {
                           "mnemonic": "INT_AND",
                           "input0": {
-                            "name": "$U1e080",
+                            "name": "$U1e400",
                             "size": 4,
                             "is_virtual": true
                           },
@@ -758,14 +758,14 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$Ud980",
+                          "name": "$Uda00",
                           "size": 1,
                           "is_virtual": true
                         },
                         "rhs": {
                           "mnemonic": "POPCOUNT",
                           "input0": {
-                            "name": "$Ud900",
+                            "name": "$Ud980",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -779,14 +779,14 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$Uda00",
+                          "name": "$Uda80",
                           "size": 1,
                           "is_virtual": true
                         },
                         "rhs": {
                           "mnemonic": "INT_AND",
                           "input0": {
-                            "name": "$Ud980",
+                            "name": "$Uda00",
                             "size": 1,
                             "is_virtual": true
                           },
@@ -812,7 +812,7 @@
                         "rhs": {
                           "mnemonic": "INT_EQUAL",
                           "input0": {
-                            "name": "$Uda00",
+                            "name": "$Uda80",
                             "size": 1,
                             "is_virtual": true
                           },
@@ -904,7 +904,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7980",
+                          "name": "$U7a00",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -937,7 +937,7 @@
                         "rhs": {
                           "mnemonic": "COPY",
                           "input0": {
-                            "name": "$U7980",
+                            "name": "$U7a00",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -951,7 +951,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7980",
+                          "name": "$U7a00",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -984,7 +984,7 @@
                         "rhs": {
                           "mnemonic": "COPY",
                           "input0": {
-                            "name": "$U7980",
+                            "name": "$U7a00",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -1024,7 +1024,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7980",
+                          "name": "$U7a00",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -1057,7 +1057,7 @@
                             "is_virtual": true
                           },
                           "input2": {
-                            "name": "$U7980",
+                            "name": "$U7a00",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -1124,7 +1124,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7980",
+                          "name": "$U7a00",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -1157,7 +1157,7 @@
                         "rhs": {
                           "mnemonic": "COPY",
                           "input0": {
-                            "name": "$U7980",
+                            "name": "$U7a00",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -1197,7 +1197,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7980",
+                          "name": "$U7a00",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -1230,7 +1230,7 @@
                         "rhs": {
                           "mnemonic": "COPY",
                           "input0": {
-                            "name": "$U7980",
+                            "name": "$U7a00",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -1244,7 +1244,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$U7980",
+                          "name": "$U7a00",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -1277,7 +1277,7 @@
                             "is_virtual": false
                           },
                           "input2": {
-                            "name": "$U7980",
+                            "name": "$U7a00",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -1508,7 +1508,7 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$Ud900",
+                          "name": "$Ud980",
                           "size": 4,
                           "is_virtual": true
                         },
@@ -1534,14 +1534,14 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$Ud980",
+                          "name": "$Uda00",
                           "size": 1,
                           "is_virtual": true
                         },
                         "rhs": {
                           "mnemonic": "POPCOUNT",
                           "input0": {
-                            "name": "$Ud900",
+                            "name": "$Ud980",
                             "size": 4,
                             "is_virtual": true
                           }
@@ -1555,14 +1555,14 @@
                       },
                       "term": {
                         "lhs": {
-                          "name": "$Uda00",
+                          "name": "$Uda80",
                           "size": 1,
                           "is_virtual": true
                         },
                         "rhs": {
                           "mnemonic": "INT_AND",
                           "input0": {
-                            "name": "$Ud980",
+                            "name": "$Uda00",
                             "size": 1,
                             "is_virtual": true
                           },
@@ -1588,7 +1588,7 @@
                         "rhs": {
                           "mnemonic": "INT_EQUAL",
                           "input0": {
-                            "name": "$Uda00",
+                            "name": "$Uda80",
                             "size": 1,
                             "is_virtual": true
                           },
@@ -6573,6 +6573,12 @@
       "size": 4
     },
     {
+      "register": "reserved",
+      "base_register": "contextreg",
+      "lsb": 3,
+      "size": 1
+    },
+    {
       "register": "bit64",
       "base_register": "contextreg",
       "lsb": 3,
@@ -6593,19 +6599,19 @@
     {
       "register": "segover",
       "base_register": "contextreg",
-      "lsb": 3,
+      "lsb": 2,
       "size": 1
     },
     {
       "register": "highseg",
       "base_register": "contextreg",
-      "lsb": 3,
+      "lsb": 2,
       "size": 1
     },
     {
       "register": "protectedMode",
       "base_register": "contextreg",
-      "lsb": 3,
+      "lsb": 2,
       "size": 1
     },
     {
@@ -6641,25 +6647,25 @@
     {
       "register": "rexRprefix",
       "base_register": "contextreg",
-      "lsb": 2,
+      "lsb": 1,
       "size": 1
     },
     {
       "register": "rexXprefix",
       "base_register": "contextreg",
-      "lsb": 2,
+      "lsb": 1,
       "size": 1
     },
     {
       "register": "rexBprefix",
       "base_register": "contextreg",
-      "lsb": 2,
+      "lsb": 1,
       "size": 1
     },
     {
       "register": "rexprefix",
       "base_register": "contextreg",
-      "lsb": 2,
+      "lsb": 1,
       "size": 1
     },
     {
@@ -6683,7 +6689,7 @@
     {
       "register": "vexVVVV",
       "base_register": "contextreg",
-      "lsb": 1,
+      "lsb": 0,
       "size": 1
     },
     {

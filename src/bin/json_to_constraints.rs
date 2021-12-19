@@ -68,9 +68,9 @@ fn main() -> anyhow::Result<()> {
     let constraints = ctx.generate_constraints();
 
     for cons in constraints.iter() {
-        eprintln!("{}", cons);
+        println!("{}", cons);
     }
-    eprintln!("done cons");
+    println!("done cons");
 
     let mut interestings = BTreeSet::new();
     let reg = Regex::new(r"sub_(\d+)(@ESP)?").unwrap();
