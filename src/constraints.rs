@@ -4,6 +4,7 @@ use alga::general::{
     MultiplicativeSemigroup, TwoSidedInverse,
 };
 use alga_derive::Alga;
+use cwe_checker_lib::intermediate_representation::Variable;
 use log::error;
 use nom::branch::alt;
 use nom::bytes::complete::take_while;
@@ -15,7 +16,7 @@ use nom::multi::{many0, many1, separated_list0};
 use nom::sequence::{delimited, preceded, Tuple};
 use nom::Parser;
 use nom::{bytes::complete::tag, character::is_space, combinator::map, sequence::tuple, IResult};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 use std::fmt::{Debug, Display, Write};
 use std::iter::FromIterator;
 use std::num::ParseIntError;
@@ -323,6 +324,13 @@ impl DerivedTypeVar {
         let mut n = self.clone();
         n.add_field_label(lab);
         n
+    }
+
+    pub fn create_with_path(base: TypeVariable, path: Vec<FieldLabel>) -> DerivedTypeVar {
+        DerivedTypeVar {
+            var: base,
+            labels: path,
+        }
     }
 
     pub fn get_field_labels(&self) -> &[FieldLabel] {

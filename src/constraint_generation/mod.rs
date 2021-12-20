@@ -239,8 +239,9 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                 vman,
             ),
             _ => {
-                warn!("Unhandled binop type: {:?}", op);
-                (DerivedTypeVar::new(vman.fresh()), ConstraintSet::default())
+                let repr = vman.fresh();
+                warn!("Unhandled binop type: {:?}, representing with {}", op, repr);
+                (DerivedTypeVar::new(repr), ConstraintSet::default())
             }
         }
     }
@@ -257,8 +258,12 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             }
             Expression::BinOp { op, lhs, rhs } => self.evaluate_binop(op, lhs, rhs, vman),
             _ => {
-                warn!("Unhandled expression: {:?}", value);
-                (DerivedTypeVar::new(vman.fresh()), ConstraintSet::empty())
+                let repr = vman.fresh();
+                warn!(
+                    "Unhandled expression: {:?} representing with {}",
+                    value, repr
+                );
+                (DerivedTypeVar::new(repr), ConstraintSet::empty())
             } // TODO(ian) handle additional constraints, add/sub
         }
     }
@@ -666,13 +671,15 @@ where
         )
     }
 
+    /* Adjusting stack displacement for actuals is not nessecary since the stack is computed as the maximum depth which will include the return address
+    TODO(ian): verify this
     fn get_return_address_displacement(&self) -> i64 {
         let res: i64 = (self.type_properties.pointer_size.as_bit_length() / 8)
             .try_into()
             .expect("stack displacement should be small enough");
         -res
     }
-
+    */
     fn collect_extern_call_constraints(
         &self,
         edges: &[Term<Jmp>],
@@ -691,13 +698,7 @@ where
         });
 
         called_externs
-            .map(|ext| {
-                nd_ctxt.handle_extern_actual_params(
-                    &ext,
-                    vman,
-                    self.get_return_address_displacement(),
-                )
-            })
+            .map(|ext| nd_ctxt.handle_extern_actual_params(&ext, vman, 0))
             .fold(ConstraintSet::default(), |mut prev, nxt| {
                 prev.insert_all(&nxt);
                 prev
@@ -726,11 +727,7 @@ where
                             tid: target.clone(),
                         };
 
-                        cons.insert_all(&nd_ctxt.handle_extern_actual_rets(
-                            &term,
-                            vman,
-                            self.get_return_address_displacement(),
-                        ));
+                        cons.insert_all(&nd_ctxt.handle_extern_actual_rets(&term, vman, 0));
                     }
                 }
             }
@@ -774,19 +771,11 @@ where
                 Node::CallReturn {
                     call: (_call_blk, _calling_proc),
                     return_: (_returned_to_blk, return_proc),
-                } => nd_cont.handle_return_actual(
-                    return_proc,
-                    vman,
-                    self.get_return_address_displacement(),
-                ),
+                } => nd_cont.handle_return_actual(return_proc, vman, 0),
                 Node::CallSource {
                     source: _source,
                     target: (_calling_blk, target_func),
-                } => nd_cont.handle_call_actual(
-                    target_func,
-                    vman,
-                    self.get_return_address_displacement(),
-                ),
+                } => nd_cont.handle_call_actual(target_func, vman, 0),
                 // block post conditions arent needed to generate constraints
                 Node::BlkEnd(blk, sub) => {
                     let mut cs = ConstraintSet::default();

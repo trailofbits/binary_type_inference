@@ -8,6 +8,7 @@ use cwe_checker_lib::{
     analysis::graph::{Edge, Node},
     pcode::Variable,
 };
+use log::info;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -592,7 +593,13 @@ impl FSA {
             for scc in cond.into_iter() {
                 if scc.len() != 1 {
                     did_change = true;
+                    scc.iter()
+                        .for_each(|x| println!("in group: {}", self.grph.node_weight(*x).unwrap()));
+
                     let entries = self.get_entries_to_scc(&scc);
+                    entries.iter().for_each(|x| {
+                        println!("in entries: {}", self.grph.node_weight(*x).unwrap())
+                    });
                     assert!(entries.len() != 0);
                     let non_redundant_removes = self.select_entry_reprs(entries);
                     assert!(non_redundant_removes.len() != 0);
@@ -647,7 +654,7 @@ impl FSA {
         self.grph.add_edge(
             *start_ind,
             entry,
-            FSAEdge::Push(StackSymbol::InterestingVar(ivlhs, Variance::Covariant)),
+            FSAEdge::Pop(StackSymbol::InterestingVar(ivlhs, Variance::Covariant)),
         );
 
         let end_ind = self.cant_pop_nodes.get(&FiniteState::End).unwrap();
@@ -670,7 +677,7 @@ impl FSA {
 
         for (edge_id, dest_node, weight) in self
             .grph
-            .edges_directed(to_replace, petgraph::EdgeDirection::Incoming)
+            .edges_directed(to_replace, petgraph::EdgeDirection::Outgoing)
             .into_iter()
             .map(|e| (e.id(), e.target(), e.weight().clone()))
             .collect::<Vec<_>>()
@@ -923,7 +930,7 @@ impl FSA {
         self.saturate();
         self.intersect_with_pop_push();
         self.remove_unreachable();
-        self.replace_sccs_with_repr_tvars();
+        //self.generate_recursive_type_variables();
         self.remove_unreachable();
     }
 
@@ -1001,11 +1008,11 @@ impl FSA {
         }
     }
 
-    fn add_field_to_var(v: &mut DerivedTypeVar, symb: &StackSymbol) -> bool {
+    fn add_field_to_var(v: &mut Vec<FieldLabel>, symb: &StackSymbol) -> bool {
         match &symb {
-            StackSymbol::InterestingVar(x, v) => false,
+            StackSymbol::InterestingVar(_x, _v) => false,
             StackSymbol::Label(fl) => {
-                v.add_field_label(fl.clone());
+                v.push(fl.clone());
                 true
             }
         }
@@ -1034,11 +1041,14 @@ impl FSA {
 
         let res = pop_it.and_then(|mut lhs| {
             push_it.and_then(|mut rhs| {
+                let mut lhs_path = Vec::new();
+                let mut rhs_path = Vec::new();
                 for edge_idx in &path[1..path.len() - 1] {
                     let ew = self.grph.edge_weight(*edge_idx)?;
                     if !match ew {
-                        FSAEdge::Pop(s) => Self::add_field_to_var(&mut lhs, s),
-                        FSAEdge::Push(s) => Self::add_field_to_var(&mut rhs, s),
+                        FSAEdge::Pop(s) => Self::add_field_to_var(&mut lhs_path, s),
+                        // pushes occur in reverse order so put to front
+                        FSAEdge::Push(s) => Self::add_field_to_var(&mut rhs_path, s),
                         FSAEdge::Success => true,
                         FSAEdge::Failed => unreachable!(),
                     } {
@@ -1046,7 +1056,11 @@ impl FSA {
                     }
                 }
 
-                Some(SubtypeConstraint::new(lhs, rhs))
+                rhs_path.reverse();
+                Some(SubtypeConstraint::new(
+                    DerivedTypeVar::create_with_path(lhs.get_base_variable().clone(), lhs_path),
+                    DerivedTypeVar::create_with_path(rhs.get_base_variable().clone(), rhs_path),
+                ))
             })
         });
 
@@ -1218,14 +1232,6 @@ impl FSA {
 
         Ok(new_fsa)
     }
-    /*
-    Ok the lemma: if you replace a set of nodes with a left node at start and a right node at end, ignoring which subgraph you came from, it cant possibly create pop edge that is in the push subgraph or a push edge that is in the pop subgraph.
-
-    Proof: A_L is in the pop subgraph, all outgoing edges from each node are added to A_L. If the edge is a pop transition then that edges destination is also in the pop subgraph. If the edge is a push transition then the destination is the push transition, so no pops can occur afterwards. Proof is symmetric wrt A_R
-    */
-
-    /// Remove SCCs
-    fn replace_sccs_with_repr_tvars(&self) {}
 }
 
 #[cfg(test)]

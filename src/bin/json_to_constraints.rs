@@ -99,6 +99,11 @@ fn main() -> anyhow::Result<()> {
     //fsa_res.remove_unreachable();
     //println!("{:?}", Dot::new(&fsa_res.get_graph()));
     fsa_res.simplify_graph();
+    println!("{}", Dot::new(&fsa_res.get_graph()));
+    fsa_res.generate_recursive_type_variables();
+    println!("{}", Dot::new(&fsa_res.get_graph()));
+    fsa_res.remove_unreachable();
+    println!("{}", Dot::new(&fsa_res.get_graph()));
     let new_cons = fsa_res.walk_constraints();
 
     for cons in new_cons.iter() {

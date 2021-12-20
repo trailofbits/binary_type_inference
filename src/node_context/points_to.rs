@@ -12,7 +12,7 @@ use cwe_checker_lib::analysis::pointer_inference;
 use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Project, Variable};
 use cwe_checker_lib::utils;
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
-use log::warn;
+use log::{info, warn};
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
@@ -217,7 +217,7 @@ pub fn run_analysis<'a>(
     );
 
     let stack_depths = Arc::new(depth_context.get_stack_depths());
-
+    info!("{:?}", stack_depths);
     Ok(state_mapping
         .into_iter()
         .map(|(idx, ps)| {
