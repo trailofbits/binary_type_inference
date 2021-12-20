@@ -593,21 +593,14 @@ impl FSA {
             for scc in cond.into_iter() {
                 if scc.len() != 1 {
                     did_change = true;
-                    scc.iter()
-                        .for_each(|x| println!("in group: {}", self.grph.node_weight(*x).unwrap()));
 
                     let entries = self.get_entries_to_scc(&scc);
-                    entries.iter().for_each(|x| {
-                        println!("in entries: {}", self.grph.node_weight(*x).unwrap())
-                    });
                     assert!(entries.len() != 0);
                     let non_redundant_removes = self.select_entry_reprs(entries);
                     assert!(non_redundant_removes.len() != 0);
                     for idx in non_redundant_removes.into_iter() {
                         let tv = TypeVariable::new(format!("loop_breaker{}", ctr));
-                        println!("replacing! {}", self.grph.node_weight(idx).unwrap());
                         self.replace_nodes_with_interesting_variable(idx, tv);
-                        println!("{}", petgraph::dot::Dot::new(&self.grph));
                         ctr += 1;
                     }
                 }
@@ -1063,15 +1056,6 @@ impl FSA {
                 ))
             })
         });
-
-        if res.is_some() {
-            println!(
-                "{:?}",
-                path.iter()
-                    .map(|e| self.grph.edge_weight(*e).unwrap())
-                    .collect::<Vec<_>>()
-            );
-        }
 
         res
     }
