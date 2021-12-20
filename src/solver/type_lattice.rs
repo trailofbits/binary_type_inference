@@ -13,12 +13,16 @@ use std::{
     rc::Rc,
 };
 
-trait NamedLattice<T: Lattice> {
+pub trait NamedLatticeElement: Lattice {
+    fn get_name(&self) -> &str;
+}
+
+pub trait NamedLattice<T: NamedLatticeElement> {
     fn bot(&self) -> T;
 
     fn get_elem(&self, name: &str) -> Option<T>;
 
-    fn top(&self) -> CustomLatticeElement;
+    fn top(&self) -> T;
 }
 
 struct EnumeratedNamedLattice {
@@ -191,6 +195,12 @@ struct CustomLatticeElement {
     meet_table: Rc<HashMap<(String, String), String>>,
     /// Sets of nodes less than x
     orig_relation: HashMap<String, HashSet<String>>,
+}
+
+impl NamedLatticeElement for CustomLatticeElement {
+    fn get_name(&self) -> &str {
+        &self.elem
+    }
 }
 
 impl PartialEq for CustomLatticeElement {

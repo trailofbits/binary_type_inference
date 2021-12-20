@@ -1,13 +1,14 @@
 use std::collections::{BTreeSet, HashSet};
 use std::{collections::HashMap, hash::Hash};
 
+use alga::general::{AbstractMagma, Lattice};
 use itertools::Itertools;
 use log::info;
 use petgraph::dot::Dot;
 use petgraph::graph::DefaultIx;
 use petgraph::unionfind::UnionFind;
-use petgraph::visit::Walker;
 use petgraph::visit::{Dfs, EdgeRef, IntoEdgeReferences, IntoNodeReferences};
+use petgraph::visit::{IntoEdgesDirected, Walker};
 use petgraph::{
     data::Build,
     graph::NodeIndex,
@@ -15,9 +16,12 @@ use petgraph::{
     Directed,
 };
 
-use crate::constraints::{ConstraintSet, DerivedTypeVar, FieldLabel, TyConstraint, TypeVariable};
+use crate::constraints::{
+    ConstraintSet, DerivedTypeVar, FieldLabel, TyConstraint, TypeVariable, Variance,
+};
 
 use super::constraint_graph::RuleContext;
+use super::type_lattice::{NamedLattice, NamedLatticeElement};
 // TODO(ian): use this abstraction for the transducer
 struct NodeDefinedGraph<N: Clone + Hash + Eq, E: Hash + Eq> {
     grph: Graph<N, E>,
@@ -333,4 +337,158 @@ pub fn get_initial_sketches(
                 .map(|scheme_def| (x.clone(), scheme_def))
         })
         .collect()
+}
+
+struct LabelingContext<U: NamedLatticeElement, T: NamedLattice<U>> {
+    lattice: T,
+    nm: std::marker::PhantomData<U>,
+    type_lattice_elements: HashSet<TypeVariable>,
+}
+
+impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
+    fn construct_variance(
+        &self,
+        entry: NodeIndex,
+        orig_graph: &Graph<(), FieldLabel>,
+    ) -> Graph<U, FieldLabel> {
+        // Stores who we visited and how we visited them.
+        let mut visited: HashMap<NodeIndex, Vec<FieldLabel>> = HashMap::new();
+
+        let mut to_visit = Vec::new();
+        to_visit.push((entry, Vec::new()));
+
+        while let Some((next_nd, path)) = to_visit.pop() {
+            if visited.contains_key(&next_nd) {
+                continue;
+            }
+
+            visited.insert(next_nd, path.clone());
+
+            for e in orig_graph.edges_directed(next_nd, petgraph::EdgeDirection::Outgoing) {
+                if !visited.contains_key(&e.target()) {
+                    let mut next_path = path.clone();
+                    next_path.push(e.weight().clone());
+                    to_visit.push((e.target(), next_path));
+                }
+            }
+        }
+
+        let variances: HashMap<_, _> = visited
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k,
+                    v.iter()
+                        .map(|x| x.variance())
+                        .reduce(|x, y| x.operate(&y))
+                        .unwrap_or(Variance::Covariant),
+                )
+            })
+            .collect();
+
+        orig_graph.map(
+            |nd_idx, _| match variances.get(&nd_idx).unwrap() {
+                Variance::Covariant => self.lattice.top(),
+                Variance::Contravariant => self.lattice.bot(),
+            },
+            |_, e| e.clone(),
+        )
+    }
+
+    pub fn get_initial_labels(
+        &self,
+        initial_sketches: HashMap<TypeVariable, (NodeIndex, Graph<(), FieldLabel>)>,
+    ) -> HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)> {
+        let unlabeled = initial_sketches
+            .into_iter()
+            .map(|(k, (entry, graph))| (k, (entry, self.construct_variance(entry, &graph))));
+        unlabeled.collect()
+    }
+
+    fn dtv_is_uninterpreted_lattice(&self, dtv: &DerivedTypeVar) -> bool {
+        self.type_lattice_elements.contains(dtv.get_base_variable())
+            && dtv.get_field_labels().is_empty()
+    }
+
+    // TODO(ian): What about multiple edges with the same weight (paper claims it is prefix closed, is that actually true? can we prove it?)
+    fn find_node_following_path<S>(
+        entry: NodeIndex,
+        path: &[FieldLabel],
+        grph: &Graph<S, FieldLabel>,
+    ) -> Option<NodeIndex> {
+        let mut curr_node = entry;
+        for pth_member in path.iter() {
+            let found = grph
+                .edges_directed(curr_node, petgraph::EdgeDirection::Outgoing)
+                .find(|e| e.weight() == pth_member);
+
+            if let Some(found_edge) = found {
+                curr_node = found_edge.target();
+            } else {
+                return None;
+            }
+        }
+
+        Some(curr_node)
+    }
+
+    fn update_lattice_node(
+        initial_sketches: &mut HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)>,
+        lattice_elem: U,
+        target_dtv: &DerivedTypeVar,
+        operation: impl Fn(&U, &U) -> U,
+    ) {
+        let (entry, grph) = initial_sketches
+            .get_mut(target_dtv.get_base_variable())
+            .unwrap();
+
+        let target_node_idx =
+            Self::find_node_following_path(*entry, target_dtv.get_field_labels(), grph)
+                .expect("The sketch for a type variable should acccept its field labels");
+
+        let weight_ref = grph.node_weight_mut(target_node_idx).unwrap();
+        *weight_ref = operation(weight_ref, &lattice_elem);
+    }
+
+    pub fn label_sketches(
+        &self,
+        cons: &ConstraintSet,
+        mut initial_sketches: HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)>,
+    ) -> HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)> {
+        cons.iter()
+            .filter_map(|x| {
+                if let TyConstraint::SubTy(sy) = x {
+                    Some(sy)
+                } else {
+                    None
+                }
+            })
+            .for_each(|subty| {
+                if self.dtv_is_uninterpreted_lattice(&subty.lhs)
+                    && initial_sketches.contains_key(subty.rhs.get_base_variable())
+                {
+                    Self::update_lattice_node(
+                        &mut initial_sketches,
+                        self.lattice
+                            .get_elem(subty.lhs.get_base_variable().get_name())
+                            .unwrap(),
+                        &subty.rhs,
+                        |x: &U, y: &U| x.join(&y),
+                    );
+                } else if self.dtv_is_uninterpreted_lattice(&subty.rhs)
+                    && initial_sketches.contains_key(subty.lhs.get_base_variable())
+                {
+                    Self::update_lattice_node(
+                        &mut initial_sketches,
+                        self.lattice
+                            .get_elem(subty.rhs.get_base_variable().get_name())
+                            .unwrap(),
+                        &subty.lhs,
+                        |x: &U, y: &U| x.join(&y),
+                    );
+                }
+            });
+
+        initial_sketches
+    }
 }
