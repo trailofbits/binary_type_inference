@@ -32,8 +32,9 @@ fn main() -> anyhow::Result<()> {
     let additional_constraints_file = matches.value_of("additional_constraints_file").unwrap();
     let constraints_string = std::fs::read_to_string(additional_constraints_file)
         .expect("unable to read constraints file");
-    let additional_constraints =
+    let (rest, additional_constraints) =
         parse_constraint_set(&constraints_string).expect("unable to parse additional constraints");
+    println!("leftover {}", rest);
 
     let lattice_fl =
         std::fs::File::open(lattice_json).expect("Should be able to open lattice file.");
@@ -85,7 +86,7 @@ fn main() -> anyhow::Result<()> {
         &ir.program.term.extern_symbols,
     );
     let mut constraints = ctx.generate_constraints();
-    constraints.insert_all(&additional_constraints.1);
+    constraints.insert_all(&additional_constraints);
     for cons in constraints.iter() {
         println!("{}", cons);
     }

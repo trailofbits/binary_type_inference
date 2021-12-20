@@ -12,10 +12,11 @@ use nom::character::complete::alphanumeric1;
 use nom::character::complete::{anychar, char, crlf, digit1, newline, space0, tab};
 use nom::character::is_newline;
 use nom::combinator::map_res;
+use nom::error::ParseError;
 use nom::multi::{many0, many1, separated_list0};
 use nom::sequence::{delimited, preceded, Tuple};
-use nom::Parser;
 use nom::{bytes::complete::tag, character::is_space, combinator::map, sequence::tuple, IResult};
+use nom::{AsChar, InputTakeAtPosition, Parser};
 use std::collections::{BTreeSet, VecDeque};
 use std::fmt::{Debug, Display, Write};
 use std::iter::FromIterator;
@@ -23,8 +24,22 @@ use std::num::ParseIntError;
 use std::ops::{Deref, DerefMut};
 use std::vec::Vec;
 
+fn identifier_char<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
+where
+    T: InputTakeAtPosition,
+    <T as InputTakeAtPosition>::Item: AsChar,
+{
+    input.split_at_position1_complete(
+        |x| {
+            let chr = x.as_char();
+            chr != '_' && !chr.is_alphanumeric()
+        },
+        nom::error::ErrorKind::AlphaNumeric,
+    )
+}
+
 pub fn parse_type_variable(input: &str) -> IResult<&str, TypeVariable> {
-    map(alphanumeric1, |s: &str| TypeVariable::new(s.to_owned()))(input)
+    map(identifier_char, |s: &str| TypeVariable::new(s.to_owned()))(input)
 }
 
 fn parse_field_field(input: &str) -> IResult<&str, FieldLabel> {
@@ -49,11 +64,19 @@ fn parse_add_field(input: &str) -> IResult<&str, FieldLabel> {
     })(input)
 }
 
+fn parse_in_field(input: &str) -> IResult<&str, FieldLabel> {
+    map_res::<_, _, _, _, ParseIntError, _, _>(preceded(tag("in_"), digit1), |x: &str| {
+        let cons = x.parse()?;
+        Ok(FieldLabel::In(cons))
+    })(input)
+}
+
 pub fn parse_field_label(input: &str) -> IResult<&str, FieldLabel> {
     alt((
         map(tag("load"), |_| FieldLabel::Load),
         map(tag("store"), |_| FieldLabel::Store),
         map(tag("out"), |_| FieldLabel::Out(0)),
+        parse_in_field,
         parse_field_field,
         parse_add_field,
     ))(input)
@@ -515,6 +538,39 @@ mod test {
                 )
             )),
             parse_subtype_cons("x <= y"),
+        );
+    }
+
+    #[test]
+    fn parse_func_cons() {
+        let mut func = DerivedTypeVar::new(TypeVariable::new("sub_00001000".to_owned()));
+        func.add_field_label(FieldLabel::Out(0));
+        assert_eq!(
+            Ok((
+                "",
+                SubtypeConstraint::new(
+                    func,
+                    DerivedTypeVar::new(TypeVariable::new("int".to_owned())),
+                )
+            )),
+            parse_subtype_cons("sub_00001000.out <= int"),
+        );
+    }
+
+    // file_descriptor <= sub_00001000.in_0
+    #[test]
+    fn parse_func_cons2() {
+        let mut func = DerivedTypeVar::new(TypeVariable::new("sub_00001000".to_owned()));
+        func.add_field_label(FieldLabel::In(0));
+        assert_eq!(
+            Ok((
+                "",
+                SubtypeConstraint::new(
+                    DerivedTypeVar::new(TypeVariable::new("file_descriptor".to_owned())),
+                    func,
+                )
+            )),
+            parse_subtype_cons("file_descriptor <= sub_00001000.in_0"),
         );
     }
 }

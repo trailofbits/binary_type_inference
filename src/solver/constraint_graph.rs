@@ -295,8 +295,8 @@ pub fn parse_interesting_variable(input: &str) -> IResult<&str, InterestingVar> 
         tuple((
             parse_type_variable,
             alt((
-                map(tag("_L"), |_| Direction::Lhs),
-                map(tag("_R"), |_| Direction::Rhs),
+                map(tag("/L"), |_| Direction::Lhs),
+                map(tag("/R"), |_| Direction::Rhs),
             )),
         )),
         |(tv, dir)| InterestingVar { dir, tv },
@@ -887,7 +887,7 @@ impl FSA {
             let src = FiniteState::Tv(TypeVarNode {
                 base_var: TypeVarControlState {
                     dt_var: tv1.dt_var.clone(),
-                    variance: rule.orig_variance.clone(),
+                    variance: tv1.variance.clone(),
                 },
                 access_path: flds_lhs,
             });
@@ -895,7 +895,7 @@ impl FSA {
             let dst = FiniteState::Tv(TypeVarNode {
                 base_var: TypeVarControlState {
                     dt_var: tv2.dt_var.clone(),
-                    variance: rule.orig_variance.clone(),
+                    variance: tv2.variance.clone(),
                 },
                 access_path: flds_rhs,
             });
@@ -1986,11 +1986,41 @@ mod tests {
             access_path: vec![FieldLabel::Load],
         });
 
-        assert_eq!(parse_finite_state("A_L⊖.load"), Ok(("", fstate)));
+        assert_eq!(parse_finite_state("A/L⊖.load"), Ok(("", fstate)));
     }
 
     fn assert_edges(graph: &FSA, edges: &str) {
         assert!(graph.equal_edges(&parse_edges(edges).unwrap().1));
+    }
+
+    #[test]
+    fn test_identity() {
+        let (_, cs_set) = constraints::parse_constraint_set(
+            "
+        y <= x.store
+        ",
+        )
+        .unwrap();
+
+        let rc = RuleContext::new(BTreeSet::from_iter(
+            vec![
+                TypeVariable::new("x".to_owned()),
+                TypeVariable::new("y".to_owned()),
+            ]
+            .into_iter(),
+        ));
+
+        let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
+        fsa_res.simplify_graph();
+        println!("{}", Dot::new(fsa_res.get_graph()));
+
+        /*assert_edges(
+            &fsa_res,
+            "
+                start(pop_a_L⊕)a_L⊕
+                start(pop_a_L⊕)a_L⊕
+             ",
+        );*/
     }
 
     #[test]
