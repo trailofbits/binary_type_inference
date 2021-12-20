@@ -63,8 +63,12 @@ fn main() -> anyhow::Result<()> {
         &rt_mem,
     )?;
 
-    let ctx =
-        constraint_generation::Context::new(&graph, nd_context, &ir.program.term.extern_symbols);
+    let ctx = constraint_generation::Context::new(
+        &graph,
+        &ir.datatype_properties,
+        nd_context,
+        &ir.program.term.extern_symbols,
+    );
     let constraints = ctx.generate_constraints();
 
     for cons in constraints.iter() {
@@ -73,7 +77,9 @@ fn main() -> anyhow::Result<()> {
     println!("done cons");
 
     let mut interestings = BTreeSet::new();
-    let reg = Regex::new(r"sub_(\d+)(@ESP)?").unwrap();
+    //let reg = Regex::new(r"sub_(\d+)(@ESP)?").unwrap();
+
+    let reg = Regex::new(r"^sub_(\d+)$").unwrap();
     for cons in constraints.iter() {
         if let TyConstraint::SubTy(s) = cons {
             if reg.is_match(s.rhs.get_base_variable().get_name()) {
@@ -89,24 +95,29 @@ fn main() -> anyhow::Result<()> {
     let context = RuleContext::new(interestings);
 
     let mut fsa_res = FSA::new(&constraints, &context).unwrap();
+    //fsa_res.intersect_with_pop_push();
+    //fsa_res.remove_unreachable();
+    //println!("{:?}", Dot::new(&fsa_res.get_graph()));
     fsa_res.simplify_graph();
     let new_cons = fsa_res.walk_constraints();
 
     for cons in new_cons.iter() {
         eprintln!("{}", cons);
     }
-    eprintln!("done new cons");
 
-    let sketches = get_initial_sketches(&new_cons, &context);
+    /*
+        eprintln!("done new cons");
 
-    println!("{}", Dot::new(fsa_res.get_graph()));
+        let sketches = get_initial_sketches(&new_cons, &context);
 
-    if let Some(target_var) = matches.value_of("target_var") {
-        let tv = TypeVariable::new(target_var.to_owned());
-        let (_root, grph) = sketches.get(&tv).expect("no sketch for target");
+        println!("{}", Dot::new(fsa_res.get_graph()));
 
-        println!("{:?}", Dot::new(&grph));
-    }
+        if let Some(target_var) = matches.value_of("target_var") {
+            let tv = TypeVariable::new(target_var.to_owned());
+            let (_root, grph) = sketches.get(&tv).expect("no sketch for target");
 
+            println!("{:?}", Dot::new(&grph));
+        }
+    */
     Ok(())
 }

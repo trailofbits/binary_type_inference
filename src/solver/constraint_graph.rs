@@ -494,6 +494,7 @@ impl EdgeDefinition {
 }
 
 impl FSA {
+    /// Finds the intersection of nodes that are both reachable from the start and end of the automata.
     pub fn remove_unreachable(&mut self) {
         let mut reachable_from_start = HashSet::new();
 

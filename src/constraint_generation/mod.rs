@@ -1,7 +1,8 @@
 use cwe_checker_lib::{
     analysis::graph::{Edge, Graph, Node},
     intermediate_representation::{
-        Arg, BinOpType, Bitvector, Blk, Def, ExternSymbol, Jmp, Sub, Term, UnOpType,
+        Arg, BinOpType, Bitvector, Blk, DatatypeProperties, Def, ExternSymbol, Jmp, Sub, Term,
+        UnOpType,
     },
 };
 use log::{info, warn};
@@ -19,7 +20,10 @@ use crate::constraints::{
     TyConstraint, TypeVariable, VariableManager,
 };
 
-use std::collections::{btree_set::BTreeSet, BTreeMap, HashMap};
+use std::{
+    collections::{btree_set::BTreeSet, BTreeMap, HashMap},
+    convert::TryInto,
+};
 
 /// Gets a type variable for a [Tid] where multiple type variables need to exist at that [Tid] which are distinguished by which [Variable] they operate over.
 pub fn tid_indexed_by_variable(tid: &Tid, var: &Variable) -> TypeVariable {
@@ -421,15 +425,19 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         }
     }
 
-    fn argtvar_to_dtv(tvar: ArgTvar, written: bool) -> DerivedTypeVar {
+    fn argtvar_to_dtv(tvar: ArgTvar, displacement: i64) -> DerivedTypeVar {
         match tvar {
             ArgTvar::VariableTvar(tv) => DerivedTypeVar::new(tv),
             ArgTvar::MemTvar(tv_access) => {
-                if written {
-                    Self::make_store_tvar(tv_access)
-                } else {
-                    Self::make_loaded_tvar(tv_access)
+                let mut dt = DerivedTypeVar::new(tv_access.ty_var);
+
+                if let Some(off) = tv_access.offset {
+                    dt.add_field_label(FieldLabel::Field(Field::new(
+                        off + displacement,
+                        tv_access.sz.as_bit_length(),
+                    )));
                 }
+                dt
             }
         }
     }
@@ -450,6 +458,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         args: &[Arg],
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
         arg_is_written: bool,
+        displacement: i64,
         vm: &mut VariableManager,
     ) -> ConstraintSet {
         let mut start_constraints = ConstraintSet::default();
@@ -467,7 +476,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             start_constraints.insert_all(&add_cons);
 
             for arg_repr_tvar in arg_tvars {
-                let dt = Self::argtvar_to_dtv(arg_repr_tvar, arg_is_written);
+                let dt = Self::argtvar_to_dtv(arg_repr_tvar, displacement);
                 let new_cons = if arg_is_written {
                     SubtypeConstraint::new(formal_tv.clone(), dt)
                 } else {
@@ -486,6 +495,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             &sub.term.formal_args,
             &|i| FieldLabel::In(i),
             true,
+            0,
             vman,
         )
     }
@@ -497,26 +507,43 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             &sub.term.formal_rets,
             &|i| FieldLabel::Out(i),
             false,
+            0,
             vman,
         )
     }
 
-    fn handle_return_actual(&self, sub: &Term<Sub>, vman: &mut VariableManager) -> ConstraintSet {
+    /*
+    So the actuals are displaced by the stored return address since args are marked by the the displacement after the CALL, need to adjust by address size back.
+    */
+
+    fn handle_return_actual(
+        &self,
+        sub: &Term<Sub>,
+        vman: &mut VariableManager,
+        return_address_displacement: i64,
+    ) -> ConstraintSet {
         self.make_constraints(
             sub,
             &sub.term.formal_rets,
             &|i| FieldLabel::Out(i),
             true,
+            return_address_displacement,
             vman,
         )
     }
 
-    fn handle_call_actual(&self, sub: &Term<Sub>, vman: &mut VariableManager) -> ConstraintSet {
+    fn handle_call_actual(
+        &self,
+        sub: &Term<Sub>,
+        vman: &mut VariableManager,
+        return_address_displacement: i64,
+    ) -> ConstraintSet {
         self.make_constraints(
             sub,
             &sub.term.formal_args,
             &|i| FieldLabel::In(i),
             false,
+            return_address_displacement,
             vman,
         )
     }
@@ -525,12 +552,14 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         &self,
         sub: &Term<ExternSymbol>,
         vman: &mut VariableManager,
+        return_address_displacement: i64,
     ) -> ConstraintSet {
         self.make_constraints(
             sub,
             &sub.term.parameters,
             &|i| FieldLabel::In(i),
             false,
+            return_address_displacement,
             vman,
         )
     }
@@ -539,12 +568,14 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         &self,
         sub: &Term<ExternSymbol>,
         vman: &mut VariableManager,
+        return_address_displacement: i64,
     ) -> ConstraintSet {
         self.make_constraints(
             sub,
             &sub.term.return_values,
             &|i| FieldLabel::Out(i),
             true,
+            return_address_displacement,
             vman,
         )
     }
@@ -579,6 +610,7 @@ where
     S: SubprocedureLocators,
 {
     graph: &'a Graph<'a>,
+    type_properties: &'a DatatypeProperties,
     node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
 }
@@ -592,11 +624,13 @@ where
     /// Creates a new context for type constraint generation.
     pub fn new(
         graph: &'a Graph<'a>,
+        type_properties: &'a DatatypeProperties,
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
         extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
     ) -> Context<'a, R, P, S> {
         Context {
             graph,
+            type_properties,
             node_contexts,
             extern_symbols,
         }
@@ -632,6 +666,13 @@ where
         )
     }
 
+    fn get_return_address_displacement(&self) -> i64 {
+        let res: i64 = (self.type_properties.pointer_size.as_bit_length() / 8)
+            .try_into()
+            .expect("stack displacement should be small enough");
+        -res
+    }
+
     fn collect_extern_call_constraints(
         &self,
         edges: &[Term<Jmp>],
@@ -650,7 +691,13 @@ where
         });
 
         called_externs
-            .map(|ext| nd_ctxt.handle_extern_actual_params(&ext, vman))
+            .map(|ext| {
+                nd_ctxt.handle_extern_actual_params(
+                    &ext,
+                    vman,
+                    self.get_return_address_displacement(),
+                )
+            })
             .fold(ConstraintSet::default(), |mut prev, nxt| {
                 prev.insert_all(&nxt);
                 prev
@@ -679,7 +726,11 @@ where
                             tid: target.clone(),
                         };
 
-                        cons.insert_all(&nd_ctxt.handle_extern_actual_rets(&term, vman));
+                        cons.insert_all(&nd_ctxt.handle_extern_actual_rets(
+                            &term,
+                            vman,
+                            self.get_return_address_displacement(),
+                        ));
                     }
                 }
             }
@@ -723,11 +774,19 @@ where
                 Node::CallReturn {
                     call: (_call_blk, _calling_proc),
                     return_: (_returned_to_blk, return_proc),
-                } => nd_cont.handle_return_actual(return_proc, vman),
+                } => nd_cont.handle_return_actual(
+                    return_proc,
+                    vman,
+                    self.get_return_address_displacement(),
+                ),
                 Node::CallSource {
                     source: _source,
                     target: (_calling_blk, target_func),
-                } => nd_cont.handle_call_actual(target_func, vman),
+                } => nd_cont.handle_call_actual(
+                    target_func,
+                    vman,
+                    self.get_return_address_displacement(),
+                ),
                 // block post conditions arent needed to generate constraints
                 Node::BlkEnd(blk, sub) => {
                     let mut cs = ConstraintSet::default();
