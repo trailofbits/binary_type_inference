@@ -923,7 +923,7 @@ impl FSA {
         self.saturate();
         self.intersect_with_pop_push();
         self.remove_unreachable();
-        //self.generate_recursive_type_variables();
+        self.generate_recursive_type_variables();
         self.remove_unreachable();
     }
 

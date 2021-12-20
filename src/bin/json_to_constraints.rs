@@ -100,29 +100,22 @@ fn main() -> anyhow::Result<()> {
     //println!("{:?}", Dot::new(&fsa_res.get_graph()));
     fsa_res.simplify_graph();
     println!("{}", Dot::new(&fsa_res.get_graph()));
-    fsa_res.generate_recursive_type_variables();
-    println!("{}", Dot::new(&fsa_res.get_graph()));
-    fsa_res.remove_unreachable();
-    println!("{}", Dot::new(&fsa_res.get_graph()));
     let new_cons = fsa_res.walk_constraints();
 
     for cons in new_cons.iter() {
         eprintln!("{}", cons);
     }
 
-    /*
-        eprintln!("done new cons");
+    eprintln!("done new cons");
 
-        let sketches = get_initial_sketches(&new_cons, &context);
+    let sketches = get_initial_sketches(&new_cons, &context);
+    println!("{:?}", sketches);
+    if let Some(target_var) = matches.value_of("target_var") {
+        let tv = TypeVariable::new(target_var.to_owned());
+        let (_root, grph) = sketches.get(&tv).expect("no sketch for target");
 
-        println!("{}", Dot::new(fsa_res.get_graph()));
+        println!("{:?}", Dot::new(&grph));
+    }
 
-        if let Some(target_var) = matches.value_of("target_var") {
-            let tv = TypeVariable::new(target_var.to_owned());
-            let (_root, grph) = sketches.get(&tv).expect("no sketch for target");
-
-            println!("{:?}", Dot::new(&grph));
-        }
-    */
     Ok(())
 }

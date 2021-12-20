@@ -156,8 +156,8 @@ impl Default for VariableManager {
 /// A field constraint of the form .σN@k where N is the bit-width of the field at byte offset k
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Field {
-    offset: i64,
-    size: usize,
+    pub offset: i64,
+    pub size: usize,
 }
 
 impl Field {

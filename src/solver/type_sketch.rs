@@ -2,6 +2,8 @@ use std::collections::{BTreeSet, HashSet};
 use std::{collections::HashMap, hash::Hash};
 
 use itertools::Itertools;
+use log::info;
+use petgraph::dot::Dot;
 use petgraph::graph::DefaultIx;
 use petgraph::unionfind::UnionFind;
 use petgraph::visit::Walker;
@@ -85,7 +87,7 @@ impl<N: Clone + Hash + Eq, E: Hash + Eq + Clone> NodeDefinedGraph<N, E> {
             .collect::<HashMap<_, _>>();
 
         for grp in groups.iter() {
-            let new_node = nd.add_node(grp.clone());
+            let _new_node = nd.add_node(grp.clone());
         }
 
         for edge in self.get_graph().edge_references() {
@@ -116,6 +118,14 @@ struct EdgeImplication {
 }
 
 impl SketchGraph {
+    pub fn get_graph(&self) -> &NodeDefinedGraph<DerivedTypeVar, FieldLabel> {
+        &self.grph
+    }
+
+    pub fn get_quotient_graph(&self) -> &NodeDefinedGraph<BTreeSet<NodeIndex>, FieldLabel> {
+        &self.quotient_graph
+    }
+
     fn insert_dtv(grph: &mut NodeDefinedGraph<DerivedTypeVar, FieldLabel>, dtv: DerivedTypeVar) {
         let mut curr_var = DerivedTypeVar::new(dtv.get_base_variable().clone());
 
@@ -124,6 +134,7 @@ impl SketchGraph {
             curr_var.add_field_label(fl.clone());
             let next = grph.add_node(curr_var.clone());
             grph.add_edge(prev, next, fl.clone());
+            prev = next;
         }
     }
 
@@ -192,7 +203,6 @@ impl SketchGraph {
         cons: &ConstraintSet,
     ) -> Vec<BTreeSet<NodeIndex>> {
         let mut cons = Self::constraint_quotients(grph, cons);
-
         let mut edge_implications = Self::get_edge_set(grph);
 
         while {
@@ -208,13 +218,24 @@ impl SketchGraph {
             cons.clone().into_labeling() != prev_labeling
         } {}
 
+        for (nd_idx, grouplab) in cons.clone().into_labeling().into_iter().enumerate() {
+            let nd_idx: NodeIndex = NodeIndex::new(nd_idx);
+            let nd = grph.get_graph().node_weight(nd_idx).unwrap();
+            info!("Node {}: {} in group {}", nd_idx.index(), nd, grouplab);
+        }
+
         cons.into_labeling()
             .into_iter()
             .enumerate()
             .map(|(ndidx, repr)| (NodeIndex::new(ndidx), repr))
-            .group_by(|(_, repr)| *repr)
-            .into_iter()
-            .map(|(_, grp)| grp.map(|(idx, _)| idx).collect::<BTreeSet<_>>())
+            .fold(
+                HashMap::<usize, BTreeSet<NodeIndex>>::new(),
+                |mut total, (nd_ind, repr_group)| {
+                    total.entry(repr_group).or_default().insert(nd_ind);
+                    total
+                },
+            )
+            .into_values()
             .collect()
     }
 
