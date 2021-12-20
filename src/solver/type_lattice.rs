@@ -8,7 +8,7 @@ use petgraph::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     hash::Hash,
     rc::Rc,
 };
@@ -25,10 +25,16 @@ pub trait NamedLattice<T: NamedLatticeElement> {
     fn top(&self) -> T;
 }
 
-struct EnumeratedNamedLattice {
+pub struct EnumeratedNamedLattice {
     nds: HashMap<String, CustomLatticeElement>,
     bottom: CustomLatticeElement,
     top: CustomLatticeElement,
+}
+
+impl EnumeratedNamedLattice {
+    pub fn get_nds(&self) -> &HashMap<String, CustomLatticeElement> {
+        &self.nds
+    }
 }
 
 impl NamedLattice<CustomLatticeElement> for EnumeratedNamedLattice {
@@ -47,7 +53,7 @@ impl NamedLattice<CustomLatticeElement> for EnumeratedNamedLattice {
 
 /// User input that defines a complete lattice.
 #[derive(Debug, Deserialize, Serialize)]
-struct LatticeDefinition {
+pub struct LatticeDefinition {
     less_than_relations_between_handles: Vec<(String, String)>,
     top_handle: String,
     bottom_handle: String,
@@ -60,9 +66,14 @@ impl LatticeDefinition {
         for (x, y) in self
             .less_than_relations_between_handles
             .iter()
-            .group_by(|(k, _)| k)
+            .fold(
+                HashMap::<String, HashSet<String>>::new(),
+                |mut total, (x, y)| {
+                    total.entry(x.clone()).or_default().insert(y.clone());
+                    total
+                },
+            )
             .into_iter()
-            .map(|(k, g)| (k, g.into_iter().map(|(k, x)| x).collect::<HashSet<_>>()))
         {
             let parent = *temp_node_holder
                 .entry(x.to_owned())
@@ -179,9 +190,44 @@ impl LatticeDefinition {
         let gt_graph = self.get_gt_graph();
         Self::create_reachable_sets(&gt_graph)
     }
-    pub fn generate_lattice(&self) {
+    pub fn generate_lattice(&self) -> EnumeratedNamedLattice {
         let join = Rc::new(self.create_join_table());
         let meet = Rc::new(self.create_meet_table());
+        let lt_set = Rc::new(self.create_less_than_sets());
+
+        let top = CustomLatticeElement {
+            elem: self.top_handle.clone(),
+            join_table: join.clone(),
+            meet_table: meet.clone(),
+            orig_relation: lt_set.clone(),
+        };
+
+        let bot = CustomLatticeElement {
+            elem: self.bottom_handle.clone(),
+            ..top.clone()
+        };
+
+        let nds: HashMap<String, CustomLatticeElement> = self
+            .less_than_relations_between_handles
+            .iter()
+            .map(|x| vec![&x.0, &x.1].into_iter())
+            .flatten()
+            .map(|elem| {
+                (
+                    elem.clone(),
+                    CustomLatticeElement {
+                        elem: elem.clone(),
+                        ..top.clone()
+                    },
+                )
+            })
+            .collect();
+
+        EnumeratedNamedLattice {
+            nds,
+            top,
+            bottom: bot,
+        }
     }
 }
 
@@ -189,12 +235,12 @@ impl LatticeDefinition {
 /// This is an ineffecient representation, block decomposition of lattices would be more effecient.
 /// currently doesnt check any lattice laws, good luck
 #[derive(Clone)]
-struct CustomLatticeElement {
+pub struct CustomLatticeElement {
     elem: String,
     join_table: Rc<HashMap<(String, String), String>>,
     meet_table: Rc<HashMap<(String, String), String>>,
     /// Sets of nodes less than x
-    orig_relation: HashMap<String, HashSet<String>>,
+    orig_relation: Rc<HashMap<String, HashSet<String>>>,
 }
 
 impl NamedLatticeElement for CustomLatticeElement {

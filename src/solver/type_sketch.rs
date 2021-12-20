@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, HashSet};
+use std::marker::PhantomData;
 use std::{collections::HashMap, hash::Hash};
 
 use alga::general::{AbstractMagma, Lattice};
@@ -314,7 +315,7 @@ impl SketchGraph {
                 .iter()
                 .for_each(|x| self.add_edges_to_subgraph(*x, &node_map, &mut reachable_subgraph));
 
-            Some((root, reachable_subgraph))
+            Some((*node_map.get(&root).unwrap(), reachable_subgraph))
         } else {
             None
         }
@@ -339,13 +340,21 @@ pub fn get_initial_sketches(
         .collect()
 }
 
-struct LabelingContext<U: NamedLatticeElement, T: NamedLattice<U>> {
+pub struct LabelingContext<U: NamedLatticeElement, T: NamedLattice<U>> {
     lattice: T,
     nm: std::marker::PhantomData<U>,
     type_lattice_elements: HashSet<TypeVariable>,
 }
 
 impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
+    pub fn new(lattice: T, elements: HashSet<TypeVariable>) -> Self {
+        Self {
+            lattice,
+            type_lattice_elements: elements,
+            nm: PhantomData,
+        }
+    }
+
     fn construct_variance(
         &self,
         entry: NodeIndex,
@@ -385,7 +394,6 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                 )
             })
             .collect();
-
         orig_graph.map(
             |nd_idx, _| match variances.get(&nd_idx).unwrap() {
                 Variance::Covariant => self.lattice.top(),
@@ -395,7 +403,7 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
         )
     }
 
-    pub fn get_initial_labels(
+    fn get_initial_labels(
         &self,
         initial_sketches: HashMap<TypeVariable, (NodeIndex, Graph<(), FieldLabel>)>,
     ) -> HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)> {
@@ -451,6 +459,15 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
     }
 
     pub fn label_sketches(
+        &self,
+        cons: &ConstraintSet,
+        init_graph: HashMap<TypeVariable, (NodeIndex, Graph<(), FieldLabel>)>,
+    ) -> HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)> {
+        let init = self.get_initial_labels(init_graph);
+        self.label_inited_sketches(cons, init)
+    }
+
+    fn label_inited_sketches(
         &self,
         cons: &ConstraintSet,
         mut initial_sketches: HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)>,
