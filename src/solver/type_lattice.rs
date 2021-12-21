@@ -195,6 +195,7 @@ impl LatticeDefinition {
         let meet = Rc::new(self.create_meet_table());
         let lt_set = Rc::new(self.create_less_than_sets());
 
+        println!("{:?}", meet);
         let top = CustomLatticeElement {
             elem: self.top_handle.clone(),
             join_table: join.clone(),

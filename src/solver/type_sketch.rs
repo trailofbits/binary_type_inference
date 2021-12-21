@@ -565,7 +565,7 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                             .get_elem(subty.rhs.get_base_variable().get_name())
                             .unwrap(),
                         &subty.lhs,
-                        |x: &U, y: &U| x.join(&y),
+                        |x: &U, y: &U| x.meet(&y),
                     );
                 }
             });
