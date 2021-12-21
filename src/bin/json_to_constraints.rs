@@ -139,7 +139,7 @@ fn main() -> anyhow::Result<()> {
     let (lookup, sketches) = get_initial_sketches(&new_cons, &RuleContext::new(only_interestings));
     println!("{:?}", sketches);
     let lbling_context = LabelingContext::new(named_lattice, lattice_elems);
-    let sketches = lbling_context.label_sketches(&new_cons, &lookup, sketches);
+    let sketches = lbling_context.label_sketches(&new_cons, &lookup, &sketches);
     if let Some(target_var) = matches.value_of("target_var") {
         let tv = TypeVariable::new(target_var.to_owned());
         let repr_idx = lookup.get(&tv).expect("No repr index for target var");

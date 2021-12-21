@@ -280,7 +280,7 @@ impl SketchGraph {
         rule_context: &RuleContext,
     ) -> (
         HashMap<TypeVariable, NodeIndex>,
-        HashMap<NodeIndex, Sketch<()>>,
+        HashMap<NodeIndex, Sketch<NodeIndex>>,
     ) {
         let graphs = rule_context
             .get_interesting()
@@ -289,7 +289,7 @@ impl SketchGraph {
                 self.get_repr_idx(&DerivedTypeVar::new(x.clone()))
                     .map(|x| (x, self.get_graph_for_idx(x)))
             })
-            .collect::<HashMap<NodeIndex, Sketch<()>>>();
+            .collect::<HashMap<NodeIndex, Sketch<NodeIndex>>>();
 
         let var_map = rule_context
             .get_interesting()
@@ -314,7 +314,7 @@ impl SketchGraph {
         &self,
         start: NodeIndex,
         node_map: &HashMap<NodeIndex, NodeIndex>,
-        subgraph: &mut Graph<(), FieldLabel>,
+        subgraph: &mut Graph<NodeIndex, FieldLabel>,
     ) {
         for e in self
             .quotient_graph
@@ -329,7 +329,7 @@ impl SketchGraph {
         }
     }
     /// retrieves a graph for the given DerivedTypeVariable where it is the root and it contains all remaining paths these maps can serve as the basis for sketches
-    pub fn get_repr_graph(&self, dt: &DerivedTypeVar) -> Option<Sketch<()>> {
+    pub fn get_repr_graph(&self, dt: &DerivedTypeVar) -> Option<Sketch<NodeIndex>> {
         let root = self.get_repr_idx(dt);
 
         if let Some(root) = root {
@@ -339,14 +339,14 @@ impl SketchGraph {
         }
     }
 
-    pub fn get_graph_for_idx(&self, root: NodeIndex) -> Sketch<()> {
+    pub fn get_graph_for_idx(&self, root: NodeIndex) -> Sketch<NodeIndex> {
         let dfs = Dfs::new(self.quotient_graph.get_graph(), root);
         let mut reachable_subgraph = Graph::new();
         let reachable: Vec<_> = dfs.iter(self.quotient_graph.get_graph()).collect();
         let node_map = reachable
             .iter()
             .map(|old| {
-                let new = reachable_subgraph.add_node(());
+                let new = reachable_subgraph.add_node(*old);
                 (*old, new)
             })
             .collect::<HashMap<_, _>>();
@@ -366,7 +366,7 @@ pub fn get_initial_sketches(
     rule_context: &RuleContext,
 ) -> (
     HashMap<TypeVariable, NodeIndex>,
-    HashMap<NodeIndex, Sketch<()>>,
+    HashMap<NodeIndex, Sketch<NodeIndex>>,
 ) {
     let grph = SketchGraph::new(cons);
     grph.get_initial_sketches(rule_context)
@@ -387,11 +387,12 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
         }
     }
 
-    fn construct_variance(
+    fn apply_variance(
         &self,
         entry: NodeIndex,
-        orig_graph: &Graph<(), FieldLabel>,
-    ) -> Sketch<U> {
+        orig_graph: &Graph<NodeIndex, FieldLabel>,
+        labeling: &mut HashMap<NodeIndex, U>,
+    ) {
         // Stores who we visited and how we visited them.
         let mut visited: HashMap<NodeIndex, Vec<FieldLabel>> = HashMap::new();
 
@@ -414,7 +415,7 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
             }
         }
 
-        let variances: HashMap<_, _> = visited
+        visited
             .into_iter()
             .map(|(k, v)| {
                 (
@@ -425,27 +426,27 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                         .unwrap_or(Variance::Covariant),
                 )
             })
-            .collect();
-        Sketch {
-            graph: orig_graph.map(
-                |nd_idx, _| match variances.get(&nd_idx).unwrap() {
-                    Variance::Covariant => self.lattice.top(),
-                    Variance::Contravariant => self.lattice.bot(),
-                },
-                |_, e| e.clone(),
-            ),
-            entry,
-        }
+            .for_each(|(new_nd_index, var)| {
+                let old_idx = orig_graph.node_weight(new_nd_index).unwrap();
+                labeling.insert(
+                    *old_idx,
+                    match var {
+                        Variance::Covariant => self.lattice.top(),
+                        Variance::Contravariant => self.lattice.bot(),
+                    },
+                );
+            });
     }
 
     fn get_initial_labels(
         &self,
-        initial_sketches: HashMap<NodeIndex, Sketch<()>>,
-    ) -> HashMap<NodeIndex, Sketch<U>> {
-        let unlabeled = initial_sketches
-            .into_iter()
-            .map(|(k, sketch)| (k, self.construct_variance(sketch.entry, &sketch.graph)));
-        unlabeled.collect()
+        initial_sketches: &HashMap<NodeIndex, Sketch<NodeIndex>>,
+    ) -> HashMap<NodeIndex, U> {
+        let mut labeling = HashMap::new();
+        initial_sketches.iter().for_each(|(_k, sketch)| {
+            self.apply_variance(sketch.entry, &sketch.graph, &mut labeling);
+        });
+        labeling
     }
 
     fn dtv_is_uninterpreted_lattice(&self, dtv: &DerivedTypeVar) -> bool {
@@ -476,14 +477,15 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
     }
 
     fn update_lattice_node(
-        initial_sketches: &mut HashMap<NodeIndex, Sketch<U>>,
+        initial_sketches: &HashMap<NodeIndex, Sketch<NodeIndex>>,
         lookup: &HashMap<TypeVariable, NodeIndex>,
+        labeling: &mut HashMap<NodeIndex, U>,
         lattice_elem: U,
         target_dtv: &DerivedTypeVar,
         operation: impl Fn(&U, &U) -> U,
     ) {
         let repr = lookup.get(target_dtv.get_base_variable()).unwrap();
-        let sketch = initial_sketches.get_mut(repr).unwrap();
+        let sketch = initial_sketches.get(repr).unwrap();
 
         let target_node_idx = Self::find_node_following_path(
             sketch.entry,
@@ -492,26 +494,44 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
         )
         .expect("The sketch for a type variable should acccept its field labels");
 
-        let weight_ref = sketch.graph.node_weight_mut(target_node_idx).unwrap();
-        *weight_ref = operation(weight_ref, &lattice_elem);
+        let weight_ref = sketch.graph.node_weight(target_node_idx).unwrap();
+        let orig_value = labeling.get_mut(weight_ref).unwrap();
+        *orig_value = operation(orig_value, &lattice_elem);
     }
 
     pub fn label_sketches(
         &self,
         cons: &ConstraintSet,
         lookup: &HashMap<TypeVariable, NodeIndex>,
-        sketches: HashMap<NodeIndex, Sketch<()>>,
+        sketches: &HashMap<NodeIndex, Sketch<NodeIndex>>,
     ) -> HashMap<NodeIndex, Sketch<U>> {
-        let init = self.get_initial_labels(sketches);
-        self.label_inited_sketches(cons, lookup, init)
+        let mut init = self.get_initial_labels(sketches);
+        self.label_inited_sketches(cons, lookup, sketches, &mut init);
+        sketches
+            .iter()
+            .map(|(idx, sketch)| {
+                let new_graph = sketch.graph.map(
+                    |_, old_idx| init.get(old_idx).unwrap().clone(),
+                    |_, e| e.clone(),
+                );
+                (
+                    *idx,
+                    Sketch {
+                        graph: new_graph,
+                        entry: sketch.entry,
+                    },
+                )
+            })
+            .collect()
     }
 
     fn label_inited_sketches(
         &self,
         cons: &ConstraintSet,
         lookup: &HashMap<TypeVariable, NodeIndex>,
-        mut initial_sketches: HashMap<NodeIndex, Sketch<U>>,
-    ) -> HashMap<NodeIndex, Sketch<U>> {
+        sketches: &HashMap<NodeIndex, Sketch<NodeIndex>>,
+        initial_labeling: &mut HashMap<NodeIndex, U>,
+    ) {
         cons.iter()
             .filter_map(|x| {
                 if let TyConstraint::SubTy(sy) = x {
@@ -525,8 +545,9 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                     && lookup.contains_key(subty.rhs.get_base_variable())
                 {
                     Self::update_lattice_node(
-                        &mut initial_sketches,
+                        sketches,
                         lookup,
+                        initial_labeling,
                         self.lattice
                             .get_elem(subty.lhs.get_base_variable().get_name())
                             .unwrap(),
@@ -537,8 +558,9 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                     && lookup.contains_key(subty.lhs.get_base_variable())
                 {
                     Self::update_lattice_node(
-                        &mut initial_sketches,
+                        sketches,
                         lookup,
+                        initial_labeling,
                         self.lattice
                             .get_elem(subty.rhs.get_base_variable().get_name())
                             .unwrap(),
@@ -547,7 +569,5 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                     );
                 }
             });
-
-        initial_sketches
     }
 }

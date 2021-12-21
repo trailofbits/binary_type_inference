@@ -13,7 +13,7 @@ use std::{
     rc::Rc,
 };
 
-pub trait NamedLatticeElement: Lattice {
+pub trait NamedLatticeElement: Lattice + Clone {
     fn get_name(&self) -> &str;
 }
 
