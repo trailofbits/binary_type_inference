@@ -18,3 +18,9 @@ Run `cargo test`
 ## Generating All Documentation
 
 Run `cargo doc --document-private-items --open`
+
+## Running the Demo:
+
+`cargo run ./test_data/list_test.o ./test_data/list_test.json ./test_data/list_lattice.json ./test_data/list_additional_constraints sub_00000000`
+
+Produces the dot representation of the type sketch for sub_00000000 which is inferred to be of a recursive structure. 
