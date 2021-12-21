@@ -108,6 +108,12 @@ impl<N: Clone + Hash + Eq, E: Hash + Eq + Clone> NodeDefinedGraph<N, E> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Sketch<T> {
+    pub entry: NodeIndex,
+    pub graph: Graph<T, FieldLabel>,
+}
+
 // TODO(ian): these graphs are awfully similar is there some refactoring that can be done
 struct SketchGraph {
     grph: NodeDefinedGraph<DerivedTypeVar, FieldLabel>,
@@ -268,6 +274,35 @@ impl SketchGraph {
         }
     }
 
+    /// Gets initial unlabeled sketches
+    pub fn get_initial_sketches(
+        &self,
+        rule_context: &RuleContext,
+    ) -> (
+        HashMap<TypeVariable, NodeIndex>,
+        HashMap<NodeIndex, Sketch<()>>,
+    ) {
+        let graphs = rule_context
+            .get_interesting()
+            .iter()
+            .filter_map(|x| {
+                self.get_repr_idx(&DerivedTypeVar::new(x.clone()))
+                    .map(|x| (x, self.get_graph_for_idx(x)))
+            })
+            .collect::<HashMap<NodeIndex, Sketch<()>>>();
+
+        let var_map = rule_context
+            .get_interesting()
+            .iter()
+            .filter_map(|x| {
+                self.get_repr_idx(&DerivedTypeVar::new(x.clone()))
+                    .map(|ndidx| (x.clone(), ndidx))
+            })
+            .collect();
+
+        (var_map, graphs)
+    }
+
     fn get_repr_idx(&self, dt: &DerivedTypeVar) -> Option<NodeIndex> {
         self.grph
             .get_node(&dt)
@@ -294,50 +329,47 @@ impl SketchGraph {
         }
     }
     /// retrieves a graph for the given DerivedTypeVariable where it is the root and it contains all remaining paths these maps can serve as the basis for sketches
-    pub fn get_repr_graph(
-        &self,
-        dt: &DerivedTypeVar,
-    ) -> Option<(NodeIndex, Graph<(), FieldLabel>)> {
+    pub fn get_repr_graph(&self, dt: &DerivedTypeVar) -> Option<Sketch<()>> {
         let root = self.get_repr_idx(dt);
 
         if let Some(root) = root {
-            let dfs = Dfs::new(self.quotient_graph.get_graph(), root);
-            let mut reachable_subgraph = Graph::new();
-            let reachable: Vec<_> = dfs.iter(self.quotient_graph.get_graph()).collect();
-            let node_map = reachable
-                .iter()
-                .map(|old| {
-                    let new = reachable_subgraph.add_node(());
-                    (*old, new)
-                })
-                .collect::<HashMap<_, _>>();
-            reachable
-                .iter()
-                .for_each(|x| self.add_edges_to_subgraph(*x, &node_map, &mut reachable_subgraph));
-
-            Some((*node_map.get(&root).unwrap(), reachable_subgraph))
+            Some(self.get_graph_for_idx(root))
         } else {
             None
         }
     }
+
+    pub fn get_graph_for_idx(&self, root: NodeIndex) -> Sketch<()> {
+        let dfs = Dfs::new(self.quotient_graph.get_graph(), root);
+        let mut reachable_subgraph = Graph::new();
+        let reachable: Vec<_> = dfs.iter(self.quotient_graph.get_graph()).collect();
+        let node_map = reachable
+            .iter()
+            .map(|old| {
+                let new = reachable_subgraph.add_node(());
+                (*old, new)
+            })
+            .collect::<HashMap<_, _>>();
+        reachable
+            .iter()
+            .for_each(|x| self.add_edges_to_subgraph(*x, &node_map, &mut reachable_subgraph));
+
+        Sketch {
+            entry: *node_map.get(&root).unwrap(),
+            graph: reachable_subgraph,
+        }
+    }
 }
 
-/// Gets initial unlabeled sketches
 pub fn get_initial_sketches(
     cons: &ConstraintSet,
     rule_context: &RuleContext,
-) -> HashMap<TypeVariable, (NodeIndex, Graph<(), FieldLabel>)> {
-    let initial_sketch_builder = SketchGraph::new(cons);
-
-    rule_context
-        .get_interesting()
-        .iter()
-        .filter_map(|x| {
-            initial_sketch_builder
-                .get_repr_graph(&DerivedTypeVar::new(x.clone()))
-                .map(|scheme_def| (x.clone(), scheme_def))
-        })
-        .collect()
+) -> (
+    HashMap<TypeVariable, NodeIndex>,
+    HashMap<NodeIndex, Sketch<()>>,
+) {
+    let grph = SketchGraph::new(cons);
+    grph.get_initial_sketches(rule_context)
 }
 
 pub struct LabelingContext<U: NamedLatticeElement, T: NamedLattice<U>> {
@@ -359,7 +391,7 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
         &self,
         entry: NodeIndex,
         orig_graph: &Graph<(), FieldLabel>,
-    ) -> Graph<U, FieldLabel> {
+    ) -> Sketch<U> {
         // Stores who we visited and how we visited them.
         let mut visited: HashMap<NodeIndex, Vec<FieldLabel>> = HashMap::new();
 
@@ -394,22 +426,25 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                 )
             })
             .collect();
-        orig_graph.map(
-            |nd_idx, _| match variances.get(&nd_idx).unwrap() {
-                Variance::Covariant => self.lattice.top(),
-                Variance::Contravariant => self.lattice.bot(),
-            },
-            |_, e| e.clone(),
-        )
+        Sketch {
+            graph: orig_graph.map(
+                |nd_idx, _| match variances.get(&nd_idx).unwrap() {
+                    Variance::Covariant => self.lattice.top(),
+                    Variance::Contravariant => self.lattice.bot(),
+                },
+                |_, e| e.clone(),
+            ),
+            entry,
+        }
     }
 
     fn get_initial_labels(
         &self,
-        initial_sketches: HashMap<TypeVariable, (NodeIndex, Graph<(), FieldLabel>)>,
-    ) -> HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)> {
+        initial_sketches: HashMap<NodeIndex, Sketch<()>>,
+    ) -> HashMap<NodeIndex, Sketch<U>> {
         let unlabeled = initial_sketches
             .into_iter()
-            .map(|(k, (entry, graph))| (k, (entry, self.construct_variance(entry, &graph))));
+            .map(|(k, sketch)| (k, self.construct_variance(sketch.entry, &sketch.graph)));
         unlabeled.collect()
     }
 
@@ -441,37 +476,42 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
     }
 
     fn update_lattice_node(
-        initial_sketches: &mut HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)>,
+        initial_sketches: &mut HashMap<NodeIndex, Sketch<U>>,
+        lookup: &HashMap<TypeVariable, NodeIndex>,
         lattice_elem: U,
         target_dtv: &DerivedTypeVar,
         operation: impl Fn(&U, &U) -> U,
     ) {
-        let (entry, grph) = initial_sketches
-            .get_mut(target_dtv.get_base_variable())
-            .unwrap();
+        let repr = lookup.get(target_dtv.get_base_variable()).unwrap();
+        let sketch = initial_sketches.get_mut(repr).unwrap();
 
-        let target_node_idx =
-            Self::find_node_following_path(*entry, target_dtv.get_field_labels(), grph)
-                .expect("The sketch for a type variable should acccept its field labels");
+        let target_node_idx = Self::find_node_following_path(
+            sketch.entry,
+            target_dtv.get_field_labels(),
+            &sketch.graph,
+        )
+        .expect("The sketch for a type variable should acccept its field labels");
 
-        let weight_ref = grph.node_weight_mut(target_node_idx).unwrap();
+        let weight_ref = sketch.graph.node_weight_mut(target_node_idx).unwrap();
         *weight_ref = operation(weight_ref, &lattice_elem);
     }
 
     pub fn label_sketches(
         &self,
         cons: &ConstraintSet,
-        init_graph: HashMap<TypeVariable, (NodeIndex, Graph<(), FieldLabel>)>,
-    ) -> HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)> {
-        let init = self.get_initial_labels(init_graph);
-        self.label_inited_sketches(cons, init)
+        lookup: &HashMap<TypeVariable, NodeIndex>,
+        sketches: HashMap<NodeIndex, Sketch<()>>,
+    ) -> HashMap<NodeIndex, Sketch<U>> {
+        let init = self.get_initial_labels(sketches);
+        self.label_inited_sketches(cons, lookup, init)
     }
 
     fn label_inited_sketches(
         &self,
         cons: &ConstraintSet,
-        mut initial_sketches: HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)>,
-    ) -> HashMap<TypeVariable, (NodeIndex, Graph<U, FieldLabel>)> {
+        lookup: &HashMap<TypeVariable, NodeIndex>,
+        mut initial_sketches: HashMap<NodeIndex, Sketch<U>>,
+    ) -> HashMap<NodeIndex, Sketch<U>> {
         cons.iter()
             .filter_map(|x| {
                 if let TyConstraint::SubTy(sy) = x {
@@ -482,10 +522,11 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
             })
             .for_each(|subty| {
                 if self.dtv_is_uninterpreted_lattice(&subty.lhs)
-                    && initial_sketches.contains_key(subty.rhs.get_base_variable())
+                    && lookup.contains_key(subty.rhs.get_base_variable())
                 {
                     Self::update_lattice_node(
                         &mut initial_sketches,
+                        lookup,
                         self.lattice
                             .get_elem(subty.lhs.get_base_variable().get_name())
                             .unwrap(),
@@ -493,10 +534,11 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                         |x: &U, y: &U| x.join(&y),
                     );
                 } else if self.dtv_is_uninterpreted_lattice(&subty.rhs)
-                    && initial_sketches.contains_key(subty.lhs.get_base_variable())
+                    && lookup.contains_key(subty.lhs.get_base_variable())
                 {
                     Self::update_lattice_node(
                         &mut initial_sketches,
+                        lookup,
                         self.lattice
                             .get_elem(subty.rhs.get_base_variable().get_name())
                             .unwrap(),

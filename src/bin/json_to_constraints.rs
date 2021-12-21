@@ -136,14 +136,17 @@ fn main() -> anyhow::Result<()> {
 
     eprintln!("done new cons");
 
-    let sketches = get_initial_sketches(&new_cons, &RuleContext::new(only_interestings));
+    let (lookup, sketches) = get_initial_sketches(&new_cons, &RuleContext::new(only_interestings));
     println!("{:?}", sketches);
     let lbling_context = LabelingContext::new(named_lattice, lattice_elems);
-    let sketches = lbling_context.label_sketches(&new_cons, sketches);
+    let sketches = lbling_context.label_sketches(&new_cons, &lookup, sketches);
     if let Some(target_var) = matches.value_of("target_var") {
         let tv = TypeVariable::new(target_var.to_owned());
-        let (_root, grph) = sketches.get(&tv).expect("no sketch for target");
-        let ngraph = grph.map(|_, nd| nd.get_name(), |_, e| e.clone());
+        let repr_idx = lookup.get(&tv).expect("No repr index for target var");
+        let target_sketch = sketches.get(repr_idx).expect("no sketch for target");
+        let ngraph = target_sketch
+            .graph
+            .map(|_, nd| nd.get_name(), |_, e| e.clone());
         println!("{}", Dot::new(&ngraph));
     }
 

@@ -1,2 +1,2 @@
-int <= sub_00001000.out
+sub_00001000.out <= int
 file_descriptor <= sub_00001000.in_0
