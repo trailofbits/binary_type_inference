@@ -146,7 +146,7 @@ fn main() -> anyhow::Result<()> {
         let target_sketch = sketches.get(repr_idx).expect("no sketch for target");
         let ngraph = target_sketch
             .graph
-            .map(|_, nd| nd.get_name(), |_, e| e.clone());
+            .map(|_, nd| nd.value.get_name(), |_, e| e.clone());
         println!("{}", Dot::new(&ngraph));
     }
 

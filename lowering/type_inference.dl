@@ -1,0 +1,60 @@
+.type NodeId <: unsigned
+.type ParamIdx <: unsigned
+.type TypeConstant <: symbol
+.type Bytes <: unsigned 
+.type Bits <: unsigned
+.type Field = [size: Bits, offset: Bytes]
+.type Argument = [idx: ParamIdx]
+
+
+
+.decl node_value(node_id: NodeId, node_value: symbol)
+.input node_value
+
+.decl can_load(src_node: NodeId, dst_node: NodeId)
+.input can_load
+
+.decl can_store(src_node: NodeId, dst_node: NodeId)
+.input can_store
+
+// size in bits offset in bytes
+.decl has_field(src_node: NodeId, dst_node: NodeId, size: Bits, offset: Bytes)
+.input has_field
+
+
+.decl in_param(src_node: NodeId, dst_node: NodeId, idx: ParamIdx)
+.input in_param
+
+.decl out_param(src_node: NodeId, dst_node: NodeId)
+.input out_param
+
+
+// a node gets associated with a type where the type gets an id
+.decl Type(node: NodeId)
+Type(node) :- Structure(node).
+
+.decl AllOutgoingFields(src: NodeId)
+AllOutgoingFields(src_id) :- !out_param(src_id, _), has_field(src_id, _, _, _),
+    !in_param(src_id, _, _), !out_param(src_id, _), !can_store(src_id, _), !can_load(src_id, _).
+
+
+.decl HasField(fld: Field, src_id: NodeId, dst_type: NodeId)
+HasField([size, offset], src_node, dst_node) :- has_field(src_node, dst_node, size, offset).
+
+
+.decl IncompatibleFields(f1: Field, f2: Field, src_node: NodeId)
+IncompatibleFields([f1_sz, f1_offset], [f2_sz, f2_offset], src_node) :-
+    HasField([f1_sz, f1_offset], src_node, dst_node1),
+    HasField([f2_sz, f2_offset], src_node, dst_node2),
+    dst_node1 != dst_node2, // this isnt totally correct because we could have multiple fields going to the same node that are incompatible??
+        (
+        (f1_offset < f2_offset) ,  (f1_offset + f1_sz > f2_offset);
+        (f2_offset < f1_offset), (f2_offset + f2_sz > f1_offset)
+        ).
+
+
+
+// So there is a bug here this is checking that there exists a pair of fields that are compatible
+.decl Structure(node: NodeId)
+Structure(node) :- 
+    AllOutgoingFields(node), !IncompatibleFields(f1, f2, node), HasField(f1, node, _),  HasField(f2, node, _).

@@ -361,6 +361,28 @@ impl SketchGraph {
     }
 }
 
+/// Binds a sketch node to its original node in the constraing graph
+#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GroupID {
+    id: usize,
+}
+
+impl GroupID {
+    fn new(id: usize) -> GroupID {
+        GroupID { id }
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.id
+    }
+}
+
+/// A lattice node with a group id
+pub struct LabeledNode<U> {
+    pub id: GroupID,
+    pub value: U,
+}
+
 pub fn get_initial_sketches(
     cons: &ConstraintSet,
     rule_context: &RuleContext,
@@ -504,14 +526,17 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
         cons: &ConstraintSet,
         lookup: &HashMap<TypeVariable, NodeIndex>,
         sketches: &HashMap<NodeIndex, Sketch<NodeIndex>>,
-    ) -> HashMap<NodeIndex, Sketch<U>> {
+    ) -> HashMap<NodeIndex, Sketch<LabeledNode<U>>> {
         let mut init = self.get_initial_labels(sketches);
         self.label_inited_sketches(cons, lookup, sketches, &mut init);
         sketches
             .iter()
             .map(|(idx, sketch)| {
                 let new_graph = sketch.graph.map(
-                    |_, old_idx| init.get(old_idx).unwrap().clone(),
+                    |_, old_idx| LabeledNode {
+                        id: GroupID::new(old_idx.index()),
+                        value: init.get(old_idx).unwrap().clone(),
+                    },
                     |_, e| e.clone(),
                 );
                 (
