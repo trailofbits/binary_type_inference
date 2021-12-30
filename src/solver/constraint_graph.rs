@@ -5,27 +5,16 @@ use crate::constraints::{
 use alga::general::AbstractMagma;
 use anyhow::{anyhow, Result};
 
-
-use nom::{
-    branch::alt,
-    bytes::complete::tag,
-    multi::separated_list0,
-    sequence::{tuple},
-    IResult,
-};
+use nom::{branch::alt, bytes::complete::tag, multi::separated_list0, sequence::tuple, IResult};
 
 use crate::graph_algos::all_simple_paths;
+use petgraph::visit::IntoNodeReferences;
 use petgraph::{
-    data::Build,
     graph::EdgeIndex,
     graph::NodeIndex,
     stable_graph::StableDiGraph,
-    visit::{
-        EdgeRef, IntoEdgeReferences, IntoEdgesDirected, Reversed,
-        Walker,
-    },
+    visit::{EdgeRef, IntoEdgeReferences, Reversed, Walker},
 };
-use petgraph::{data::DataMap, visit::IntoNodeReferences};
 
 use std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
@@ -58,6 +47,8 @@ impl Display for Direction {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+/// An interesting variable within the FSA has a direction (either LHS or RHS) to represent where it was in a rule.
+/// If it is the LHS then it will only have outgoing edges, if it is an RHS then there will only be incoming edges.
 pub struct InterestingVar {
     tv: TypeVariable,
     dir: Direction,
@@ -70,12 +61,17 @@ impl Display for InterestingVar {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+/// Vhat merges interesting variables which hav a direction and uninteresting variables which do not.
+/// Operations on Vhat are generic over both cases.
 pub enum VHat {
+    /// An interesting variable with a direction.
     Interesting(InterestingVar),
+    /// An uninteresting variable without a direction.
     Uninteresting(TypeVariable),
 }
 
 impl VHat {
+    /// Flips the direction if this is an interesting variable, otherwise preserves the variable.
     pub fn not(&self) -> VHat {
         match &self {
             Self::Interesting(InterestingVar { tv, dir }) => Self::Interesting(InterestingVar {
@@ -97,6 +93,8 @@ impl Display for VHat {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+/// A type variable control state in the pushdown automata has a vhat representing the variable involved in the constraint
+/// as well as a variance which tracks the current variance of the stack state.
 pub struct TypeVarControlState {
     dt_var: VHat,
     variance: Variance,
@@ -109,25 +107,30 @@ impl Display for TypeVarControlState {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+// NOTE(Ian): The pushdown automata rules also include start and end, maybe we should have them here and compute them explicitely rather
+// than implicitly later.
 enum ControlState {
-    Start,
-    End,
     TypeVar(TypeVarControlState),
 }
 
 impl Display for ControlState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            Self::Start => write!(f, "START"),
-            Self::End => write!(f, "END"),
             Self::TypeVar(ctr) => write!(f, "{}", ctr),
         }
     }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+/// A stack symbol in the pushdown system is either a field label or an interesting variable.
+/// Interesting variables are popped off the stack as the first operation in the pushdown system and the final action will push
+/// an interesting variable onto the stack.
+/// This means the stack will have the state transitions of pop (iv1) (pop(field_label_iv1_0)...pop(field_label_iv1_n)) (push(field_label_iv2_0)...push(field_label_iv2_m)) push(iv2)
+/// Which corresponds to proving the following constraint iv1.field_label_iv1_0...field_label_iv1_n <= iv2.field_label_iv2_m...field_label_iv2_0 (field_label_iv2_m will be at the top of the stack)
 pub enum StackSymbol {
+    /// A field label of a derived type variable.
     Label(FieldLabel),
+    /// An interesting type variable with a variance.
     InterestingVar(InterestingVar, Variance),
 }
 
@@ -136,15 +139,6 @@ impl Display for StackSymbol {
         match &self {
             Self::Label(l) => write!(f, "{}", l),
             Self::InterestingVar(iv, var) => write!(f, "{}{}", iv, var),
-        }
-    }
-}
-
-impl StackSymbol {
-    fn get_variance(&self) -> Variance {
-        match &self {
-            &Self::Label(fl) => fl.variance(),
-            &Self::InterestingVar(_, var) => var.clone(),
         }
     }
 }
@@ -173,15 +167,19 @@ struct Rule {
     rhs: PushDownState,
 }
 
+/// The rule context stores the set of interesting variables needed to generate delta C (the constraint pushdown system rules).
+/// The set of interesting type variables decides which nodes get attached to the start and end state. Interesting variables will have two nodes an LHS and an RHS.
 pub struct RuleContext {
     interesting: BTreeSet<TypeVariable>,
 }
 
 impl RuleContext {
+    /// Creates a rule context from a set of interesting variables.
     pub fn new(interesting: BTreeSet<TypeVariable>) -> RuleContext {
         RuleContext { interesting }
     }
 
+    /// Gets the set of interesting variables.
     pub fn get_interesting(&self) -> &BTreeSet<TypeVariable> {
         &self.interesting
     }
@@ -266,6 +264,8 @@ impl RuleContext {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+/// A type variable node in the FSA stores a type variable with a variance along with the access path of the node.
+/// Type variable nodes represent derived type variables that can be linked with subtyping constraints.
 pub struct TypeVarNode {
     base_var: TypeVarControlState,
     access_path: Vec<FieldLabel>,
@@ -284,6 +284,7 @@ impl Display for TypeVarNode {
 
 use nom::combinator::map;
 
+/// Parses an interesting variable which is  a type variable tagged with a direction.
 pub fn parse_interesting_variable(input: &str) -> IResult<&str, InterestingVar> {
     map(
         tuple((
@@ -297,6 +298,7 @@ pub fn parse_interesting_variable(input: &str) -> IResult<&str, InterestingVar> 
     )(input)
 }
 
+/// Parses either an uninteresting or interesting variable.
 pub fn parse_vhat(input: &str) -> IResult<&str, VHat> {
     alt((
         map(parse_interesting_variable, |iv| VHat::Interesting(iv)),
@@ -304,6 +306,7 @@ pub fn parse_vhat(input: &str) -> IResult<&str, VHat> {
     ))(input)
 }
 
+/// Parses a variance symbol.
 pub fn parse_variance(input: &str) -> IResult<&str, Variance> {
     alt((
         map(tag("⊕"), |_| Variance::Covariant),
@@ -311,6 +314,7 @@ pub fn parse_variance(input: &str) -> IResult<&str, Variance> {
     ))(input)
 }
 
+/// Parses a type variable control state which is the combination of a tvar and a stack variance.
 pub fn parse_type_var_control_state(input: &str) -> IResult<&str, TypeVarControlState> {
     map(tuple((parse_vhat, parse_variance)), |(vhat, var)| {
         TypeVarControlState {
@@ -320,6 +324,7 @@ pub fn parse_type_var_control_state(input: &str) -> IResult<&str, TypeVarControl
     })(input)
 }
 
+/// Parse a finite state node that is a type variable with a set of fields.
 pub fn parse_typvarnode(input: &str) -> IResult<&str, FiniteState> {
     map(
         tuple((parse_type_var_control_state, parse_fields)),
@@ -332,6 +337,7 @@ pub fn parse_typvarnode(input: &str) -> IResult<&str, FiniteState> {
     )(input)
 }
 
+/// Parses a finite state which may be a start, end, or type variable state.
 pub fn parse_finite_state(input: &str) -> IResult<&str, FiniteState> {
     alt((
         map(tag("start"), |_| FiniteState::Start),
@@ -340,6 +346,7 @@ pub fn parse_finite_state(input: &str) -> IResult<&str, FiniteState> {
     ))(input)
 }
 
+/// Parses a stack symbol which is either a field label or an interesting variable.
 pub fn parse_stack_symbol(input: &str) -> IResult<&str, StackSymbol> {
     let parse_iv = map(
         tuple((parse_interesting_variable, parse_variance)),
@@ -349,6 +356,7 @@ pub fn parse_stack_symbol(input: &str) -> IResult<&str, StackSymbol> {
     alt((parse_iv, parse_fl))(input)
 }
 
+/// Parses wether this edge is a push or pop.
 pub fn parse_edge_type(input: &str) -> IResult<&str, FSAEdge> {
     let parse_push = map(tuple((tag("push_"), parse_stack_symbol)), |(_, symb)| {
         FSAEdge::Push(symb)
@@ -365,16 +373,21 @@ pub fn parse_edge_type(input: &str) -> IResult<&str, FSAEdge> {
     ))(input)
 }
 
+/// Labels a state as either part of the original graph with pop edges, or the copy which is a subgraph without pop edges.
 pub enum StateLabel {
+    /// This state represents the state when a push has not occured.
     Orig,
+    /// This state is only reachable if a push has occured.
     Copy,
 }
 
+/// A finite state labeled by wether it is in the cannot pop copy of the graph.
 pub struct LabeledState {
     label: StateLabel,
     state: FiniteState,
 }
 
+/// Parses a graph node represented by a [LabeledState].
 pub fn parse_labeled_state(input: &str) -> IResult<&str, LabeledState> {
     let copy_lab = map(tag("'"), |_| StateLabel::Copy);
     let norm_lab = map(tag(""), |_| StateLabel::Orig);
@@ -384,6 +397,7 @@ pub fn parse_labeled_state(input: &str) -> IResult<&str, LabeledState> {
     )(input)
 }
 
+/// Parses an edge in the FSA where the nodes are [LabeledState]s and the edge is an [FSAEdge].
 pub fn parse_edge(input: &str) -> IResult<&str, (LabeledState, FSAEdge, LabeledState)> {
     let parse_edge_type = map(
         tuple((tag("("), parse_edge_type, tag(")"))),
@@ -393,14 +407,19 @@ pub fn parse_edge(input: &str) -> IResult<&str, (LabeledState, FSAEdge, LabeledS
     tuple((parse_labeled_state, parse_edge_type, parse_labeled_state))(input)
 }
 
+/// Parses a collection of graph edges, delimited by arbitrary whitespace.
 pub fn parse_edges(input: &str) -> IResult<&str, Vec<(LabeledState, FSAEdge, LabeledState)>> {
     separated_list0(parse_whitespace_delim, parse_edge)(input.trim())
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+/// A [FiniteState] in the [FSA] is either a type variable or the start or end state of the automata.
 pub enum FiniteState {
+    /// A finite state that represents a type variable (either interesting or uninteresting).
     Tv(TypeVarNode),
+    /// The start state of the FSA.
     Start,
+    /// The accepting state of the FSA.
     End,
 }
 
@@ -415,6 +434,7 @@ impl Display for FiniteState {
 }
 
 impl FiniteState {
+    /// A finite state can be negated which finds the opposite node in the graph (LHS becomes RHS and the variance flips).
     pub fn not(&self) -> FiniteState {
         match &self {
             Self::Start => Self::End,
@@ -431,8 +451,12 @@ impl FiniteState {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+/// An FSAEdge can push or pop a stack symbol within the stack langauge. Otherwise an edge of 1 represents an always successful transition and an edge
+/// of 0 represents an always failing transition.
 pub enum FSAEdge {
+    /// Pushes the stack symbol to the stack.
     Push(StackSymbol),
+    /// Pops the stack symbol from the stack.
     Pop(StackSymbol),
     /// 1
     Success,
@@ -441,6 +465,8 @@ pub enum FSAEdge {
 }
 
 impl FSAEdge {
+    /// Negates the edge by flipping push to pop and pop to push. Used to ensure that all push edges also receive a corresponding pop edge going in the opposite direciton
+    /// for constraint generated edges on non start/end nodes.
     pub fn flip(&self) -> FSAEdge {
         match &self {
             FSAEdge::Push(s) => FSAEdge::Pop(s.clone()),
@@ -472,6 +498,7 @@ pub struct FSA {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+/// A definition of an edge between two finite states, weighted by an [FSAEdge].
 pub struct EdgeDefinition {
     src: FiniteState,
     dst: FiniteState,
@@ -479,6 +506,7 @@ pub struct EdgeDefinition {
 }
 
 impl EdgeDefinition {
+    /// Flips the direction of the edge and the weight.
     pub fn flip_edge(&self) -> EdgeDefinition {
         EdgeDefinition {
             src: self.dst.clone(),
@@ -588,6 +616,9 @@ impl FSA {
             .collect()
     }
 
+    /// Removes SCC by selecting a representative node that receives a new interesting type variable.
+    /// Recursive constraints will end up expressed in terms of this new loop_breaker type variable.
+    /// This function ensures that walk_constraints collects all elementary proofs.
     pub fn generate_recursive_type_variables(&mut self) {
         let mut ctr: usize = 0;
 
@@ -691,6 +722,7 @@ impl FSA {
         }
     }
 
+    /// Gets the set of all edges in the FSA.
     pub fn get_edge_set(&self) -> HashSet<(NodeIndex, FSAEdge, NodeIndex)> {
         self.grph
             .edge_references()
@@ -698,6 +730,7 @@ impl FSA {
             .collect::<HashSet<_>>()
     }
 
+    /// Determines if the edges set of this FSA is exactly represented by the vector of edge definitions.
     pub fn equal_edges(&self, edges: &Vec<(LabeledState, FSAEdge, LabeledState)>) -> bool {
         let edges = edges
             .iter()
@@ -723,6 +756,7 @@ impl FSA {
         edge_set == self_edge_set
     }
 
+    /// Gets edge definitions for all edges that should be inserted by saturation.
     pub fn get_saturation_edges(&self) -> HashSet<EdgeDefinition> {
         let mut new_edges = HashSet::new();
         let mut reaching_pushes: HashMap<FiniteState, HashMap<StackSymbol, HashSet<FiniteState>>> =
@@ -846,6 +880,7 @@ impl FSA {
         new_edges.into_iter().filter(|x| x.src != x.dst).collect()
     }
 
+    /// Gets the underlying graph for this FSA.
     pub fn get_graph(&self) -> &StableDiGraph<FiniteState, FSAEdge> {
         &self.grph
     }
@@ -885,35 +920,29 @@ impl FSA {
         let flds_rhs: Vec<FieldLabel> = Self::iterate_over_field_labels_in_stack(&rule.rhs.stack)?
             .into_iter()
             .collect();
-        if let (ControlState::TypeVar(tv1), ControlState::TypeVar(tv2)) =
-            (&rule.lhs.st, &rule.rhs.st)
-        {
-            let src = FiniteState::Tv(TypeVarNode {
-                base_var: TypeVarControlState {
-                    dt_var: tv1.dt_var.clone(),
-                    variance: tv1.variance.clone(),
-                },
-                access_path: flds_lhs,
-            });
+        let (ControlState::TypeVar(tv1), ControlState::TypeVar(tv2)) = (&rule.lhs.st, &rule.rhs.st);
 
-            let dst = FiniteState::Tv(TypeVarNode {
-                base_var: TypeVarControlState {
-                    dt_var: tv2.dt_var.clone(),
-                    variance: tv2.variance.clone(),
-                },
-                access_path: flds_rhs,
-            });
+        let src = FiniteState::Tv(TypeVarNode {
+            base_var: TypeVarControlState {
+                dt_var: tv1.dt_var.clone(),
+                variance: tv1.variance.clone(),
+            },
+            access_path: flds_lhs,
+        });
 
-            Ok(EdgeDefinition {
-                src,
-                dst,
-                edge_weight: FSAEdge::Success,
-            })
-        } else {
-            Err(anyhow!(
-                "Subtype constraint rules should not have start end states"
-            ))
-        }
+        let dst = FiniteState::Tv(TypeVarNode {
+            base_var: TypeVarControlState {
+                dt_var: tv2.dt_var.clone(),
+                variance: tv2.variance.clone(),
+            },
+            access_path: flds_rhs,
+        });
+
+        Ok(EdgeDefinition {
+            src,
+            dst,
+            edge_weight: FSAEdge::Success,
+        })
     }
 
     fn get_direct_rule_edges(constraint_rules: &Vec<Rule>) -> Result<Vec<EdgeDefinition>> {
@@ -923,6 +952,11 @@ impl FSA {
             .collect::<Result<Vec<EdgeDefinition>>>()
     }
 
+    /// Simplfies this FSA representing the stack state so that it can be walked to derive all elementary proofs.
+    /// This process involves saturating the graph with edges for pointer rules, as well as removing unproductive transitions.
+    /// The process then removes the language where pops occur after pushes.
+    /// Looping type variables are removed and represented with a fresh interesting type variable.
+    /// Finally, unreachable nodes that can neither be reached from the start or end are removed.
     pub fn simplify_graph(&mut self) {
         self.saturate();
         self.intersect_with_pop_push();
@@ -931,6 +965,9 @@ impl FSA {
         self.remove_unreachable();
     }
 
+    /// Removes unproductive transitions in the FSA. ie. transitions of the form pop y push x where x/=y
+    /// Productive transitions are transitions in the FSA in the state machine is a series of transitions in the semiring stack domain where
+    /// x * y ... * z != 0
     pub fn saturate(&mut self) {
         self.get_saturation_edges()
             .into_iter()
@@ -948,6 +985,9 @@ impl FSA {
             })
     }
 
+    /// Computes the interesection of the current language of the FSA with the language that only accepts a series of pops followed by pushes.
+    /// This task is accomplished by cloning the graph into a new graph called cant-pop-mirror. The cant-pop-mirror only preserves edges that are not
+    /// pops. Push edges that start in the original graph are modified to point to a node in the cant-pop-mirror to prevent pops from occuring after a push.
     pub fn intersect_with_pop_push(&mut self) {
         for edge_ind in self
             .grph
@@ -1044,7 +1084,6 @@ impl FSA {
                     let ew = self.grph.edge_weight(*edge_idx)?;
                     if !match ew {
                         FSAEdge::Pop(s) => Self::add_field_to_var(&mut lhs_path, s),
-                        // pushes occur in reverse order so put to front
                         FSAEdge::Push(s) => Self::add_field_to_var(&mut rhs_path, s),
                         FSAEdge::Success => true,
                         FSAEdge::Failed => unreachable!(),
@@ -1052,7 +1091,7 @@ impl FSA {
                         return None;
                     }
                 }
-
+                // pushes occur in reverse order so put to front
                 rhs_path.reverse();
                 Some(SubtypeConstraint::new(
                     DerivedTypeVar::create_with_path(lhs.get_base_variable().clone(), lhs_path),
@@ -1064,6 +1103,7 @@ impl FSA {
         res
     }
 
+    /// Walk all paths in the FSA from start to end and generating the constraint represented by each achievable stack state in the language of this FSA.
     pub fn walk_constraints(&self) -> ConstraintSet {
         let paths = all_simple_paths::<Vec<_>, _>(&self.grph, self.get_start(), self.get_end());
 
@@ -1225,16 +1265,12 @@ impl FSA {
 #[cfg(test)]
 mod tests {
     use super::StackSymbol;
-    use super::{parse_edges, parse_finite_state, ControlState, Rule, TypeVarControlState, VHat};
-    
-    use petgraph::dot::{Dot};
-    use pretty_assertions::{assert_eq};
-    
-    use std::{
-        collections::{BTreeSet},
-        iter::FromIterator,
-        vec,
-    };
+    use super::{parse_finite_state, ControlState, Rule, TypeVarControlState, VHat};
+
+    use petgraph::dot::Dot;
+    use pretty_assertions::assert_eq;
+
+    use std::{collections::BTreeSet, iter::FromIterator, vec};
 
     use crate::{
         constraints::{
@@ -1251,8 +1287,8 @@ mod tests {
         let ytvar = TypeVariable::new("y".to_owned());
         let pvar = TypeVariable::new("p".to_owned());
         let xvar = TypeVariable::new("x".to_owned());
-        let Avar = TypeVariable::new("A".to_owned());
-        let Bvar = TypeVariable::new("B".to_owned());
+        let a_var = TypeVariable::new("A".to_owned());
+        let b_var = TypeVariable::new("B".to_owned());
 
         let cons1 = TyConstraint::SubTy(SubtypeConstraint::new(
             DerivedTypeVar::new(ytvar.clone()),
@@ -1267,7 +1303,7 @@ mod tests {
         xstore.add_field_label(FieldLabel::Store);
 
         let cons3 = TyConstraint::SubTy(SubtypeConstraint::new(
-            DerivedTypeVar::new(Avar.clone()),
+            DerivedTypeVar::new(a_var.clone()),
             xstore,
         ));
 
@@ -1276,7 +1312,7 @@ mod tests {
 
         let cons4 = TyConstraint::SubTy(SubtypeConstraint::new(
             yload,
-            DerivedTypeVar::new(Bvar.clone()),
+            DerivedTypeVar::new(b_var.clone()),
         ));
 
         let constraints = ConstraintSet::from(BTreeSet::from_iter(
@@ -1284,8 +1320,8 @@ mod tests {
         ));
 
         let mut interesting = BTreeSet::new();
-        interesting.insert(Avar);
-        interesting.insert(Bvar);
+        interesting.insert(a_var);
+        interesting.insert(b_var);
 
         let context = RuleContext::new(interesting);
         (constraints, context)
@@ -1993,10 +2029,6 @@ mod tests {
         });
 
         assert_eq!(parse_finite_state("A/L⊖.load"), Ok(("", fstate)));
-    }
-
-    fn assert_edges(graph: &FSA, edges: &str) {
-        assert!(graph.equal_edges(&parse_edges(edges).unwrap().1));
     }
 
     #[test]

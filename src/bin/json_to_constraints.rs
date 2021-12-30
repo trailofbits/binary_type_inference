@@ -79,12 +79,8 @@ fn main() -> anyhow::Result<()> {
         &rt_mem,
     )?;
 
-    let ctx = constraint_generation::Context::new(
-        &graph,
-        &ir.datatype_properties,
-        nd_context,
-        &ir.program.term.extern_symbols,
-    );
+    let ctx =
+        constraint_generation::Context::new(&graph, nd_context, &ir.program.term.extern_symbols);
     let mut constraints = ctx.generate_constraints();
     constraints.insert_all(&additional_constraints);
     for cons in constraints.iter() {

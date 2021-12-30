@@ -288,18 +288,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         constraints
     }
 
-    fn make_mem_tvar(var: TypeVariableAccess, label: FieldLabel) -> DerivedTypeVar {
-        let mut der_var = DerivedTypeVar::new(var.ty_var);
-        der_var.add_field_label(label);
-        if let Some(off) = var.offset {
-            der_var.add_field_label(FieldLabel::Field(Field::new(off, var.sz.as_bit_length())));
-        }
-        der_var
-    }
-    fn make_loaded_tvar(var: TypeVariableAccess) -> DerivedTypeVar {
-        Self::make_mem_tvar(var, FieldLabel::Load)
-    }
-
     fn reg_update(at_term: &Tid, v_into: &Variable, value_repr: DerivedTypeVar) -> ConstraintSet {
         let reg_tv = tid_indexed_by_variable(at_term, v_into);
         let mut cons = ConstraintSet::default();
@@ -325,10 +313,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         let mut base_set = Self::reg_update(tid, v_into, addr_repr);
         base_set.insert_all(&cons);
         base_set
-    }
-
-    fn make_store_tvar(var: TypeVariableAccess) -> DerivedTypeVar {
-        Self::make_mem_tvar(var, FieldLabel::Store)
     }
 
     // this is kinda a hack
@@ -673,7 +657,6 @@ where
     S: SubprocedureLocators,
 {
     graph: &'a Graph<'a>,
-    type_properties: &'a DatatypeProperties,
     node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
 }
@@ -687,13 +670,11 @@ where
     /// Creates a new context for type constraint generation.
     pub fn new(
         graph: &'a Graph<'a>,
-        type_properties: &'a DatatypeProperties,
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
         extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
     ) -> Context<'a, R, P, S> {
         Context {
             graph,
-            type_properties,
             node_contexts,
             extern_symbols,
         }
