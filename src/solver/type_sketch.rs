@@ -2,19 +2,15 @@ use std::collections::{BTreeSet, HashSet};
 use std::marker::PhantomData;
 use std::{collections::HashMap, hash::Hash};
 
-use alga::general::{AbstractMagma, Lattice};
+use alga::general::AbstractMagma;
 use itertools::Itertools;
 use log::info;
-use petgraph::dot::Dot;
-use petgraph::graph::DefaultIx;
 use petgraph::unionfind::UnionFind;
-use petgraph::visit::{Dfs, EdgeRef, IntoEdgeReferences, IntoNodeReferences};
-use petgraph::visit::{IntoEdgesDirected, Walker};
+use petgraph::visit::Walker;
+use petgraph::visit::{Dfs, EdgeRef, IntoNodeReferences};
 use petgraph::{
-    data::Build,
     graph::NodeIndex,
     graph::{EdgeIndex, Graph},
-    Directed,
 };
 
 use crate::constraints::{
@@ -109,12 +105,17 @@ impl<N: Clone + Hash + Eq, E: Hash + Eq + Clone> NodeDefinedGraph<N, E> {
 }
 
 #[derive(Debug, Clone)]
+/// A sketch is a graph with edges weighted by field labels.
+/// These sketches represent the type of the type variable.
+/// The sketch stores the entry index to the graph for convenience rather than having to find the root.
+/// A sketche's nodes can be labeled by a type T.
 pub struct Sketch<T> {
+    /// The entry node which represents the type of this sketch.
     pub entry: NodeIndex,
+    /// The graph rooted by entry. This graph is prefix closed.
     pub graph: Graph<T, FieldLabel>,
 }
 
-// TODO(ian): these graphs are awfully similar is there some refactoring that can be done
 struct SketchGraph {
     grph: NodeDefinedGraph<DerivedTypeVar, FieldLabel>,
     quotient_graph: NodeDefinedGraph<BTreeSet<NodeIndex>, FieldLabel>,
@@ -129,14 +130,6 @@ struct EdgeImplication {
 }
 
 impl SketchGraph {
-    pub fn get_graph(&self) -> &NodeDefinedGraph<DerivedTypeVar, FieldLabel> {
-        &self.grph
-    }
-
-    pub fn get_quotient_graph(&self) -> &NodeDefinedGraph<BTreeSet<NodeIndex>, FieldLabel> {
-        &self.quotient_graph
-    }
-
     fn insert_dtv(grph: &mut NodeDefinedGraph<DerivedTypeVar, FieldLabel>, dtv: DerivedTypeVar) {
         let mut curr_var = DerivedTypeVar::new(dtv.get_base_variable().clone());
 
@@ -169,7 +162,6 @@ impl SketchGraph {
             return UnionFind::new(0);
         }
 
-        let num_vars = grph;
         let mut uf: UnionFind<usize> =
             UnionFind::new(grph.get_graph().node_indices().max().unwrap().index() + 1);
 
@@ -328,16 +320,6 @@ impl SketchGraph {
             );
         }
     }
-    /// retrieves a graph for the given DerivedTypeVariable where it is the root and it contains all remaining paths these maps can serve as the basis for sketches
-    pub fn get_repr_graph(&self, dt: &DerivedTypeVar) -> Option<Sketch<NodeIndex>> {
-        let root = self.get_repr_idx(dt);
-
-        if let Some(root) = root {
-            Some(self.get_graph_for_idx(root))
-        } else {
-            None
-        }
-    }
 
     pub fn get_graph_for_idx(&self, root: NodeIndex) -> Sketch<NodeIndex> {
         let dfs = Dfs::new(self.quotient_graph.get_graph(), root);
@@ -361,7 +343,7 @@ impl SketchGraph {
     }
 }
 
-/// Binds a sketch node to its original node in the constraing graph
+/// Binds a sketch node to its original node in the constraint graph
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GroupID {
     id: usize,
@@ -372,6 +354,7 @@ impl GroupID {
         GroupID { id }
     }
 
+    /// Gets the groupid as a plain unsigned integer.
     pub fn get_id(&self) -> usize {
         self.id
     }
@@ -379,10 +362,14 @@ impl GroupID {
 
 /// A lattice node with a group id
 pub struct LabeledNode<U> {
+    /// The ID of the equivalence group of this node.
     pub id: GroupID,
+    /// An additional label value.
     pub value: U,
 }
 
+/// Get initial unlabeled sketches. The lookup map maps a type variable to its NodeIndex in the equivalence class graph. The sketch graph is labeled by indices into the equivalence
+/// class graph.
 pub fn get_initial_sketches(
     cons: &ConstraintSet,
     rule_context: &RuleContext,
@@ -394,6 +381,8 @@ pub fn get_initial_sketches(
     grph.get_initial_sketches(rule_context)
 }
 
+/// The context under which a labeling of sketches can be computed. Based on subtyping constraints
+/// Sketch nodes will be lableed by computing joins and meets of euqivalence relations.
 pub struct LabelingContext<U: NamedLatticeElement, T: NamedLattice<U>> {
     lattice: T,
     nm: std::marker::PhantomData<U>,
@@ -401,6 +390,8 @@ pub struct LabelingContext<U: NamedLatticeElement, T: NamedLattice<U>> {
 }
 
 impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
+    /// Creates a new lattice context described by the named lattice itself which returns the lattice elem for a given string type var
+    /// and the set of available elements.
     pub fn new(lattice: T, elements: HashSet<TypeVariable>) -> Self {
         Self {
             lattice,
@@ -521,6 +512,7 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
         *orig_value = operation(orig_value, &lattice_elem);
     }
 
+    /// Provided sketches labeled by equivalence class node indeces, computes a labeling of each node by the given lattice and constraint set.
     pub fn label_sketches(
         &self,
         cons: &ConstraintSet,

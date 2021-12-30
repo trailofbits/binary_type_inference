@@ -1,30 +1,37 @@
 use alga::general::{JoinSemilattice, Lattice, MeetSemilattice};
-use cwe_checker_lib::abstract_domain::HasTop;
 use itertools::Itertools;
 use petgraph::{
     graph::NodeIndex,
-    visit::{Dfs, GraphRef, IntoNeighbors, IntoNeighborsDirected, VisitMap, Visitable, Walker},
-    Directed, EdgeDirection, Graph,
+    visit::{Dfs, GraphRef, IntoNeighbors, VisitMap, Visitable, Walker},
+    Directed, Graph,
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     hash::Hash,
     rc::Rc,
 };
 
+/// A named lattice elment can be cloned and also has a string name.
 pub trait NamedLatticeElement: Lattice + Clone {
+    /// The name of this lattice element.
     fn get_name(&self) -> &str;
 }
 
+/// A named lattice has a top element, bottom element, and can lookup lattice elements by name.
 pub trait NamedLattice<T: NamedLatticeElement> {
+    /// The bottom lattice element.
     fn bot(&self) -> T;
 
+    /// Finds the element with the name name, if it exists.
     fn get_elem(&self, name: &str) -> Option<T>;
 
+    /// The top lattice element.
     fn top(&self) -> T;
 }
 
+/// A named lattice that is created by user input enumerating the less than relations that are not
+/// transitive.
 pub struct EnumeratedNamedLattice {
     nds: HashMap<String, CustomLatticeElement>,
     bottom: CustomLatticeElement,
@@ -32,6 +39,7 @@ pub struct EnumeratedNamedLattice {
 }
 
 impl EnumeratedNamedLattice {
+    /// Gets a map from the string representing a node to the lattice element, equipped with lattice operations.
     pub fn get_nds(&self) -> &HashMap<String, CustomLatticeElement> {
         &self.nds
     }
@@ -110,10 +118,12 @@ impl LatticeDefinition {
         Dfs::new(g, star).iter(&g).collect()
     }
 
+    /// Creates a join tables where each pair of elements is mapped to their join.
     pub fn create_join_table(&self) -> HashMap<(String, String), String> {
         self.create_table(&self.get_lt_graph())
     }
 
+    /// Creates a precomputed table of the meets for each element.
     pub fn create_meet_table(&self) -> HashMap<(String, String), String> {
         self.create_table(&self.get_gt_graph())
     }
@@ -186,10 +196,7 @@ impl LatticeDefinition {
         Self::create_reachable_sets(&lt_graph)
     }
 
-    fn create_greater_than_sets(&self) -> HashMap<String, HashSet<String>> {
-        let gt_graph = self.get_gt_graph();
-        Self::create_reachable_sets(&gt_graph)
-    }
+    /// From a user definition generates a named lattice that has joins, meets, and a lookup table for the less than relation.
     pub fn generate_lattice(&self) -> EnumeratedNamedLattice {
         let join = Rc::new(self.create_join_table());
         let meet = Rc::new(self.create_meet_table());

@@ -1,23 +1,17 @@
 use alga::general::Multiplicative;
-use alga::general::{
-    AbstractMagma, AbstractSemigroup, Identity, MultiplicativeGroup, MultiplicativeMonoid,
-    MultiplicativeSemigroup, TwoSidedInverse,
-};
+use alga::general::{AbstractMagma, AbstractSemigroup, Identity, TwoSidedInverse};
 use alga_derive::Alga;
-use cwe_checker_lib::intermediate_representation::Variable;
 use log::error;
 use nom::branch::alt;
 use nom::bytes::complete::take_while;
-use nom::character::complete::alphanumeric1;
-use nom::character::complete::{anychar, char, crlf, digit1, newline, space0, tab};
-use nom::character::is_newline;
+use nom::character::complete::{digit1, space0};
 use nom::combinator::map_res;
 use nom::error::ParseError;
-use nom::multi::{many0, many1, separated_list0};
-use nom::sequence::{delimited, preceded, Tuple};
-use nom::{bytes::complete::tag, character::is_space, combinator::map, sequence::tuple, IResult};
-use nom::{AsChar, InputTakeAtPosition, Parser};
-use std::collections::{BTreeSet, VecDeque};
+use nom::multi::{many0, separated_list0};
+use nom::sequence::preceded;
+use nom::{bytes::complete::tag, combinator::map, sequence::tuple, IResult};
+use nom::{AsChar, InputTakeAtPosition};
+use std::collections::BTreeSet;
 use std::fmt::{Debug, Display, Write};
 use std::iter::FromIterator;
 use std::num::ParseIntError;
@@ -38,6 +32,7 @@ where
     )
 }
 
+/// Parses a non-derived type variable. A type variable is just an identifier.
 pub fn parse_type_variable(input: &str) -> IResult<&str, TypeVariable> {
     map(identifier_char, |s: &str| TypeVariable::new(s.to_owned()))(input)
 }
@@ -71,6 +66,7 @@ fn parse_in_field(input: &str) -> IResult<&str, FieldLabel> {
     })(input)
 }
 
+/// Parses a field lable that occurs after a "." to create a derived type variable.
 pub fn parse_field_label(input: &str) -> IResult<&str, FieldLabel> {
     alt((
         map(tag("load"), |_| FieldLabel::Load),
@@ -82,10 +78,12 @@ pub fn parse_field_label(input: &str) -> IResult<&str, FieldLabel> {
     ))(input)
 }
 
+/// Parses an optional set of fields after a type variable to create a derived type variable.
 pub fn parse_fields(input: &str) -> IResult<&str, Vec<FieldLabel>> {
     many0(preceded(tag("."), parse_field_label))(input)
 }
 
+/// Parses a derived variable, including its field labels.
 pub fn parse_derived_type_variable(input: &str) -> IResult<&str, DerivedTypeVar> {
     map(
         tuple((parse_type_variable, parse_fields)),
@@ -97,6 +95,7 @@ pub fn parse_derived_type_variable(input: &str) -> IResult<&str, DerivedTypeVar>
     )(input)
 }
 
+/// Parses a subtyping constraint "a.x <= b.y"
 pub fn parse_subtype_cons(input: &str) -> IResult<&str, SubtypeConstraint> {
     let parser = tuple((
         parse_derived_type_variable,
@@ -108,6 +107,7 @@ pub fn parse_subtype_cons(input: &str) -> IResult<&str, SubtypeConstraint> {
     map(parser, |(x, _, _, _, y)| SubtypeConstraint::new(x, y))(input)
 }
 
+/// Checks for the existence of some whitespace that delimits two parsers.
 pub fn parse_whitespace_delim(input: &str) -> IResult<&str, &str> {
     preceded(
         alt((tag(" "), tag("\n"), tag("\t"), tag("\r\n"))),
@@ -115,6 +115,7 @@ pub fn parse_whitespace_delim(input: &str) -> IResult<&str, &str> {
     )(input)
 }
 
+/// Parses a set of subtyping constraints delimited by whitespace between the constraints.
 pub fn parse_constraint_set(input: &str) -> IResult<&str, ConstraintSet> {
     map(
         separated_list0(parse_whitespace_delim, parse_subtype_cons),
@@ -139,6 +140,7 @@ impl TypeVariable {
         TypeVariable { name }
     }
 
+    /// Gets the string of the identifier for this type variable.
     pub fn get_name(&self) -> &str {
         &self.name
     }
@@ -179,7 +181,9 @@ impl Default for VariableManager {
 /// A field constraint of the form .σN@k where N is the bit-width of the field at byte offset k
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Field {
+    /// Offset in bytes of the field.
     pub offset: i64,
+    /// Size of the field in bits.
     pub size: usize,
 }
 
@@ -255,8 +259,12 @@ impl Display for FieldLabel {
 }
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Alga, Debug)]
 #[alga_traits(Monoid(Multiplicative))]
+/// Variance describes the relation between a field and a subtyping relation. Variance forms a multiplicative sign monoid such that
+/// cov*cov = cov, contra*contra=cov, contra*cov=cov*contra=contra
 pub enum Variance {
+    /// This variance is covariant such that A <= B /\ B.l  ===> A.l <= B.l
     Covariant,
+    /// This variance is contravariant such that A <= B /\ B.l ===> B.l <= A.l
     Contravariant,
 }
 impl Display for Variance {
@@ -323,6 +331,8 @@ impl DerivedTypeVar {
         }
     }
 
+    /// Checks if this derived variable is contained by the other type variable. This means the derived
+    /// type variable has strictly less field labels and all field labels that do exist are represented in order on other.
     pub fn is_prefix_of(&self, other: &DerivedTypeVar) -> bool {
         other.get_base_variable() == self.get_base_variable()
             && self.labels.len() < other.labels.len()
@@ -349,6 +359,7 @@ impl DerivedTypeVar {
         n
     }
 
+    /// Creates a type variable that has the given path of field labels.
     pub fn create_with_path(base: TypeVariable, path: Vec<FieldLabel>) -> DerivedTypeVar {
         DerivedTypeVar {
             var: base,
@@ -356,10 +367,12 @@ impl DerivedTypeVar {
         }
     }
 
+    /// Gets a reference to all field labels in order.
     pub fn get_field_labels(&self) -> &[FieldLabel] {
         &self.labels
     }
 
+    /// Gets the base type variable to which field labels are applied to create this derived type variable.
     pub fn get_base_variable(&self) -> &TypeVariable {
         &self.var
     }
@@ -408,6 +421,8 @@ pub struct AddConstraint {
 }
 
 impl AddConstraint {
+    /// Creates an add constraint between two added derived type variables. lhs and rhs are the represented types that are added,
+    /// repr is the type variable for the result.
     pub fn new(
         lhs_ty: DerivedTypeVar,
         rhs_ty: DerivedTypeVar,
@@ -510,14 +525,11 @@ mod test {
     };
 
     #[test]
-    fn parse_simple_derived_tvar() {
-        #[test]
-        fn parse_simple_constraint() {
-            assert_eq!(
-                Ok(("", DerivedTypeVar::new(TypeVariable::new("x".to_owned())),)),
-                parse_derived_type_variable("x"),
-            );
-        }
+    fn parse_simple_dtv() {
+        assert_eq!(
+            Ok(("", DerivedTypeVar::new(TypeVariable::new("x".to_owned())),)),
+            parse_derived_type_variable("x"),
+        );
     }
 
     #[test]
