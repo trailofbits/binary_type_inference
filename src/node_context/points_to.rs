@@ -1,7 +1,7 @@
 use crate::analysis::stack_depth_analysis;
 use crate::constraint_generation::{NodeContextMapping, PointsToMapping, TypeVariableAccess};
 use crate::constraints::TypeVariable;
-use crate::util;
+
 use anyhow::Result;
 use cwe_checker_lib::abstract_domain::{
     AbstractIdentifier, DataDomain, IntervalDomain, TryToBitvec,
@@ -10,7 +10,7 @@ use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
 use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Project, Variable};
-use cwe_checker_lib::utils;
+
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
 use log::{info, warn};
 use petgraph::graph::NodeIndex;

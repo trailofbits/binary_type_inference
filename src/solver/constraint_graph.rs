@@ -4,17 +4,13 @@ use crate::constraints::{
 };
 use alga::general::AbstractMagma;
 use anyhow::{anyhow, Result};
-use cwe_checker_lib::{
-    analysis::graph::{Edge, Node},
-    pcode::Variable,
-};
-use log::info;
+
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    combinator::success,
     multi::separated_list0,
-    sequence::{delimited, tuple},
+    sequence::{tuple},
     IResult,
 };
 
@@ -25,17 +21,15 @@ use petgraph::{
     graph::NodeIndex,
     stable_graph::StableDiGraph,
     visit::{
-        EdgeRef, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNodeIdentifiers, Reversed,
+        EdgeRef, IntoEdgeReferences, IntoEdgesDirected, Reversed,
         Walker,
     },
-    Directed,
 };
 use petgraph::{data::DataMap, visit::IntoNodeReferences};
-use serde_json::value::Index;
+
 use std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
-    fmt::{write, Display, Write},
-    rc::Rc,
+    fmt::{Display, Write},
     vec,
 };
 
@@ -1042,8 +1036,8 @@ impl FSA {
             })
         });
 
-        let res = pop_it.and_then(|mut lhs| {
-            push_it.and_then(|mut rhs| {
+        let res = pop_it.and_then(|lhs| {
+            push_it.and_then(|rhs| {
                 let mut lhs_path = Vec::new();
                 let mut rhs_path = Vec::new();
                 for edge_idx in &path[1..path.len() - 1] {
@@ -1232,19 +1226,19 @@ impl FSA {
 mod tests {
     use super::StackSymbol;
     use super::{parse_edges, parse_finite_state, ControlState, Rule, TypeVarControlState, VHat};
-    use cwe_checker_lib::analysis::graph::Edge;
-    use petgraph::dot::{Config, Dot};
-    use pretty_assertions::{assert_eq, assert_ne};
-    use std::os::unix::fs;
+    
+    use petgraph::dot::{Dot};
+    use pretty_assertions::{assert_eq};
+    
     use std::{
-        collections::{BTreeSet, HashSet},
+        collections::{BTreeSet},
         iter::FromIterator,
         vec,
     };
 
     use crate::{
         constraints::{
-            ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TyConstraint,
+            ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint,
             TypeVariable, Variance,
         },
         solver::constraint_graph::{
