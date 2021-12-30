@@ -52,9 +52,15 @@ IncompatibleFields([f1_sz, f1_offset], [f2_sz, f2_offset], src_node) :-
         (f2_offset < f1_offset), (f2_offset + f2_sz > f1_offset)
         ).
 
-
-
-// So there is a bug here this is checking that there exists a pair of fields that are compatible
 .decl Structure(node: NodeId)
 Structure(node) :- 
-    AllOutgoingFields(node), !IncompatibleFields(f1, f2, node), HasField(f1, node, _),  HasField(f2, node, _).
+    AllOutgoingFields(node), !IncompatibleFields(f1, f2, node), HasField(f, node, _).
+
+.decl HasMemop(node: NodeId)
+HasMemop(nd) :- can_store(_,nd); can_load(nd, _) .
+
+.decl OnlyMemop(node: NodeId)
+OnlyMemop(nd) :- !()
+
+.decl Pointer(node: NodeId)
+Pointer(nd) :- HasMemop(node: NodeId), EquivType()
