@@ -499,6 +499,13 @@ impl FSA {
     pub fn remove_unreachable(&mut self) {
         let mut reachable_from_start = HashSet::new();
 
+        let start_idx = *self.mp.get(&FiniteState::Start).unwrap();
+
+        let end_idx = *self.cant_pop_nodes.get(&FiniteState::End).unwrap();
+
+        assert!(self.grph.contains_node(start_idx));
+        assert!(self.grph.contains_node(end_idx));
+
         let dfs = petgraph::visit::Dfs::new(&self.grph, *self.mp.get(&FiniteState::Start).unwrap());
         dfs.iter(&self.grph).for_each(|x| {
             reachable_from_start.insert(x);
@@ -511,9 +518,12 @@ impl FSA {
         );
 
         let reachable_from_end = dfs.iter(&rev_graph).collect();
-        let reachable: HashSet<_> = reachable_from_start
+        let mut reachable: HashSet<_> = reachable_from_start
             .intersection(&reachable_from_end)
             .collect();
+
+        reachable.insert(&start_idx);
+        reachable.insert(&end_idx);
 
         for nd_id in self.grph.node_indices().collect::<Vec<_>>().into_iter() {
             if !reachable.contains(&nd_id) {
@@ -2044,7 +2054,6 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         fsa_res.simplify_graph();
-        println!("{}", Dot::new(fsa_res.get_graph()));
 
         /*assert_edges(
             &fsa_res,
