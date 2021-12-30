@@ -1,8 +1,7 @@
 use cwe_checker_lib::{
     analysis::graph::{Edge, Graph, Node},
     intermediate_representation::{
-        Arg, BinOpType, Bitvector, Blk, DatatypeProperties, Def, ExternSymbol, Jmp, Sub, Term,
-        UnOpType,
+        Arg, BinOpType, Bitvector, Blk, Def, ExternSymbol, Jmp, Sub, Term, UnOpType,
     },
 };
 use log::{info, warn};
@@ -137,9 +136,9 @@ impl From<(DerivedTypeVar, ConstraintSet)> for BaseValueDomain {
     }
 }
 
-impl Into<(DerivedTypeVar, ConstraintSet)> for BaseValueDomain {
-    fn into(self) -> (DerivedTypeVar, ConstraintSet) {
-        (self.repr_var, self.additional_constriants)
+impl From<BaseValueDomain> for (DerivedTypeVar, ConstraintSet) {
+    fn from(bv: BaseValueDomain) -> Self {
+        (bv.repr_var, bv.additional_constriants)
     }
 }
 
@@ -346,7 +345,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                         let next = ind + 1;
                         if let FieldLabel::Field(fld) = &pth[next] {
                             let mut new_fld = fld.clone();
-                            let total: i128 = delayed_adds.drain(..).map(|x| *x).sum();
+                            let total: i128 = delayed_adds.drain(..).copied().sum();
                             let total: i64 =
                                 total.try_into().expect("Sums of adds should fit in an i64");
                             new_fld.offset += total;

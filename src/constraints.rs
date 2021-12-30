@@ -119,11 +119,7 @@ pub fn parse_whitespace_delim(input: &str) -> IResult<&str, &str> {
 pub fn parse_constraint_set(input: &str) -> IResult<&str, ConstraintSet> {
     map(
         separated_list0(parse_whitespace_delim, parse_subtype_cons),
-        |x| {
-            ConstraintSet(BTreeSet::from_iter(
-                x.into_iter().map(|x| TyConstraint::SubTy(x)),
-            ))
-        },
+        |x| ConstraintSet(BTreeSet::from_iter(x.into_iter().map(TyConstraint::SubTy))),
     )(input.trim())
 }
 
@@ -453,9 +449,9 @@ pub enum TyConstraint {
 
 impl Display for TyConstraint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            &Self::SubTy(sub) => write!(f, "{}", sub),
-            &Self::AddCons(add_cons) => write!(f, "{}", add_cons),
+        match self {
+            Self::SubTy(sub) => write!(f, "{}", sub),
+            Self::AddCons(add_cons) => write!(f, "{}", add_cons),
         }
     }
 }

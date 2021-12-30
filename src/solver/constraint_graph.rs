@@ -301,8 +301,8 @@ pub fn parse_interesting_variable(input: &str) -> IResult<&str, InterestingVar> 
 /// Parses either an uninteresting or interesting variable.
 pub fn parse_vhat(input: &str) -> IResult<&str, VHat> {
     alt((
-        map(parse_interesting_variable, |iv| VHat::Interesting(iv)),
-        map(parse_type_variable, |tv| VHat::Uninteresting(tv)),
+        map(parse_interesting_variable, VHat::Interesting),
+        map(parse_type_variable, VHat::Uninteresting),
     ))(input)
 }
 
@@ -352,7 +352,7 @@ pub fn parse_stack_symbol(input: &str) -> IResult<&str, StackSymbol> {
         tuple((parse_interesting_variable, parse_variance)),
         |(iv, var)| StackSymbol::InterestingVar(iv, var),
     );
-    let parse_fl = map(parse_field_label, |x| StackSymbol::Label(x));
+    let parse_fl = map(parse_field_label, StackSymbol::Label);
     alt((parse_iv, parse_fl))(input)
 }
 
@@ -554,15 +554,15 @@ impl FSA {
         }
     }
 
-    fn get_entries_to_scc(&self, idxs: &Vec<NodeIndex>) -> HashSet<NodeIndex> {
-        let canidates = idxs.clone().into_iter().collect::<HashSet<_>>();
+    fn get_entries_to_scc(&self, idxs: &[NodeIndex]) -> HashSet<NodeIndex> {
+        let canidates = idxs.to_owned().into_iter().collect::<HashSet<_>>();
 
         idxs.iter()
             .cloned()
             .filter(|idx: &NodeIndex| {
                 let edges = self
                     .grph
-                    .edges_directed(idx.clone(), petgraph::EdgeDirection::Incoming);
+                    .edges_directed(*idx, petgraph::EdgeDirection::Incoming);
                 for e in edges {
                     if !canidates.contains(&e.source()) {
                         return true;
@@ -630,9 +630,9 @@ impl FSA {
                     did_change = true;
 
                     let entries = self.get_entries_to_scc(&scc);
-                    assert!(entries.len() != 0);
+                    assert!(!entries.is_empty());
                     let non_redundant_removes = self.select_entry_reprs(entries);
-                    assert!(non_redundant_removes.len() != 0);
+                    assert!(!non_redundant_removes.is_empty());
                     for idx in non_redundant_removes.into_iter() {
                         let tv = TypeVariable::new(format!("loop_breaker{}", ctr));
                         self.replace_nodes_with_interesting_variable(idx, tv);
@@ -716,9 +716,9 @@ impl FSA {
     }
 
     fn lstate_to_nd_index(&self, st: &LabeledState) -> Option<NodeIndex> {
-        match &st.label {
-            &StateLabel::Copy => self.cant_pop_nodes.get(&st.state).cloned(),
-            &StateLabel::Orig => self.mp.get(&st.state).cloned(),
+        match st.label {
+            StateLabel::Copy => self.cant_pop_nodes.get(&st.state).cloned(),
+            StateLabel::Orig => self.mp.get(&st.state).cloned(),
         }
     }
 
@@ -731,7 +731,7 @@ impl FSA {
     }
 
     /// Determines if the edges set of this FSA is exactly represented by the vector of edge definitions.
-    pub fn equal_edges(&self, edges: &Vec<(LabeledState, FSAEdge, LabeledState)>) -> bool {
+    pub fn equal_edges(&self, edges: &[(LabeledState, FSAEdge, LabeledState)]) -> bool {
         let edges = edges
             .iter()
             .map(|(s1, e, s2)| {
@@ -780,7 +780,7 @@ impl FSA {
                 let dst_pushes = reaching_pushes.get_mut(&edge.dst).unwrap();
                 dst_pushes
                     .entry(l.clone())
-                    .or_insert(HashSet::new())
+                    .or_insert_with(HashSet::new)
                     .insert(edge.src.clone());
             }
         }
@@ -872,8 +872,7 @@ impl FSA {
             }
 
             // Check fixpoint
-            let did_not_reach_fixpoint = saved_state != (&reaching_pushes, &all_edges);
-            did_not_reach_fixpoint
+            saved_state != (&reaching_pushes, &all_edges)
         } {}
 
         // remove reflexive edges
@@ -886,10 +885,10 @@ impl FSA {
     }
     fn get_or_insert_nd(&mut self, nd: FiniteState) -> NodeIndex {
         if let Some(idx) = self.mp.get(&nd) {
-            idx.clone()
+            *idx
         } else {
             let idx = self.grph.add_node(nd.clone());
-            self.mp.insert(nd, idx.clone());
+            self.mp.insert(nd, idx);
             idx
         }
     }
@@ -907,9 +906,9 @@ impl FSA {
 
     fn iterate_over_field_labels_in_stack(stack: &[StackSymbol]) -> Result<VecDeque<FieldLabel>> {
         stack.iter().map(|x|
-            match &x {
-                &StackSymbol::InterestingVar(..) => Err(anyhow!("Malformed rules: constraint based rules should not contain type variable stack symbols")),
-                &StackSymbol::Label(lab) => Ok(lab.clone())
+            match x {
+                StackSymbol::InterestingVar(..) => Err(anyhow!("Malformed rules: constraint based rules should not contain type variable stack symbols")),
+                StackSymbol::Label(lab) => Ok(lab.clone())
             }).collect::<Result<VecDeque<FieldLabel>>>()
     }
 
@@ -945,7 +944,7 @@ impl FSA {
         })
     }
 
-    fn get_direct_rule_edges(constraint_rules: &Vec<Rule>) -> Result<Vec<EdgeDefinition>> {
+    fn get_direct_rule_edges(constraint_rules: &[Rule]) -> Result<Vec<EdgeDefinition>> {
         constraint_rules
             .iter()
             .map(|r| Self::sub_type_edge(r))
@@ -976,7 +975,7 @@ impl FSA {
 
     fn add_cant_push_node(&mut self, old_node: &FiniteState) -> NodeIndex {
         self.cant_pop_nodes
-            .get(&old_node)
+            .get(old_node)
             .cloned()
             .unwrap_or_else(|| {
                 let nd_idx = self.grph.add_node(old_node.clone());
@@ -996,7 +995,7 @@ impl FSA {
             .into_iter()
         {
             let edge = self.grph.edge_weight(edge_ind).unwrap().clone();
-            let (src, dst) = self.grph.edge_endpoints(edge_ind).unwrap().clone();
+            let (src, dst) = self.grph.edge_endpoints(edge_ind).unwrap();
             let old_src_node = self.grph.node_weight(src).unwrap().clone();
             let old_dst_node = self.grph.node_weight(dst).unwrap().clone();
 
@@ -1055,7 +1054,7 @@ impl FSA {
         }
     }
 
-    fn path_to_constraint(&self, path: &Vec<EdgeIndex>) -> Option<SubtypeConstraint> {
+    fn path_to_constraint(&self, path: &[EdgeIndex]) -> Option<SubtypeConstraint> {
         let pop_it = path.get(0).and_then(|x| {
             self.get_it_from_edge(x, &|x| {
                 if let FSAEdge::Pop(x) = x {
@@ -1076,7 +1075,7 @@ impl FSA {
             })
         });
 
-        let res = pop_it.and_then(|lhs| {
+        pop_it.and_then(|lhs| {
             push_it.and_then(|rhs| {
                 let mut lhs_path = Vec::new();
                 let mut rhs_path = Vec::new();
@@ -1098,9 +1097,7 @@ impl FSA {
                     DerivedTypeVar::create_with_path(rhs.get_base_variable().clone(), rhs_path),
                 ))
             })
-        });
-
-        res
+        })
     }
 
     /// Walk all paths in the FSA from start to end and generating the constraint represented by each achievable stack state in the language of this FSA.
@@ -1108,10 +1105,7 @@ impl FSA {
         let paths = all_simple_paths::<Vec<_>, _>(&self.grph, self.get_start(), self.get_end());
 
         let cons_set: BTreeSet<TyConstraint> = paths
-            .filter_map(|x| {
-                self.path_to_constraint(&x)
-                    .map(|sub| TyConstraint::SubTy(sub))
-            })
+            .filter_map(|x| self.path_to_constraint(&x).map(TyConstraint::SubTy))
             .collect();
 
         ConstraintSet::from(cons_set)
@@ -1156,10 +1150,10 @@ impl FSA {
     }
 
     fn generate_push_pop_edges_for_state(s: &FiniteState) -> Vec<EdgeDefinition> {
-        match &s {
-            &FiniteState::Start => vec![],
-            &FiniteState::End => vec![],
-            &FiniteState::Tv(tv) => {
+        match s {
+            FiniteState::Start => vec![],
+            FiniteState::End => vec![],
+            FiniteState::Tv(tv) => {
                 if !tv.access_path.is_empty() {
                     Self::generate_push_pop_edges(tv.clone())
                 } else {
@@ -1231,7 +1225,7 @@ impl FSA {
             .flatten()
             .collect::<Vec<_>>();
 
-        total_edges.extend(indirect_edges.into_iter());
+        total_edges.extend(indirect_edges);
 
         let start_stop_edges = total_edges
             .iter()
@@ -1243,7 +1237,7 @@ impl FSA {
             .flatten()
             .collect::<Vec<_>>();
 
-        total_edges.extend(start_stop_edges.into_iter());
+        total_edges.extend(start_stop_edges);
 
         let mut new_fsa = FSA {
             grph: StableDiGraph::new(),

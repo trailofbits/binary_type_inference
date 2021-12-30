@@ -76,7 +76,7 @@ impl<N: Clone + Hash + Eq, E: Hash + Eq + Clone> NodeDefinedGraph<N, E> {
 
     pub fn quoetient_graph(
         &self,
-        groups: &Vec<BTreeSet<NodeIndex>>,
+        groups: &[BTreeSet<NodeIndex>],
     ) -> NodeDefinedGraph<BTreeSet<NodeIndex>, E> {
         let mut nd: NodeDefinedGraph<BTreeSet<NodeIndex>, E> = NodeDefinedGraph::new();
 
@@ -297,7 +297,7 @@ impl SketchGraph {
 
     fn get_repr_idx(&self, dt: &DerivedTypeVar) -> Option<NodeIndex> {
         self.grph
-            .get_node(&dt)
+            .get_node(dt)
             .and_then(|old_idx| self.constraint_to_group.get(old_idx))
             .cloned()
     }
@@ -409,8 +409,7 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
         // Stores who we visited and how we visited them.
         let mut visited: HashMap<NodeIndex, Vec<FieldLabel>> = HashMap::new();
 
-        let mut to_visit = Vec::new();
-        to_visit.push((entry, Vec::new()));
+        let mut to_visit = vec![(entry, Vec::new())];
 
         while let Some((next_nd, path)) = to_visit.pop() {
             if visited.contains_key(&next_nd) {
@@ -569,7 +568,7 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                             .get_elem(subty.lhs.get_base_variable().get_name())
                             .unwrap(),
                         &subty.rhs,
-                        |x: &U, y: &U| x.join(&y),
+                        |x: &U, y: &U| x.join(y),
                     );
                 } else if self.dtv_is_uninterpreted_lattice(&subty.rhs)
                     && lookup.contains_key(subty.lhs.get_base_variable())
@@ -582,7 +581,7 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                             .get_elem(subty.rhs.get_base_variable().get_name())
                             .unwrap(),
                         &subty.lhs,
-                        |x: &U, y: &U| x.meet(&y),
+                        |x: &U, y: &U| x.meet(y),
                     );
                 }
             });

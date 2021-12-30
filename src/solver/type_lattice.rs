@@ -154,10 +154,9 @@ impl LatticeDefinition {
 
             let mut gt_set2 = Self::collect_reachable_nds(graph, id2);
             gt_set2.insert(id2);
-            let shared_reachable = gt_set1.intersection(&gt_set2).collect::<Vec<_>>();
+            let shared_reachable = gt_set1.intersection(&gt_set2);
 
             let lub = shared_reachable
-                .into_iter()
                 .min_by_key(|x| sort.get(x))
                 .expect("every member should have a lub");
             join_res.push(((id1, id2), *lub));
@@ -205,9 +204,9 @@ impl LatticeDefinition {
         println!("{:?}", meet);
         let top = CustomLatticeElement {
             elem: self.top_handle.clone(),
-            join_table: join.clone(),
-            meet_table: meet.clone(),
-            orig_relation: lt_set.clone(),
+            join_table: join,
+            meet_table: meet,
+            orig_relation: lt_set,
         };
 
         let bot = CustomLatticeElement {
