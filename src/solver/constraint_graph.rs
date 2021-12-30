@@ -1597,10 +1597,11 @@ mod tests {
                 },
                 access_path: vec![],
             }),
+            // This is a covariant constriant going into a stack state that is contravariant so we get cov*contra which since contra is negative and cov is the identity we get contra
             dst: FiniteState::Tv(TypeVarNode {
                 base_var: TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
-                    variance: Variance::Covariant,
+                    variance: Variance::Contravariant,
                 },
                 access_path: vec![FieldLabel::Store],
             }),
@@ -1609,9 +1610,10 @@ mod tests {
 
         let contravar_cons3 = EdgeDefinition {
             src: FiniteState::Tv(TypeVarNode {
+                // This case we have a contravariant constraint with a contravariant stack so contra*contra=cov
                 base_var: TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
-                    variance: Variance::Contravariant,
+                    variance: Variance::Covariant,
                 },
                 access_path: vec![FieldLabel::Store],
             }),
