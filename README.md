@@ -24,3 +24,7 @@ Run `cargo doc --document-private-items --open`
 `cargo run ./test_data/list_test.o ./test_data/list_test.json ./test_data/list_lattice.json ./test_data/list_additional_constraints sub_00000000`
 
 Produces the dot representation of the type sketch for sub_00000000 which is inferred to be of a recursive structure. 
+
+## Nix
+
+For convenience a development environment with souffle and rust can be build with `nix develop` or `nix-shell`

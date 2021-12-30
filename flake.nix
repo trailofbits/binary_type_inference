@@ -2,7 +2,7 @@
 # only `name` and `description` below.
 
 {
-  description = "...";
+  description = "infers types given pcode IR";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
@@ -20,7 +20,7 @@
 
   outputs = { self, nixpkgs, utils, rust-overlay, crate2nix, ... }:
     let
-      name = "my-app";
+      name = "binary_type_inference";
     in
     utils.lib.eachDefaultSystem
       (system:
@@ -61,11 +61,9 @@
             };
 
           # Configuration for the non-Rust dependencies
-          buildInputs = with pkgs; [ openssl.dev ];
+          buildInputs = with pkgs; [ pkgs.souffle ];
           nativeBuildInputs = with pkgs; [ rustc cargo pkgconfig nixpkgs-fmt ];
-          buildEnvVars = {
-            PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-          };
+          buildEnvVars = { };
         in
         rec {
           packages.${name} = project.rootCrate.build;
