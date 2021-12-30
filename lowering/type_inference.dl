@@ -54,13 +54,5 @@ IncompatibleFields([f1_sz, f1_offset], [f2_sz, f2_offset], src_node) :-
 
 .decl Structure(node: NodeId)
 Structure(node) :- 
-    AllOutgoingFields(node), !IncompatibleFields(f1, f2, node), HasField(f, node, _).
+    AllOutgoingFields(node), !IncompatibleFields(_, _, node), HasField(_, node, _).
 
-.decl HasMemop(node: NodeId)
-HasMemop(nd) :- can_store(_,nd); can_load(nd, _) .
-
-.decl OnlyMemop(node: NodeId)
-OnlyMemop(nd) :- !()
-
-.decl Pointer(node: NodeId)
-Pointer(nd) :- HasMemop(node: NodeId), EquivType()
