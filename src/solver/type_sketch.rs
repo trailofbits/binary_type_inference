@@ -1,13 +1,16 @@
 use std::collections::{BTreeSet, HashSet};
 use std::marker::PhantomData;
+use std::rc::Rc;
 use std::{collections::HashMap, hash::Hash};
 
 use alga::general::AbstractMagma;
 use itertools::Itertools;
 use log::info;
+use petgraph::graph::IndexType;
 use petgraph::unionfind::UnionFind;
-use petgraph::visit::Walker;
 use petgraph::visit::{Dfs, EdgeRef, IntoNodeReferences};
+use petgraph::visit::{IntoNodeIdentifiers, Walker};
+use petgraph::{algo, EdgeType};
 use petgraph::{
     graph::NodeIndex,
     graph::{EdgeIndex, Graph},
@@ -17,7 +20,6 @@ use crate::constraints::{
     ConstraintSet, DerivedTypeVar, FieldLabel, TyConstraint, TypeVariable, Variance,
 };
 
-use super::constraint_graph::RuleContext;
 use super::type_lattice::{NamedLattice, NamedLatticeElement};
 // TODO(ian): use this abstraction for the transducer
 struct NodeDefinedGraph<N: Clone + Hash + Eq, E: Hash + Eq> {
@@ -116,10 +118,10 @@ pub struct Sketch<T> {
     pub graph: Graph<T, FieldLabel>,
 }
 
-struct SketchGraph {
-    grph: NodeDefinedGraph<DerivedTypeVar, FieldLabel>,
-    quotient_graph: NodeDefinedGraph<BTreeSet<NodeIndex>, FieldLabel>,
-    constraint_to_group: HashMap<NodeIndex, NodeIndex>,
+/// A constraint graph quotiented over a symmetric subtyping relation.
+pub struct SketchGraph<T> {
+    quotient_graph: Graph<T, FieldLabel>,
+    dtv_to_group: Rc<HashMap<DerivedTypeVar, NodeIndex>>,
 }
 
 // an equivalence between eq nodes implies an equivalence between edge
@@ -129,7 +131,38 @@ struct EdgeImplication {
     edge: (NodeIndex, NodeIndex),
 }
 
-impl SketchGraph {
+impl<T: Clone> SketchGraph<T> {
+    fn get_graph_for_idx(&self, root: NodeIndex) -> Sketch<T> {
+        let dfs = Dfs::new(&self.quotient_graph, root);
+        let mut reachable_subgraph: Graph<T, _> = Graph::new();
+        let reachable: Vec<_> = dfs.iter(&self.quotient_graph).collect();
+        let node_map = reachable
+            .iter()
+            .map(|old| {
+                let new = reachable_subgraph
+                    .add_node(self.quotient_graph.node_weight(*old).unwrap().clone());
+                (*old, new)
+            })
+            .collect::<HashMap<_, _>>();
+        reachable
+            .iter()
+            .for_each(|x| self.add_edges_to_subgraph(*x, &node_map, &mut reachable_subgraph));
+
+        Sketch {
+            entry: *node_map.get(&root).unwrap(),
+            graph: reachable_subgraph,
+        }
+    }
+
+    /// Gets the reachable sketch for a derived type variable if it exists in the constraing graph.
+    pub fn get_sketch_for_dtv(&self, dtv: &DerivedTypeVar) -> Option<Sketch<T>> {
+        self.dtv_to_group
+            .get(dtv)
+            .map(|x| self.get_graph_for_idx(*x))
+    }
+}
+
+impl<T> SketchGraph<T> {
     fn insert_dtv(grph: &mut NodeDefinedGraph<DerivedTypeVar, FieldLabel>, dtv: DerivedTypeVar) {
         let mut curr_var = DerivedTypeVar::new(dtv.get_base_variable().clone());
 
@@ -242,75 +275,14 @@ impl SketchGraph {
             .collect()
     }
 
-    pub fn new(s: &ConstraintSet) -> SketchGraph {
-        let mut nd = NodeDefinedGraph::new();
-
-        Self::dts_from_constraint_set(s)
-            .cloned()
-            .for_each(|f| Self::insert_dtv(&mut nd, f));
-
-        let labeled = Self::quoetient_graph(&nd, s);
-        let quotient_graph = nd.quoetient_graph(&labeled);
-
-        let old_to_new = quotient_graph
-            .get_graph()
-            .node_references()
-            .map(|(idx, child_node)| child_node.iter().map(move |child| (*child, idx)))
-            .flatten()
-            .collect();
-
-        SketchGraph {
-            grph: nd,
-            quotient_graph,
-            constraint_to_group: old_to_new,
-        }
-    }
-
-    /// Gets initial unlabeled sketches
-    pub fn get_initial_sketches(
-        &self,
-        rule_context: &RuleContext,
-    ) -> (
-        HashMap<TypeVariable, NodeIndex>,
-        HashMap<NodeIndex, Sketch<NodeIndex>>,
-    ) {
-        let graphs = rule_context
-            .get_interesting()
-            .iter()
-            .filter_map(|x| {
-                self.get_repr_idx(&DerivedTypeVar::new(x.clone()))
-                    .map(|x| (x, self.get_graph_for_idx(x)))
-            })
-            .collect::<HashMap<NodeIndex, Sketch<NodeIndex>>>();
-
-        let var_map = rule_context
-            .get_interesting()
-            .iter()
-            .filter_map(|x| {
-                self.get_repr_idx(&DerivedTypeVar::new(x.clone()))
-                    .map(|ndidx| (x.clone(), ndidx))
-            })
-            .collect();
-
-        (var_map, graphs)
-    }
-
-    fn get_repr_idx(&self, dt: &DerivedTypeVar) -> Option<NodeIndex> {
-        self.grph
-            .get_node(dt)
-            .and_then(|old_idx| self.constraint_to_group.get(old_idx))
-            .cloned()
-    }
-
-    fn add_edges_to_subgraph(
+    fn add_edges_to_subgraph<O>(
         &self,
         start: NodeIndex,
         node_map: &HashMap<NodeIndex, NodeIndex>,
-        subgraph: &mut Graph<NodeIndex, FieldLabel>,
+        subgraph: &mut Graph<O, FieldLabel>,
     ) {
         for e in self
             .quotient_graph
-            .get_graph()
             .edges_directed(start, petgraph::EdgeDirection::Outgoing)
         {
             subgraph.add_edge(
@@ -321,64 +293,49 @@ impl SketchGraph {
         }
     }
 
-    pub fn get_graph_for_idx(&self, root: NodeIndex) -> Sketch<NodeIndex> {
-        let dfs = Dfs::new(self.quotient_graph.get_graph(), root);
-        let mut reachable_subgraph = Graph::new();
-        let reachable: Vec<_> = dfs.iter(self.quotient_graph.get_graph()).collect();
-        let node_map = reachable
-            .iter()
-            .map(|old| {
-                let new = reachable_subgraph.add_node(*old);
-                (*old, new)
-            })
-            .collect::<HashMap<_, _>>();
-        reachable
-            .iter()
-            .for_each(|x| self.add_edges_to_subgraph(*x, &node_map, &mut reachable_subgraph));
+    /// Creates a quotiented sketch graph from a constraint set.
+    pub fn new(s: &ConstraintSet) -> SketchGraph<()> {
+        let mut nd = NodeDefinedGraph::new();
 
-        Sketch {
-            entry: *node_map.get(&root).unwrap(),
-            graph: reachable_subgraph,
+        Self::dts_from_constraint_set(s)
+            .cloned()
+            .for_each(|f| Self::insert_dtv(&mut nd, f));
+
+        let labeled = Self::quoetient_graph(&nd, s);
+        let quotient_graph = nd.quoetient_graph(&labeled);
+
+        let old_to_new: HashMap<NodeIndex, NodeIndex> = quotient_graph
+            .get_graph()
+            .node_references()
+            .map(|(idx, child_node)| child_node.iter().map(move |child| (*child, idx)))
+            .flatten()
+            .collect();
+
+        let mapping = nd
+            .nodes
+            .iter()
+            .map(|(dtv, old_idx)| (dtv.clone(), *old_to_new.get(old_idx).unwrap()));
+
+        let new_quotient_graph = quotient_graph
+            .get_graph()
+            .clone()
+            .map(|_, _| (), |_, e| e.clone());
+        SketchGraph {
+            quotient_graph: new_quotient_graph,
+            dtv_to_group: Rc::new(mapping.collect()),
         }
     }
-}
 
-/// Binds a sketch node to its original node in the constraint graph
-#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GroupID {
-    id: usize,
-}
-
-impl GroupID {
-    fn new(id: usize) -> GroupID {
-        GroupID { id }
+    /// Produces a new graph by mapping F accross the nodes.
+    pub fn map_nodes<F, U: Clone>(&self, mut f: F) -> SketchGraph<U>
+    where
+        F: FnMut(NodeIndex, &T) -> U,
+    {
+        SketchGraph {
+            quotient_graph: self.quotient_graph.map(|x, y| f(x, y), |_, e| e.clone()),
+            dtv_to_group: self.dtv_to_group.clone(),
+        }
     }
-
-    /// Gets the groupid as a plain unsigned integer.
-    pub fn get_id(&self) -> usize {
-        self.id
-    }
-}
-
-/// A lattice node with a group id
-pub struct LabeledNode<U> {
-    /// The ID of the equivalence group of this node.
-    pub id: GroupID,
-    /// An additional label value.
-    pub value: U,
-}
-
-/// Get initial unlabeled sketches. The lookup map maps a type variable to its NodeIndex in the equivalence class graph. The sketch graph is labeled by indices into the equivalence
-/// class graph.
-pub fn get_initial_sketches(
-    cons: &ConstraintSet,
-    rule_context: &RuleContext,
-) -> (
-    HashMap<TypeVariable, NodeIndex>,
-    HashMap<NodeIndex, Sketch<NodeIndex>>,
-) {
-    let grph = SketchGraph::new(cons);
-    grph.get_initial_sketches(rule_context)
 }
 
 /// The context under which a labeling of sketches can be computed. Based on subtyping constraints
@@ -400,16 +357,14 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
         }
     }
 
-    fn apply_variance(
-        &self,
-        entry: NodeIndex,
-        orig_graph: &Graph<NodeIndex, FieldLabel>,
-        labeling: &mut HashMap<NodeIndex, U>,
-    ) {
+    fn apply_variance<O>(&self, orig_graph: &Graph<O, FieldLabel>) -> HashMap<NodeIndex, U> {
+        let mut labeling: HashMap<NodeIndex, U> = HashMap::new();
         // Stores who we visited and how we visited them.
         let mut visited: HashMap<NodeIndex, Vec<FieldLabel>> = HashMap::new();
 
-        let mut to_visit = vec![(entry, Vec::new())];
+        let mut to_visit = Vec::new();
+        let roots = Self::get_roots(orig_graph);
+        roots.iter().for_each(|x| to_visit.push((*x, Vec::new())));
 
         while let Some((next_nd, path)) = to_visit.pop() {
             if visited.contains_key(&next_nd) {
@@ -439,26 +394,60 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                 )
             })
             .for_each(|(new_nd_index, var)| {
-                let old_idx = orig_graph.node_weight(new_nd_index).unwrap();
                 labeling.insert(
-                    *old_idx,
+                    new_nd_index,
                     match var {
                         Variance::Covariant => self.lattice.top(),
                         Variance::Contravariant => self.lattice.bot(),
                     },
                 );
             });
+
+        labeling
     }
 
-    fn get_initial_labels(
+    fn get_roots<N, E, Ty: EdgeType, Ix: IndexType>(
+        tgt: &Graph<N, E, Ty, Ix>,
+    ) -> Vec<NodeIndex<Ix>> {
+        // make weights idxs so we can select an index from the scc
+        let ngraph = tgt.map(|idx, _y| idx, |_, _| ());
+
+        let condens = algo::condensation(ngraph, true);
+
+        condens
+            .node_identifiers()
+            .filter(|x| {
+                condens
+                    .neighbors_directed(*x, petgraph::EdgeDirection::Incoming)
+                    .count()
+                    == 0
+            })
+            .map(|scc_idx| {
+                // This scc is a root
+                let orig_idxs = condens.node_weight(scc_idx).unwrap();
+                // There should not be zero node sccs
+                assert!(!orig_idxs.is_empty());
+                // any node from an scc can work as the root so just take the first one we saw
+                *orig_idxs.get(0).unwrap()
+            })
+            .collect()
+    }
+
+    fn get_initial_labels<O: Clone>(&self, initial_sketches: &SketchGraph<O>) -> SketchGraph<U> {
+        let lab = self.apply_variance(&initial_sketches.quotient_graph);
+
+        initial_sketches.map_nodes(|nd_idx, _old_weight| lab.get(&nd_idx).unwrap().clone())
+    }
+
+    /// Creates a fully labeled sketch graph
+    pub fn create_labeled_sketchgraph<O: Clone>(
         &self,
-        initial_sketches: &HashMap<NodeIndex, Sketch<NodeIndex>>,
-    ) -> HashMap<NodeIndex, U> {
-        let mut labeling = HashMap::new();
-        initial_sketches.iter().for_each(|(_k, sketch)| {
-            self.apply_variance(sketch.entry, &sketch.graph, &mut labeling);
-        });
-        labeling
+        cons: &ConstraintSet,
+        initial_sketches: &SketchGraph<O>,
+    ) -> SketchGraph<U> {
+        let mut init = self.get_initial_labels(initial_sketches);
+        self.label_sketches(cons, &mut init);
+        init
     }
 
     fn dtv_is_uninterpreted_lattice(&self, dtv: &DerivedTypeVar) -> bool {
@@ -466,88 +455,22 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
             && dtv.get_field_labels().is_empty()
     }
 
-    // TODO(ian): What about multiple edges with the same weight (paper claims it is prefix closed, is that actually true? can we prove it?)
-    fn find_node_following_path<S>(
-        entry: NodeIndex,
-        path: &[FieldLabel],
-        grph: &Graph<S, FieldLabel>,
-    ) -> Option<NodeIndex> {
-        let mut curr_node = entry;
-        for pth_member in path.iter() {
-            let found = grph
-                .edges_directed(curr_node, petgraph::EdgeDirection::Outgoing)
-                .find(|e| e.weight() == pth_member);
-
-            if let Some(found_edge) = found {
-                curr_node = found_edge.target();
-            } else {
-                return None;
-            }
-        }
-
-        Some(curr_node)
-    }
-
     fn update_lattice_node(
-        initial_sketches: &HashMap<NodeIndex, Sketch<NodeIndex>>,
-        lookup: &HashMap<TypeVariable, NodeIndex>,
-        labeling: &mut HashMap<NodeIndex, U>,
+        grph: &mut SketchGraph<U>,
         lattice_elem: U,
         target_dtv: &DerivedTypeVar,
         operation: impl Fn(&U, &U) -> U,
     ) {
-        let repr = lookup.get(target_dtv.get_base_variable()).unwrap();
-        let sketch = initial_sketches.get(repr).unwrap();
-
-        let target_node_idx = Self::find_node_following_path(
-            sketch.entry,
-            target_dtv.get_field_labels(),
-            &sketch.graph,
-        )
-        .expect("The sketch for a type variable should acccept its field labels");
-
-        let weight_ref = sketch.graph.node_weight(target_node_idx).unwrap();
-        let orig_value = labeling.get_mut(weight_ref).unwrap();
+        let target_group_idx = *grph.dtv_to_group.get(target_dtv).unwrap();
+        let orig_value = grph
+            .quotient_graph
+            .node_weight_mut(target_group_idx)
+            .unwrap();
         *orig_value = operation(orig_value, &lattice_elem);
     }
 
     /// Provided sketches labeled by equivalence class node indeces, computes a labeling of each node by the given lattice and constraint set.
-    pub fn label_sketches(
-        &self,
-        cons: &ConstraintSet,
-        lookup: &HashMap<TypeVariable, NodeIndex>,
-        sketches: &HashMap<NodeIndex, Sketch<NodeIndex>>,
-    ) -> HashMap<NodeIndex, Sketch<LabeledNode<U>>> {
-        let mut init = self.get_initial_labels(sketches);
-        self.label_inited_sketches(cons, lookup, sketches, &mut init);
-        sketches
-            .iter()
-            .map(|(idx, sketch)| {
-                let new_graph = sketch.graph.map(
-                    |_, old_idx| LabeledNode {
-                        id: GroupID::new(old_idx.index()),
-                        value: init.get(old_idx).unwrap().clone(),
-                    },
-                    |_, e| e.clone(),
-                );
-                (
-                    *idx,
-                    Sketch {
-                        graph: new_graph,
-                        entry: sketch.entry,
-                    },
-                )
-            })
-            .collect()
-    }
-
-    fn label_inited_sketches(
-        &self,
-        cons: &ConstraintSet,
-        lookup: &HashMap<TypeVariable, NodeIndex>,
-        sketches: &HashMap<NodeIndex, Sketch<NodeIndex>>,
-        initial_labeling: &mut HashMap<NodeIndex, U>,
-    ) {
+    pub fn label_sketches(&self, cons: &ConstraintSet, sgraph: &mut SketchGraph<U>) {
         cons.iter()
             .filter_map(|x| {
                 if let TyConstraint::SubTy(sy) = x {
@@ -558,12 +481,10 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
             })
             .for_each(|subty| {
                 if self.dtv_is_uninterpreted_lattice(&subty.lhs)
-                    && lookup.contains_key(subty.rhs.get_base_variable())
+                    && sgraph.dtv_to_group.contains_key(&subty.rhs)
                 {
                     Self::update_lattice_node(
-                        sketches,
-                        lookup,
-                        initial_labeling,
+                        sgraph,
                         self.lattice
                             .get_elem(subty.lhs.get_base_variable().get_name())
                             .unwrap(),
@@ -571,12 +492,10 @@ impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
                         |x: &U, y: &U| x.join(y),
                     );
                 } else if self.dtv_is_uninterpreted_lattice(&subty.rhs)
-                    && lookup.contains_key(subty.lhs.get_base_variable())
+                    && sgraph.dtv_to_group.contains_key(&subty.lhs)
                 {
                     Self::update_lattice_node(
-                        sketches,
-                        lookup,
-                        initial_labeling,
+                        sgraph,
                         self.lattice
                             .get_elem(subty.rhs.get_base_variable().get_name())
                             .unwrap(),

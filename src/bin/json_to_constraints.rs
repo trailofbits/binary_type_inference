@@ -1,11 +1,11 @@
 use binary_type_inference::{
     constraint_generation,
-    constraints::{parse_constraint_set, TyConstraint, TypeVariable},
+    constraints::{parse_constraint_set, DerivedTypeVar, TyConstraint, TypeVariable},
     node_context,
     solver::{
         constraint_graph::{RuleContext, FSA},
         type_lattice::{LatticeDefinition, NamedLatticeElement},
-        type_sketch::{get_initial_sketches, LabelingContext},
+        type_sketch::{LabelingContext, SketchGraph},
     },
     util,
 };
@@ -132,17 +132,19 @@ fn main() -> anyhow::Result<()> {
 
     eprintln!("done new cons");
 
-    let (lookup, sketches) = get_initial_sketches(&new_cons, &RuleContext::new(only_interestings));
-    println!("{:?}", sketches);
+    let grph = SketchGraph::<()>::new(&new_cons);
     let lbling_context = LabelingContext::new(named_lattice, lattice_elems);
-    let sketches = lbling_context.label_sketches(&new_cons, &lookup, &sketches);
+    let labeled_graph = lbling_context.create_labeled_sketchgraph(&new_cons, &grph);
     if let Some(target_var) = matches.value_of("target_var") {
-        let tv = TypeVariable::new(target_var.to_owned());
-        let repr_idx = lookup.get(&tv).expect("No repr index for target var");
-        let target_sketch = sketches.get(repr_idx).expect("no sketch for target");
+        let target_sketch = labeled_graph
+            .get_sketch_for_dtv(&DerivedTypeVar::new(TypeVariable::new(
+                target_var.to_owned(),
+            )))
+            .expect("No sketch for target tv");
+
         let ngraph = target_sketch
             .graph
-            .map(|_, nd| nd.value.get_name(), |_, e| e.clone());
+            .map(|_, nd| nd.get_name(), |_, e| e.clone());
         println!("{}", Dot::new(&ngraph));
     }
 
