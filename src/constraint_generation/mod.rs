@@ -4,6 +4,7 @@ use cwe_checker_lib::{
         Arg, BinOpType, Bitvector, Blk, Def, ExternSymbol, Jmp, Sub, Term, UnOpType,
     },
 };
+
 use log::{info, warn};
 use petgraph::{
     graph::{Edges, IndexType, NodeIndex},
@@ -736,6 +737,7 @@ where
         });
 
         called_externs
+            .into_iter()
             .map(|ext| nd_ctxt.handle_extern_actual_params(&ext, vman, 0))
             .fold(ConstraintSet::default(), |mut prev, nxt| {
                 prev.insert_all(&nxt);
@@ -820,6 +822,7 @@ where
 
                     let add_cons =
                         self.collect_extern_call_constraints(&blk.term.jmps, nd_cont, vman);
+                    info!("Extern cons: {}\n", add_cons);
                     cs.insert_all(&add_cons);
 
                     // TODO(ian): if there is an outgoing extern call then we need to add the actual args

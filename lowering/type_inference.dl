@@ -56,3 +56,5 @@ IncompatibleFields([f1_sz, f1_offset], [f2_sz, f2_offset], src_node) :-
 Structure(node) :- 
     AllOutgoingFields(node), !IncompatibleFields(_, _, node), HasField(_, node, _).
 
+.decl Pointer(node: NodeId)
+Pointer(node) :- CanLoad(,type)
