@@ -26,5 +26,8 @@ pub mod solver;
 /// custom petagraph algos, specifically dense path expression from (FAST ALGORITHMS FOR SOLVING PATH PROBLEMS)[http://i.stanford.edu/pub/cstr/reports/cs/tr/79/734/CS-TR-79-734.pdf]
 pub mod graph_algos;
 
+/// Takes a sketch graph of types and lowers this type information to ctypes, using datalog defined heurisitics.
+pub mod lowering;
+
 #[cfg(test)]
 mod tests {}

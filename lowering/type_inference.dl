@@ -8,8 +8,11 @@
 
 
 
-.decl node_value(node_id: NodeId, node_value: symbol)
-.input node_value
+.decl is_bottom(node_id: NodeId)
+.input is_bottom
+
+.decl is_top(node_id: NodeId)
+.input is_top
 
 .decl can_load(src_node: NodeId, dst_node: NodeId)
 .input can_load
@@ -20,7 +23,7 @@
 // size in bits offset in bytes
 .decl has_field(src_node: NodeId, dst_node: NodeId, size: Bits, offset: Bytes)
 .input has_field
-
+.output has_field
 
 .decl in_param(src_node: NodeId, dst_node: NodeId, idx: ParamIdx)
 .input in_param
@@ -31,7 +34,10 @@
 
 // a node gets associated with a type where the type gets an id
 .decl FirstClassType(node: NodeId)
-FirstClassType(node) :- Structure(node); Pointer(node, _); Alias(node, _).
+FirstClassType(node) :- Structure(node); Pointer(node, _); Alias(node, _); Scalar(node).
+
+.decl Scalar(node: NodeId)
+Scalar(node) :- !is_bottom(node), !is_top(node).
 
 // a type can be a first class type or a function type. Pointers can point to non first class types. This is
 // how we support function pointers.

@@ -148,5 +148,7 @@ fn main() -> anyhow::Result<()> {
         println!("{}", Dot::new(&ngraph));
     }
 
+    binary_type_inference::lowering::generate_datalog_context(&labeled_graph, "/tmp/facts_out")?;
+
     Ok(())
 }

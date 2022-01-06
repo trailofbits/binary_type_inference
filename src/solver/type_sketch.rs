@@ -336,6 +336,11 @@ impl<T> SketchGraph<T> {
             dtv_to_group: self.dtv_to_group.clone(),
         }
     }
+
+    /// Gets a reference to the underlying graph
+    pub fn get_graph(&self) -> &Graph<T, FieldLabel> {
+        &self.quotient_graph
+    }
 }
 
 /// The context under which a labeling of sketches can be computed. Based on subtyping constraints

@@ -30,6 +30,7 @@ regex = "1.5.4"
 nom = "7.1.0"
 indexmap = { version = "1.6.2" }
 itertools = "0.10.3"
+csv = "1.1.6"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
