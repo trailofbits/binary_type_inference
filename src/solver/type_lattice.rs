@@ -16,6 +16,12 @@ use std::{
 pub trait NamedLatticeElement: Lattice + Clone {
     /// The name of this lattice element.
     fn get_name(&self) -> &str;
+
+    /// Check wether this is the top element.
+    fn is_top(&self) -> bool;
+
+    /// Check wether this is the bottom element.
+    fn is_bot(&self) -> bool;
 }
 
 /// A named lattice has a top element, bottom element, and can lookup lattice elements by name.
@@ -204,6 +210,8 @@ impl LatticeDefinition {
         println!("{:?}", meet);
         let top = CustomLatticeElement {
             elem: self.top_handle.clone(),
+            bot: self.bottom_handle.clone(),
+            top: self.top_handle.clone(),
             join_table: join,
             meet_table: meet,
             orig_relation: lt_set,
@@ -243,6 +251,8 @@ impl LatticeDefinition {
 /// currently doesnt check any lattice laws, good luck
 #[derive(Clone)]
 pub struct CustomLatticeElement {
+    top: String,
+    bot: String,
     elem: String,
     join_table: Rc<HashMap<(String, String), String>>,
     meet_table: Rc<HashMap<(String, String), String>>,
@@ -253,6 +263,14 @@ pub struct CustomLatticeElement {
 impl NamedLatticeElement for CustomLatticeElement {
     fn get_name(&self) -> &str {
         &self.elem
+    }
+
+    fn is_top(&self) -> bool {
+        self.top == self.elem
+    }
+
+    fn is_bot(&self) -> bool {
+        self.bot == self.elem
     }
 }
 
@@ -303,6 +321,8 @@ impl JoinSemilattice for CustomLatticeElement {
                 join_table: self.join_table.clone(),
                 meet_table: self.meet_table.clone(),
                 orig_relation: self.orig_relation.clone(),
+                top: self.top.clone(),
+                bot: self.bot.clone(),
             })
             .expect("All relations should be defined in table")
     }
@@ -317,6 +337,8 @@ impl MeetSemilattice for CustomLatticeElement {
                 join_table: self.join_table.clone(),
                 meet_table: self.meet_table.clone(),
                 orig_relation: self.orig_relation.clone(),
+                top: self.top.clone(),
+                bot: self.bot.clone(),
             })
             .expect("All relations should be defined in table")
     }
