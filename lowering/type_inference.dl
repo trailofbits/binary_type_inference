@@ -8,6 +8,9 @@
 
 
 
+.decl node(node_id: NodeId)
+.input node
+
 .decl is_bottom(node_id: NodeId)
 .input is_bottom
 
@@ -23,7 +26,6 @@
 // size in bits offset in bytes
 .decl has_field(src_node: NodeId, dst_node: NodeId, size: Bits, offset: Bytes)
 .input has_field
-.output has_field
 
 .decl in_param(src_node: NodeId, dst_node: NodeId, idx: ParamIdx)
 .input in_param
@@ -37,15 +39,16 @@
 FirstClassType(node) :- Structure(node); Pointer(node, _); Alias(node, _); Scalar(node).
 
 .decl Scalar(node: NodeId)
-Scalar(node) :- !is_bottom(node), !is_top(node).
+Scalar(node) :- !is_bottom(node), !is_top(node), node(node).
 
 // a type can be a first class type or a function type. Pointers can point to non first class types. This is
 // how we support function pointers.
 .decl Type(node: NodeId)
 Type(node) :- FirstClassType(node).
+.output Type
 
 .decl AllOutgoingFields(src: NodeId)
-AllOutgoingFields(src_id) :- !out_param(src_id, _), has_field(src_id, _, _, _),
+AllOutgoingFields(src_id) :- !out_param(src_id, _), has_field(src_id, dst_id, _, _), FirstClassType(dst_id),
     !in_param(src_id, _, _), !out_param(src_id, _), !can_store(src_id, _), !can_load(src_id, _).
 
 
@@ -70,12 +73,21 @@ CompatibleStructure(node) :-
 .decl MultiFieldStructure(node: NodeId)
 MultiFieldStructure(node) :- HasField(_, node, dst_node1), HasField(_,node, dst_node2), dst_node1 != dst_node2.
 
+
+.decl StructureField(node: NodeId, size: Bits, offset: Bytes, child_type: NodeId)
+StructureField(node, size, offset, child_type) :- Structure(node), HasField([size,offset],node, child_type).
+.output StructureField
+
 .decl Structure(node: NodeId)
 Structure(node) :- MultiFieldStructure(node), CompatibleStructure(node).
+.output Structure
 
 // Catch one field structs as type aliases
 .decl Alias(node: NodeId, tgt: NodeId)
 Alias(node, tgt) :- !MultiFieldStructure(node), CompatibleStructure(node), HasField(_, node, tgt), FirstClassType(tgt).
+.output Alias
+
 
 .decl Pointer(node: NodeId, tgt: NodeId)
 Pointer(node, tgt) :- can_load(node, tgt).
+.output Pointer

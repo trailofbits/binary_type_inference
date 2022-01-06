@@ -1,4 +1,4 @@
-use csv::Writer;
+use csv::{Writer, WriterBuilder};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -6,7 +6,7 @@ use std::{
 
 use petgraph::{
     graph::{EdgeReference, NodeIndex},
-    visit::{EdgeRef, IntoNodeReferences},
+    visit::{EdgeRef, IntoNodeIdentifiers, IntoNodeReferences},
 };
 
 use crate::{
@@ -165,6 +165,14 @@ impl<'a, U: NamedLatticeElement> FactsContext<'a, U> {
             })
             .collect()
     }
+
+    fn get_node_records(&self) -> Vec<Vec<String>> {
+        self.grph
+            .get_graph()
+            .node_identifiers()
+            .map(|x| vec![x.index().to_string()])
+            .collect()
+    }
 }
 
 struct FactsFileConfig {
@@ -175,13 +183,15 @@ struct FactsFileConfig {
     field_path: PathBuf,
     bottom_path: PathBuf,
     top_path: PathBuf,
+    node_path: PathBuf,
 }
 
 fn generate_facts_file<P>(records: &Vec<Vec<String>>, path: P) -> anyhow::Result<()>
 where
     P: AsRef<Path>,
 {
-    let mut wtr = Writer::from_path(path)?;
+    let mut builder = WriterBuilder::new();
+    let mut wtr = builder.delimiter('\t' as u8).from_path(path)?;
 
     for rec in records.iter() {
         wtr.write_record(rec)?;
@@ -203,6 +213,7 @@ fn generate_facts_files<U: NamedLatticeElement>(
     generate_facts_file(&fcontext.get_field_records(), config.field_path)?;
     generate_facts_file(&fcontext.generate_is_bottom_records(), config.bottom_path)?;
     generate_facts_file(&fcontext.generate_is_top_records(), config.top_path)?;
+    generate_facts_file(&fcontext.get_node_records(), config.node_path)?;
 
     Ok(())
 }
@@ -232,6 +243,7 @@ pub fn generate_datalog_context<U: NamedLatticeElement>(
         field_path: immutably_push(&pb, "has_field.facts"),
         top_path: immutably_push(&pb, "is_top.facts"),
         bottom_path: immutably_push(&pb, "is_bottom.facts"),
+        node_path: immutably_push(&pb, "node.facts"),
     };
 
     generate_facts_files(grph, facts_file_config)
