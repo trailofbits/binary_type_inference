@@ -135,20 +135,19 @@ fn main() -> anyhow::Result<()> {
     let grph = SketchGraph::<()>::new(&new_cons);
     let lbling_context = LabelingContext::new(named_lattice, lattice_elems);
     let labeled_graph = lbling_context.create_labeled_sketchgraph(&new_cons, &grph);
-    if let Some(target_var) = matches.value_of("target_var") {
-        let target_sketch = labeled_graph
-            .get_sketch_for_dtv(&DerivedTypeVar::new(TypeVariable::new(
-                target_var.to_owned(),
-            )))
-            .expect("No sketch for target tv");
 
-        let ngraph = target_sketch
-            .graph
-            .map(|_, nd| nd.get_name(), |_, e| e.clone());
-        println!("{}", Dot::new(&ngraph));
-    }
+    let displayable_graph = labeled_graph.get_graph().map(
+        |idx, nd| nd.get_name().to_owned() + ":" + &idx.index().to_string(),
+        |_eidx, e| e.clone(),
+    );
 
-    binary_type_inference::lowering::generate_datalog_context(&labeled_graph, "/tmp/facts_out")?;
+    println!("{}", Dot::new(&displayable_graph));
+
+    binary_type_inference::lowering::run_datalog(
+        &labeled_graph,
+        "/tmp/facts_in",
+        "/tmp/facts_out",
+    )?;
 
     Ok(())
 }

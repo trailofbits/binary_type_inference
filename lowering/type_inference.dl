@@ -33,6 +33,17 @@
 .decl out_param(src_node: NodeId, dst_node: NodeId)
 .input out_param
 
+// TODO(ian): make this an input with an edge id, then we can do implication without tons of negation by
+// creating a relation like only stores, !edge(src, _, id) where !can_store(id) fixes a lot of code duplication
+// Edge properties would be attached to the edge id
+.decl edge(src_node: NodeId, dst_node: NodeId)
+edge(src_node, dst_node) :- 
+    can_load(src_node, dst_node);
+    can_store(src_node, dst_node);
+    has_field(src_node, dst_node, _, _);
+    in_param(src_node, dst_node, _);
+    out_param(src_node, dst_node).
+
 
 // a node gets associated with a type where the type gets an id
 .decl FirstClassType(node: NodeId)
@@ -48,9 +59,8 @@ Type(node) :- FirstClassType(node).
 .output Type
 
 .decl AllOutgoingFields(src: NodeId)
-AllOutgoingFields(src_id) :- !out_param(src_id, _), has_field(src_id, dst_id, _, _), FirstClassType(dst_id),
+AllOutgoingFields(src_id) :- !out_param(src_id, _), has_field(src_id, _, _, _),
     !in_param(src_id, _, _), !out_param(src_id, _), !can_store(src_id, _), !can_load(src_id, _).
-
 
 .decl HasField(fld: Field, src_id: NodeId, dst_type: NodeId)
 HasField([size, offset], src_node, dst_node) :- has_field(src_node, dst_node, size, offset).
@@ -62,10 +72,12 @@ IncompatibleFields([f1_sz, f1_offset], [f2_sz, f2_offset], src_node) :-
     HasField([f2_sz, f2_offset], src_node, dst_node2),
     dst_node1 != dst_node2, // this isnt totally correct because we could have multiple fields going to the same node that are incompatible??
         (
-        (f1_offset < f2_offset) ,  (f1_offset + f1_sz > f2_offset);
-        (f2_offset < f1_offset), (f2_offset + f2_sz > f1_offset)
+        ((f1_offset < f2_offset) ,  (f1_offset + (f1_sz/8) > f2_offset));
+        ((f2_offset < f1_offset), (f2_offset + (f2_sz/8) > f1_offset));
+        f1_offset = f2_offset
         ).
 
+    
 .decl CompatibleStructure(node: NodeId)
 CompatibleStructure(node) :- 
     AllOutgoingFields(node), !IncompatibleFields(_, _, node), HasField(_, node, _).
@@ -75,19 +87,47 @@ MultiFieldStructure(node) :- HasField(_, node, dst_node1), HasField(_,node, dst_
 
 
 .decl StructureField(node: NodeId, size: Bits, offset: Bytes, child_type: NodeId)
-StructureField(node, size, offset, child_type) :- Structure(node), HasField([size,offset],node, child_type).
+StructureField(node, size, offset, child_type) :- Structure(node), HasField([size,offset],node, child_type), Type(child_type).
 .output StructureField
 
+// TODO(ian): right now we are checking that just one field has a type we need to check that all fields have a type.
+// This is going to be really annoying 
+.decl FieldWithoutType(node: NodeId)
+FieldWithoutType(node) :- node(node), HasField(_, node, tgt), FirstClassType(tgt).
+
 .decl Structure(node: NodeId)
-Structure(node) :- MultiFieldStructure(node), CompatibleStructure(node).
+Structure(node) :- MultiFieldStructure(node), CompatibleStructure(node), FieldWithoutType(node).
 .output Structure
+
+
+
+.decl NodesCanBeAliased(node: NodeId, tgt: NodeId)
+NodesCanBeAliased(node, tgt) :- !MultiFieldStructure(node), CompatibleStructure(node), HasField(_, node, tgt).
+
 
 // Catch one field structs as type aliases
 .decl Alias(node: NodeId, tgt: NodeId)
-Alias(node, tgt) :- !MultiFieldStructure(node), CompatibleStructure(node), HasField(_, node, tgt), FirstClassType(tgt).
+Alias(node, tgt) :- NodesCanBeAliased(node, tgt), FirstClassType(tgt).
 .output Alias
 
 
+.decl OnlyOutgoingStoresAndLoads(node: NodeId)
+OnlyOutgoingStoresAndLoads(node) :- (can_load(node, _); can_store(node, _)),
+    has_field(node, _, _, _),
+    in_param(node, _, _),
+    out_param(node, _).
+
+// TODO(ian): make this recursive to check all the way down a chain of aliases
+.decl NotEqualTypes(node1: NodeId, node2: NodeId)
+NotEqualTypes(node1, node2) :-
+   node1 != node2, !NodesCanBeAliased(node1, node2), !NodesCanBeAliased(node2, node1), node(node1), node(node2).
+
+.decl HasOutgoingEdgesToDifferentTypes(node: NodeId)
+HasOutgoingEdgesToDifferentTypes(node) :- 
+    edge(node, dst_node1),
+    edge(node, dst_node2),
+    NotEqualTypes(dst_node1, dst_node2).
+
 .decl Pointer(node: NodeId, tgt: NodeId)
-Pointer(node, tgt) :- can_load(node, tgt).
+Pointer(node, tgt) :- (can_load(node, tgt); can_store(node, tgt)), !HasOutgoingEdgesToDifferentTypes(node), OnlyOutgoingStoresAndLoads(node), Type(tgt).
 .output Pointer

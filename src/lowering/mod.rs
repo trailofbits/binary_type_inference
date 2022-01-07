@@ -1,8 +1,10 @@
-use csv::{Writer, WriterBuilder};
+use csv::WriterBuilder;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
+
+use std::process;
 
 use petgraph::{
     graph::{EdgeReference, NodeIndex},
@@ -228,12 +230,12 @@ where
 }
 
 /// Generates a directory of facts files for ingestion in datalog heuristics
-pub fn generate_datalog_context<U: NamedLatticeElement>(
+fn generate_datalog_context<U: NamedLatticeElement>(
     grph: &SketchGraph<U>,
-    out_facts_path: &str,
+    in_facts_path: &str,
 ) -> anyhow::Result<()> {
     let mut pb = PathBuf::new();
-    pb.push(out_facts_path);
+    pb.push(in_facts_path);
 
     let facts_file_config = FactsFileConfig {
         store_path: immutably_push(&pb, "can_store.facts"),
@@ -249,4 +251,34 @@ pub fn generate_datalog_context<U: NamedLatticeElement>(
     generate_facts_files(grph, facts_file_config)
 }
 
-//pub fn solve_graph<U>(grph: &SketchGraph<U>) -> CTypeAssignments {}
+fn run_datalog_binary(
+    souffle_command: &str,
+    datalog_file: &str,
+    in_facts_path: &str,
+    out_facts_path: &str,
+) -> anyhow::Result<()> {
+    let _ = process::Command::new(souffle_command)
+        .arg(datalog_file)
+        .arg("-F")
+        .arg(in_facts_path)
+        .arg("-D")
+        .arg(out_facts_path)
+        .output()?;
+
+    Ok(())
+}
+
+/// Generates a facts dir from the sketch graph and runs souffle to infer lowered relations in the output directory
+pub fn run_datalog<U: NamedLatticeElement>(
+    grph: &SketchGraph<U>,
+    in_facts_path: &str,
+    out_facts_path: &str,
+) -> anyhow::Result<()> {
+    generate_datalog_context(grph, in_facts_path)?;
+    run_datalog_binary(
+        "souffle",
+        "./lowering/type_inference.dl",
+        in_facts_path,
+        out_facts_path,
+    )
+}
