@@ -54,9 +54,8 @@ Scalar(node) :- !is_bottom(node), !is_top(node), node(node).
 
 // a type can be a first class type or a function type. Pointers can point to non first class types. This is
 // how we support function pointers.
-.decl Type(node: NodeId)
-Type(node) :- FirstClassType(node).
-.output Type
+.decl ComplexType(node: NodeId)
+ComplexType(node) :- FirstClassType(node).
 
 .decl AllOutgoingFields(src: NodeId)
 AllOutgoingFields(src_id) :- !out_param(src_id, _), has_field(src_id, _, _, _),
@@ -97,9 +96,17 @@ FieldWithoutType(node) :- node(node), HasField(_, node, tgt), FirstClassType(tgt
 
 .decl Structure(node: NodeId)
 Structure(node) :- MultiFieldStructure(node), CompatibleStructure(node), FieldWithoutType(node).
-.output Structure
 
 
+.decl HasUntypedOutgoingEdge(node: NodeId)
+HasUntypedOutgoingEdge(node) :- edge(node, tgt), !ComplexType(tgt).
+
+.decl AllChildrenTyped(node: NodeId)
+AllChildrenTyped(node) :- !HasUntypedOutgoingEdge(node), node(node).
+
+.decl Type(node: NodeId)
+Type(node) :- AllChildrenTyped(node), ComplexType(node).
+.output Type
 
 .decl NodesCanBeAliased(node: NodeId, tgt: NodeId)
 NodesCanBeAliased(node, tgt) :- !MultiFieldStructure(node), CompatibleStructure(node), HasField(_, node, tgt).
@@ -113,9 +120,9 @@ Alias(node, tgt) :- NodesCanBeAliased(node, tgt), FirstClassType(tgt).
 
 .decl OnlyOutgoingStoresAndLoads(node: NodeId)
 OnlyOutgoingStoresAndLoads(node) :- (can_load(node, _); can_store(node, _)),
-    has_field(node, _, _, _),
-    in_param(node, _, _),
-    out_param(node, _).
+    !has_field(node, _, _, _),
+    !in_param(node, _, _),
+    !out_param(node, _).
 
 // TODO(ian): make this recursive to check all the way down a chain of aliases
 .decl NotEqualTypes(node1: NodeId, node2: NodeId)
@@ -127,7 +134,8 @@ HasOutgoingEdgesToDifferentTypes(node) :-
     edge(node, dst_node1),
     edge(node, dst_node2),
     NotEqualTypes(dst_node1, dst_node2).
+.output HasOutgoingEdgesToDifferentTypes
 
 .decl Pointer(node: NodeId, tgt: NodeId)
-Pointer(node, tgt) :- (can_load(node, tgt); can_store(node, tgt)), !HasOutgoingEdgesToDifferentTypes(node), OnlyOutgoingStoresAndLoads(node), Type(tgt).
+Pointer(node, tgt) :- (can_load(node, tgt); can_store(node, tgt)), !HasOutgoingEdgesToDifferentTypes(node), OnlyOutgoingStoresAndLoads(node), ComplexType(tgt).
 .output Pointer
