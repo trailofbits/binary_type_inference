@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+message CTypeMapping {
+  map<uint32, CType> node_types = 1;
+  map<string, uint32> type_variable_repr_nodes = 2;
+}
+
+message Parameter {
+  uint32 parameter_index = 1;
+  uint32 type = 2;
+}
+
+message Function {
+  repeated Parameter parameters = 1;
+  uint32 return_type = 2;
+}
+
+message Field {
+  uint32 bit_size = 1;
+  uint32 byte_offset = 2;
+  uint32 type = 3;
+}
+
+message Structure { repeated Field fields = 1; }
+
+message Alias { uint32 to_type = 1; }
+
+message Primitive { string type_constant = 1; }
+
+message Pointer { uint32 to_type = 1; }
+
+message CTypes {
+  oneof inner_type {
+    Function function = 1;
+    Structure structure = 2;
+    Alias alias = 3;
+    Primitive primitive = 4;
+    Pointer pointer = 5;
+  }
+}

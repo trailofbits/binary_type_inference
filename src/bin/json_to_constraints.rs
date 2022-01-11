@@ -148,6 +148,7 @@ fn main() -> anyhow::Result<()> {
         "/tmp/facts_in",
         "/tmp/facts_out",
     )?;
+    println!("{:?}", ctype);
 
     Ok(())
 }
