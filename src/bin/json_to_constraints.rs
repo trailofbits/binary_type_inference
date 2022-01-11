@@ -143,7 +143,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("{}", Dot::new(&displayable_graph));
 
-    binary_type_inference::lowering::run_datalog(
+    let ctype = binary_type_inference::lowering::collect_ctypes(
         &labeled_graph,
         "/tmp/facts_in",
         "/tmp/facts_out",

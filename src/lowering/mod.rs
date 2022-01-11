@@ -1,8 +1,13 @@
-use csv::WriterBuilder;
+use csv::{DeserializeRecordsIter, ReaderBuilder, WriterBuilder};
+use cwe_checker_lib::analysis::pointer_inference::PointerInference;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
 };
+
+use anyhow::{Context, Result};
+
+use serde::{de::DeserializeOwned, Deserialize};
 
 use std::process;
 
@@ -20,10 +25,24 @@ pub struct CTypeAssignments {
     assignments: HashMap<NodeIndex, CType>,
 }
 
+#[derive(Deserialize)]
+struct PointerRecord {
+    node: NodeIndex,
+    tgt: NodeIndex,
+}
+
+impl NodeRepr for PointerRecord {
+    fn get_node(&self) -> NodeIndex {
+        self.tgt
+    }
+}
+
 pub enum CType {
     /// Primitive means the node has a primitive type associated with its label
-    Primitive,
-    Pointer(NodeIndex),
+    Primitive(String),
+    Pointer {
+        target: NodeIndex,
+    },
     Alias(NodeIndex),
     /// Rperesents the fields of a structure. These fields are guarenteed to not overlap, however, may be out of order and require padding.
     Structure(Vec<Field>),
@@ -40,11 +59,283 @@ pub struct Parameter {
     type_index: NodeIndex,
 }
 
+impl From<InParamRecord> for Parameter {
+    fn from(rec: InParamRecord) -> Self {
+        Parameter {
+            index: rec.idx,
+            type_index: rec.dst_node,
+        }
+    }
+}
+
 /// Represents a field with an offset and type.
 pub struct Field {
     byte_offset: usize,
     bit_sz: usize,
     type_index: NodeIndex,
+}
+
+impl From<FieldRecord> for Field {
+    fn from(fr: FieldRecord) -> Self {
+        Field {
+            byte_offset: fr.offset,
+            bit_sz: fr.size,
+            type_index: fr.child_type,
+        }
+    }
+}
+
+// A detached field record (Go attach it!)
+#[derive(Deserialize)]
+struct FieldRecord {
+    node: NodeIndex,
+    size: usize,
+    offset: usize,
+    child_type: NodeIndex,
+}
+
+impl NodeRepr for FieldRecord {
+    fn get_node(&self) -> NodeIndex {
+        self.node
+    }
+}
+
+// A detached in param
+#[derive(Deserialize)]
+struct InParamRecord {
+    src_node: NodeIndex,
+    dst_node: NodeIndex,
+    idx: usize,
+}
+
+impl NodeRepr for InParamRecord {
+    fn get_node(&self) -> NodeIndex {
+        self.src_node
+    }
+}
+
+#[derive(Deserialize)]
+struct PrimitiveRecord {
+    node_id: NodeIndex,
+    name: String,
+}
+
+impl NodeRepr for PrimitiveRecord {
+    fn get_node(&self) -> NodeIndex {
+        self.node_id
+    }
+}
+
+// A detached out param
+#[derive(Deserialize)]
+struct OutParamRecord {
+    src_node: NodeIndex,
+    dst_node: NodeIndex,
+}
+
+impl NodeRepr for OutParamRecord {
+    fn get_node(&self) -> NodeIndex {
+        self.src_node
+    }
+}
+
+trait NodeRepr {
+    fn get_node(&self) -> NodeIndex;
+}
+
+struct FactsReader {
+    facts_out_path: PathBuf,
+}
+
+#[derive(Deserialize)]
+struct Function {
+    node: NodeIndex,
+}
+
+impl NodeRepr for Function {
+    fn get_node(&self) -> NodeIndex {
+        self.node
+    }
+}
+
+#[derive(Deserialize)]
+struct Structure {
+    node: NodeIndex,
+}
+
+impl NodeRepr for Structure {
+    fn get_node(&self) -> NodeIndex {
+        self.node
+    }
+}
+
+#[derive(Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct Type {
+    node: NodeIndex,
+}
+
+#[derive(Deserialize)]
+struct Alias {
+    node: NodeIndex,
+    tgt: NodeIndex,
+}
+
+impl NodeRepr for Alias {
+    fn get_node(&self) -> NodeIndex {
+        self.node
+    }
+}
+
+impl FactsReader {
+    pub fn new(pth: PathBuf) -> FactsReader {
+        FactsReader {
+            facts_out_path: pth,
+        }
+    }
+
+    fn deserialize_file<T: DeserializeOwned>(&self, tgt_file: &str) -> Result<Vec<T>> {
+        let pth = immutably_push(&self.facts_out_path, tgt_file);
+        let mut csv_reader = ReaderBuilder::new()
+            .delimiter('\t' as u8)
+            .from_path(pth.clone())
+            .with_context(move || format!("Attempting to read csv {}", pth.to_str().unwrap()))?;
+        let x: DeserializeRecordsIter<_, T> = csv_reader.deserialize();
+        // TODO(ian): map errors
+        x.map(|x| x.map_err(|op| anyhow::anyhow!("{} Csv record format error {:?}", tgt_file, op)))
+            .collect()
+    }
+
+    fn get_type_set(&self) -> Result<HashSet<Type>> {
+        self.deserialize_file("Type.csv")
+            .map(|v| v.into_iter().collect())
+    }
+
+    fn deserialize_filtered_by_type<T: DeserializeOwned + NodeRepr>(
+        &self,
+        tgt_file: &str,
+    ) -> Result<Vec<T>> {
+        let x = self.deserialize_file(tgt_file)?;
+        let ty = self.get_type_set()?;
+        let ty: HashSet<_> = ty.into_iter().map(|x| x.node).collect();
+        Ok(x.into_iter()
+            .filter(|x: &T| ty.contains(&x.get_node()))
+            .collect())
+    }
+
+    pub fn get_structures(&self) -> Result<HashMap<NodeIndex, CType>> {
+        let structs = self.collect_types_from::<Structure, FieldRecord, Field>(
+            "Structure.csv",
+            "StructureField.csv",
+        )?;
+
+        Ok(structs
+            .into_iter()
+            .map(|(idx, v)| (idx, CType::Structure(v)))
+            .collect())
+    }
+
+    fn collect_map_to_record<T: DeserializeOwned + NodeRepr>(
+        &self,
+        type_source: &str,
+    ) -> Result<HashMap<NodeIndex, T>> {
+        self.deserialize_filtered_by_type(type_source)
+            .map(|v: Vec<T>| {
+                v.into_iter()
+                    .map(|nd| (nd.get_node(), nd))
+                    .collect::<HashMap<_, _>>()
+            })
+    }
+
+    fn collect_types_from<
+        T: DeserializeOwned + NodeRepr,
+        V: DeserializeOwned + NodeRepr,
+        C: From<V>,
+    >(
+        &self,
+        type_source: &str,
+        builder_source: &str,
+    ) -> Result<HashMap<NodeIndex, Vec<C>>> {
+        let mut collectors: HashMap<NodeIndex, Vec<C>> = self
+            .deserialize_filtered_by_type(type_source)
+            .map(|v: Vec<T>| {
+                v.into_iter()
+                    .map(|nd| (nd.get_node(), Vec::new()))
+                    .collect::<HashMap<_, _>>()
+            })?;
+
+        let fields: Vec<V> = self.deserialize_filtered_by_type(builder_source)?;
+
+        fields.into_iter().for_each(|fr| {
+            if let Some(target_fields) = collectors.get_mut(&fr.get_node()) {
+                target_fields.push(C::from(fr));
+            }
+        });
+
+        Ok(collectors)
+    }
+
+    pub fn get_functions(&self) -> Result<HashMap<NodeIndex, CType>> {
+        let function_params: HashMap<NodeIndex, Vec<Parameter>> = self
+            .collect_types_from::<Function, InParamRecord, Parameter>(
+                "Function.csv",
+                "in_param.csv",
+            )?;
+
+        let function_returns = self.collect_map_to_record::<OutParamRecord>("out_param.csv")?;
+
+        Ok(function_params
+            .into_iter()
+            .map(|(idx, params)| {
+                let return_type = function_returns
+                    .get(&idx)
+                    .expect("Should not type as a function if does not have a return type");
+                let func = CType::Function {
+                    params,
+                    return_ty: return_type.dst_node,
+                };
+                (idx, func)
+            })
+            .collect())
+    }
+
+    pub fn get_pointers(&self) -> Result<HashMap<NodeIndex, CType>> {
+        let pointers = self.collect_map_to_record::<PointerRecord>("Pointer.csv")?;
+        Ok(pointers
+            .into_iter()
+            .map(|(idx, record)| (idx, CType::Pointer { target: record.tgt }))
+            .collect())
+    }
+
+    pub fn get_aliases(&self) -> Result<HashMap<NodeIndex, CType>> {
+        let aliases = self.collect_map_to_record::<Alias>("Alias.csv")?;
+        Ok(aliases
+            .into_iter()
+            .map(|(idx, alias)| (idx, CType::Alias(alias.tgt)))
+            .collect())
+    }
+
+    pub fn get_primitive(&self) -> Result<HashMap<NodeIndex, CType>> {
+        let primitive = self.collect_map_to_record::<PrimitiveRecord>("primitive.csv")?;
+        Ok(primitive
+            .into_iter()
+            .map(|(idx, prim)| (idx, CType::Primitive(prim.name)))
+            .collect())
+    }
+
+    pub fn get_assignments(&self) -> Result<HashMap<NodeIndex, CType>> {
+        let structs = self.get_structures()?;
+        let functions = self.get_functions()?;
+        let prims = self.get_primitive()?;
+        let alias = self.get_aliases()?;
+
+        let mut total = HashMap::new();
+
+        total.extend(structs);
+        total.extend(functions);
+        total.extend(prims);
+        total.extend(alias);
+        Ok(total)
+    }
 }
 
 struct FactsContext<'a, U: NamedLatticeElement> {
@@ -175,6 +466,20 @@ impl<'a, U: NamedLatticeElement> FactsContext<'a, U> {
             .map(|x| vec![x.index().to_string()])
             .collect()
     }
+
+    fn get_primitive_records(&self) -> Vec<Vec<String>> {
+        self.grph
+            .get_graph()
+            .node_references()
+            .filter_map(|(idx, nd)| {
+                if !nd.is_bot() && !nd.is_top() {
+                    Some(vec![idx.index().to_string(), nd.get_name().to_owned()])
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 struct FactsFileConfig {
@@ -186,6 +491,7 @@ struct FactsFileConfig {
     bottom_path: PathBuf,
     top_path: PathBuf,
     node_path: PathBuf,
+    primitive_path: PathBuf,
 }
 
 fn generate_facts_file<P>(records: &Vec<Vec<String>>, path: P) -> anyhow::Result<()>
@@ -216,6 +522,7 @@ fn generate_facts_files<U: NamedLatticeElement>(
     generate_facts_file(&fcontext.generate_is_bottom_records(), config.bottom_path)?;
     generate_facts_file(&fcontext.generate_is_top_records(), config.top_path)?;
     generate_facts_file(&fcontext.get_node_records(), config.node_path)?;
+    generate_facts_file(&fcontext.get_primitive_records(), config.primitive_path)?;
 
     Ok(())
 }
@@ -246,6 +553,7 @@ fn generate_datalog_context<U: NamedLatticeElement>(
         top_path: immutably_push(&pb, "is_top.facts"),
         bottom_path: immutably_push(&pb, "is_bottom.facts"),
         node_path: immutably_push(&pb, "node.facts"),
+        primitive_path: immutably_push(&pb, "primitive.facts"),
     };
 
     generate_facts_files(grph, facts_file_config)
@@ -269,7 +577,7 @@ fn run_datalog_binary(
 }
 
 /// Generates a facts dir from the sketch graph and runs souffle to infer lowered relations in the output directory
-pub fn run_datalog<U: NamedLatticeElement>(
+fn run_datalog<U: NamedLatticeElement>(
     grph: &SketchGraph<U>,
     in_facts_path: &str,
     out_facts_path: &str,
@@ -281,4 +589,15 @@ pub fn run_datalog<U: NamedLatticeElement>(
         in_facts_path,
         out_facts_path,
     )
+}
+
+/// Collects ctypes for a graph
+pub fn collect_ctypes<U: NamedLatticeElement>(
+    grph: &SketchGraph<U>,
+    in_facts_path: &str,
+    out_facts_path: &str,
+) -> anyhow::Result<HashMap<NodeIndex, CType>> {
+    run_datalog(grph, in_facts_path, out_facts_path)?;
+    let freader = FactsReader::new(PathBuf::from(out_facts_path));
+    freader.get_assignments()
 }
