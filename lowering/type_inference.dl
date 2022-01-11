@@ -14,6 +14,10 @@
 .decl is_bottom(node_id: NodeId)
 .input is_bottom
 
+.decl  primitive(node_id: NodeId, name: symbol)
+.input primitive
+.output primitive(headers=true)
+
 .decl is_top(node_id: NodeId)
 .input is_top
 
@@ -29,11 +33,11 @@
 
 .decl in_param(src_node: NodeId, dst_node: NodeId, idx: ParamIdx)
 .input in_param
-.output in_param
+.output in_param(headers=true)
 
 .decl out_param(src_node: NodeId, dst_node: NodeId)
 .input out_param
-.output out_param
+.output out_param(headers=true)
 // TODO(ian): make this an input with an edge id, then we can do implication without tons of negation by
 // creating a relation like only stores, !edge(src, _, id) where !can_store(id) fixes a lot of code duplication
 // Edge properties would be attached to the edge id
@@ -69,7 +73,7 @@ ConflictingIn(node) :- in_param(node, tgt1, idx1), in_param(node, tgt2, idx2), t
 .decl Function(node: NodeId)
 Function(node) :-
     AllOutgoingAreOutsOrIns(node), !ConflictingOut(node), !ConflictingIn(node).
-.output Function
+.output Function(headers=true)
 
 .decl AllOutgoingAreOutsOrIns(node: NodeId)
 AllOutgoingAreOutsOrIns(src_node) :- 
@@ -107,7 +111,7 @@ MultiFieldStructure(node) :- HasField(_, node, dst_node1), HasField(_,node, dst_
 
 .decl StructureField(node: NodeId, size: Bits, offset: Bytes, child_type: NodeId)
 StructureField(node, size, offset, child_type) :- Structure(node), HasField([size,offset],node, child_type), FirstClassType(child_type).
-.output StructureField
+.output StructureField(headers=true)
 
 // TODO(ian): right now we are checking that just one field has a type we need to check that all fields have a type.
 // This is going to be really annoying 
@@ -116,7 +120,7 @@ FieldWithoutType(node) :- node(node), HasField(_, node, tgt), FirstClassType(tgt
 
 .decl Structure(node: NodeId)
 Structure(node) :- MultiFieldStructure(node), CompatibleStructure(node), FieldWithoutType(node).
-.output Structure
+.output Structure(headers=true)
 
 .decl HasUntypedOutgoingEdge(node: NodeId)
 HasUntypedOutgoingEdge(node) :- edge(node, tgt), !ComplexType(tgt).
@@ -126,7 +130,7 @@ AllChildrenTyped(node) :- !HasUntypedOutgoingEdge(node), node(node).
 
 .decl Type(node: NodeId)
 Type(node) :- AllChildrenTyped(node), ComplexType(node).
-.output Type
+.output Type(headers=true)
 
 .decl NodesCanBeAliased(node: NodeId, tgt: NodeId)
 NodesCanBeAliased(node, tgt) :- !MultiFieldStructure(node), CompatibleStructure(node), HasField(_, node, tgt).
@@ -136,7 +140,7 @@ NodesCanBeAliased(node, tgt) :- NodesCanBeAliased(node, mid), NodesCanBeAliased(
 // Catch one field structs as type aliases
 .decl Alias(node: NodeId, tgt: NodeId)
 Alias(node, tgt) :- NodesCanBeAliased(node, tgt), FirstClassType(tgt).
-.output Alias
+.output Alias(headers=true)
 
 
 .decl OnlyOutgoingStoresAndLoads(node: NodeId)
@@ -158,4 +162,4 @@ HasOutgoingEdgesToDifferentTypes(node) :-
 
 .decl Pointer(node: NodeId, tgt: NodeId)
 Pointer(node, tgt) :- (can_load(node, tgt); can_store(node, tgt)), !HasOutgoingEdgesToDifferentTypes(node), OnlyOutgoingStoresAndLoads(node), ComplexType(tgt).
-.output Pointer
+.output Pointer(headers=true)
