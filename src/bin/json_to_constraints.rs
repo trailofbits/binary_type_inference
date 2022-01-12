@@ -1,7 +1,7 @@
 use binary_type_inference::{
     constraint_generation,
     constraints::{parse_constraint_set, DerivedTypeVar, TyConstraint, TypeVariable},
-    node_context,
+    ctypes, node_context,
     solver::{
         constraint_graph::{RuleContext, FSA},
         type_lattice::{LatticeDefinition, NamedLatticeElement},
@@ -10,11 +10,15 @@ use binary_type_inference::{
     util,
 };
 use clap::{App, Arg};
-use cwe_checker_lib::{analysis::pointer_inference::Config, utils::binary::RuntimeMemoryImage};
+use cwe_checker_lib::{
+    analysis::pointer_inference::Config, intermediate_representation::Tid,
+    utils::binary::RuntimeMemoryImage,
+};
 use petgraph::dot::Dot;
+use prost::Message;
 use regex::Regex;
-use std::collections::BTreeSet;
-use std::collections::HashSet;
+use std::{collections::BTreeSet, convert::TryFrom, io::Write};
+use std::{collections::HashSet, convert::TryInto};
 use tempdir::TempDir;
 
 fn main() -> anyhow::Result<()> {
@@ -24,12 +28,17 @@ fn main() -> anyhow::Result<()> {
         .arg(Arg::with_name("input_json").required(true).index(2))
         .arg(Arg::with_name("lattice_json").required(true))
         .arg(Arg::with_name("additional_constraints_file").required(true))
-        .arg(Arg::with_name("target_var").required(false))
+        .arg(Arg::with_name("interesting_tids").required(true))
         .get_matches();
 
     let input_bin = matches.value_of("input_bin").unwrap();
     let input_json = matches.value_of("input_json").unwrap();
     let lattice_json = matches.value_of("lattice_json").unwrap();
+    let tids_file = matches.value_of("interesting_tids").unwrap();
+    let tids_file = std::fs::File::open(tids_file)?;
+    let interesting_tids: Vec<Tid> = serde_json::from_reader(tids_file)?;
+    let interesting_tids: HashSet<Tid> = interesting_tids.into_iter().collect();
+
     let additional_constraints_file = matches.value_of("additional_constraints_file").unwrap();
     let constraints_string = std::fs::read_to_string(additional_constraints_file)
         .expect("unable to read constraints file");
@@ -90,20 +99,10 @@ fn main() -> anyhow::Result<()> {
     println!("done cons");
 
     let mut only_interestings = BTreeSet::new();
-    //let reg = Regex::new(r"sub_(\d+)(@ESP)?").unwrap();
 
-    let reg = Regex::new(r"^sub_(\d+)$").unwrap();
-    for cons in constraints.iter() {
-        if let TyConstraint::SubTy(s) = cons {
-            if reg.is_match(s.rhs.get_base_variable().get_name()) {
-                only_interestings.insert(s.rhs.get_base_variable().clone());
-            }
-
-            if reg.is_match(s.lhs.get_base_variable().get_name()) {
-                only_interestings.insert(s.lhs.get_base_variable().clone());
-            }
-        }
-    }
+    interesting_tids.iter().for_each(|x| {
+        only_interestings.insert(binary_type_inference::constraint_generation::tid_to_tvar(x));
+    });
 
     let mut interesting_and_lattice = only_interestings.clone();
 
@@ -153,7 +152,28 @@ fn main() -> anyhow::Result<()> {
         facts_out_path.path(),
     )?;
 
-    let pb = binary_type_inference::lowering::convert_mapping_to_profobuf(ctype);
+    let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(ctype);
+
+    interesting_tids.iter().for_each(|x| {
+        let tvar = binary_type_inference::constraint_generation::tid_to_tvar(x);
+
+        if let Some(idx) = grph.get_node_index_for_variable(
+            &binary_type_inference::constraints::DerivedTypeVar::new(tvar),
+        ) {
+            let mut tid_to_node_idx = binary_type_inference::ctypes::TidToNodeIndex::default();
+            tid_to_node_idx.node_index = idx.index().try_into().unwrap();
+            let mut tid = binary_type_inference::ctypes::Tid::default();
+            tid.address = x.address.clone();
+            tid.name = x.get_str_repr().to_owned();
+            tid_to_node_idx.tid = Some(tid);
+            pb.type_variable_repr_nodes.push(tid_to_node_idx);
+        }
+    });
+
+    let mut buf = Vec::new();
+    pb.encode(&mut buf)?;
+
+    std::io::stdout().write_all(&buf)?;
 
     Ok(())
 }

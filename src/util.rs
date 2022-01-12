@@ -1,10 +1,12 @@
 use anyhow::Result;
 use cwe_checker_lib::{
-    intermediate_representation::Project,
+    intermediate_representation::{Project, Tid},
     utils::log::{LogLevel, LogMessage},
 };
 use log::{debug, error, info};
-use std::io::Read;
+use std::{collections::HashMap, io::Read};
+
+use crate::{constraint_generation, constraints::TypeVariable};
 
 /// Convert cwe logs into our logging infra
 pub fn log_cwe_message(msg: &LogMessage) {
@@ -29,6 +31,25 @@ pub fn get_intermediate_representation_for_reader(
 
     let ir = pcode_proj.into_ir_project(base_addr);
     Ok(ir)
+}
+
+/// Maps procedure type variables to tids
+pub fn procedure_type_variable_map(proj: &Project) -> HashMap<TypeVariable, Tid> {
+    let tids = proj
+        .program
+        .term
+        .subs
+        .iter()
+        .map(|sub| (constraint_generation::term_to_tvar(sub), sub.tid.clone()));
+
+    let extern_tids = proj
+        .program
+        .term
+        .extern_symbols
+        .iter()
+        .map(|(tid, _)| (constraint_generation::tid_to_tvar(tid), tid.clone()));
+
+    tids.chain(extern_tids).collect()
 }
 
 #[cfg(test)]
