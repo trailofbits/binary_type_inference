@@ -14,7 +14,9 @@
             pname = "binary_type_inference";
             version = "0.1.0";
             src = self;
-            cargoSha256 = "sha256-cez8pJ/uwj+PHAPQwpSB4CKaxcP8Uvv8xguOrVXR2xE=";
+            cargoLock = {
+              lockFile = ./Cargo.lock;
+            };
           };
       in {
         defaultPackage = binary_type_inference;
