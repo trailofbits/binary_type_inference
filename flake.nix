@@ -1,89 +1,23 @@
-# This file is pretty general, and you can adapt it in your project replacing
-# only `name` and `description` below.
-
 {
-  description = "infers types given pcode IR";
+  description = "Binary type inference";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    utils.url = "github:numtide/flake-utils";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    crate2nix = {
-      url = "github:kolloch/crate2nix";
-      flake = false;
-    };
-    flake-compat = {
-      url = "github:edolstra/flake-compat";
-      flake = false;
-    };
+    nixpkgs.url = "github:nixos/nixpkgs";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, utils, rust-overlay, crate2nix, ... }:
-    let
-      name = "binary_type_inference";
-    in
-    utils.lib.eachDefaultSystem
-      (system:
-        let
-          # Imports
-          pkgs = import nixpkgs {
-            inherit system;
-            overlays = [
-              rust-overlay.overlay
-              (self: super: {
-                # Because rust-overlay bundles multiple rust packages into one
-                # derivation, specify that mega-bundle here, so that crate2nix
-                # will use them automatically.
-                rustc = self.rust-bin.stable.latest.default;
-                cargo = self.rust-bin.stable.latest.default;
-              })
-            ];
+  outputs = { self, nixpkgs, flake-utils }:
+      flake-utils.lib.eachDefaultSystem (system:
+      let 
+        pkgs = nixpkgs.legacyPackages.${system};
+        binary_type_inference = pkgs.rustPlatform.buildRustPackage rec {
+            pname = "binary_type_inference";
+            version = "0.1.0";
+            src = self;
+            cargoSha256 = "sha256-cez8pJ/uwj+PHAPQwpSB4CKaxcP8Uvv8xguOrVXR2xE=";
           };
-          inherit (import "${crate2nix}/tools.nix" { inherit pkgs; })
-            generatedCargoNix;
-
-          # Create the cargo2nix project
-          project = pkgs.callPackage
-            (generatedCargoNix {
-              inherit name;
-              src = ./.;
-            })
-            {
-              # Individual crate overrides go here
-              # Example: https://github.com/balsoft/simple-osd-daemons/blob/6f85144934c0c1382c7a4d3a2bbb80106776e270/flake.nix#L28-L50
-              defaultCrateOverrides = pkgs.defaultCrateOverrides // {
-                # The app crate itself is overriden here. Typically we
-                # configure non-Rust dependencies (see below) here.
-                ${name} = oldAttrs: {
-                  inherit buildInputs nativeBuildInputs;
-                } // buildEnvVars;
-              };
-            };
-
-          # Configuration for the non-Rust dependencies
-          buildInputs = with pkgs; [ pkgs.souffle ];
-          nativeBuildInputs = with pkgs; [ rustc cargo pkgconfig nixpkgs-fmt ];
-          buildEnvVars = { };
-        in
-        rec {
-          packages.${name} = project.rootCrate.build;
-
-          # `nix build`
-          defaultPackage = packages.${name};
-
-          # `nix run`
-          apps.${name} = utils.lib.mkApp {
-            inherit name;
-            drv = packages.${name};
-          };
-          defaultApp = apps.${name};
-
-          # `nix develop`
-          devShell = pkgs.mkShell
-            {
-              inherit buildInputs nativeBuildInputs;
-              RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
-            } // buildEnvVars;
-        }
-      );
+      in {
+        defaultPackage = binary_type_inference;
+        devShell = pkgs.mkShell { buildInputs = [ pkgs.cargo pkgs.rustc pkgs.souffle ]; };
+      });
 }
