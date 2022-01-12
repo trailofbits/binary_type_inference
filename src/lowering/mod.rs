@@ -2,8 +2,12 @@ use csv::{DeserializeRecordsIter, ReaderBuilder, WriterBuilder};
 use cwe_checker_lib::analysis::pointer_inference::PointerInference;
 use std::{
     collections::{HashMap, HashSet},
+    ffi::OsStr,
     path::{Path, PathBuf},
 };
+
+use crate::ctypes::{self, CTypeMapping};
+use std::convert::TryInto;
 
 use anyhow::{Context, Result};
 
@@ -540,9 +544,9 @@ where
 }
 
 /// Generates a directory of facts files for ingestion in datalog heuristics
-fn generate_datalog_context<U: NamedLatticeElement>(
+fn generate_datalog_context<U: NamedLatticeElement, P: AsRef<Path>>(
     grph: &SketchGraph<U>,
-    in_facts_path: &str,
+    in_facts_path: P,
 ) -> anyhow::Result<()> {
     let mut pb = PathBuf::new();
     pb.push(in_facts_path);
@@ -562,11 +566,11 @@ fn generate_datalog_context<U: NamedLatticeElement>(
     generate_facts_files(grph, facts_file_config)
 }
 
-fn run_datalog_binary(
-    souffle_command: &str,
-    datalog_file: &str,
-    in_facts_path: &str,
-    out_facts_path: &str,
+fn run_datalog_binary<S1: AsRef<OsStr>, S2: AsRef<OsStr>, S3: AsRef<OsStr>, S4: AsRef<OsStr>>(
+    souffle_command: S1,
+    datalog_file: S2,
+    in_facts_path: S3,
+    out_facts_path: S4,
 ) -> anyhow::Result<()> {
     let _ = process::Command::new(souffle_command)
         .arg(datalog_file)
@@ -580,27 +584,97 @@ fn run_datalog_binary(
 }
 
 /// Generates a facts dir from the sketch graph and runs souffle to infer lowered relations in the output directory
-fn run_datalog<U: NamedLatticeElement>(
+fn run_datalog<U: NamedLatticeElement, T1: AsRef<Path>, T2: AsRef<Path>>(
     grph: &SketchGraph<U>,
-    in_facts_path: &str,
-    out_facts_path: &str,
+    in_facts_path: T1,
+    out_facts_path: T2,
 ) -> anyhow::Result<()> {
-    generate_datalog_context(grph, in_facts_path)?;
+    generate_datalog_context(grph, in_facts_path.as_ref())?;
     run_datalog_binary(
         "souffle",
         "./lowering/type_inference.dl",
-        in_facts_path,
-        out_facts_path,
+        in_facts_path.as_ref().as_os_str(),
+        out_facts_path.as_ref().as_os_str(),
     )
 }
 
 /// Collects ctypes for a graph
-pub fn collect_ctypes<U: NamedLatticeElement>(
+pub fn collect_ctypes<U: NamedLatticeElement, P1: AsRef<Path>, P2: AsRef<Path>>(
     grph: &SketchGraph<U>,
-    in_facts_path: &str,
-    out_facts_path: &str,
+    in_facts_path: P1,
+    out_facts_path: P2,
 ) -> anyhow::Result<HashMap<NodeIndex, CType>> {
-    run_datalog(grph, in_facts_path, out_facts_path)?;
-    let freader = FactsReader::new(PathBuf::from(out_facts_path));
+    run_datalog(grph, in_facts_path, out_facts_path.as_ref())?;
+    let freader = FactsReader::new(PathBuf::from(out_facts_path.as_ref()));
     freader.get_assignments()
+}
+
+fn param_to_protofbuf(internal_param: Parameter) -> ctypes::Parameter {
+    let mut param = ctypes::Parameter::default();
+    param.parameter_index = internal_param.index.try_into().unwrap();
+    param.r#type = internal_param.type_index.index().try_into().unwrap();
+    param
+}
+
+fn field_to_protobuf(internal_field: Field) -> ctypes::Field {
+    let mut field = ctypes::Field::default();
+    field.bit_size = internal_field.bit_sz.try_into().unwrap();
+    field.byte_offset = internal_field.byte_offset.try_into().unwrap();
+    field.r#type = internal_field.type_index.index().try_into().unwrap();
+    field
+}
+
+pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
+    match ct {
+        CType::Alias(tgt) => {
+            let mut alias = ctypes::Alias::default();
+            alias.to_type = tgt.index().try_into().unwrap();
+            ctypes::c_type::InnerType::Alias(alias)
+        }
+        CType::Function { params, return_ty } => {
+            let mut func = ctypes::Function::default();
+            params
+                .into_iter()
+                .for_each(|x| func.parameters.push(param_to_protofbuf(x)));
+
+            func.return_type = return_ty.index().try_into().unwrap();
+            ctypes::c_type::InnerType::Function(func)
+        }
+        CType::Pointer { target } => {
+            let mut ptr = ctypes::Pointer::default();
+            ptr.to_type = target.index().try_into().unwrap();
+            ctypes::c_type::InnerType::Pointer(ptr)
+        }
+        CType::Primitive(val) => {
+            let mut prim = ctypes::Primitive::default();
+            prim.type_constant = val.clone();
+            ctypes::c_type::InnerType::Primitive(prim)
+        }
+        CType::Structure(fields) => {
+            let mut st = ctypes::Structure::default();
+            fields
+                .into_iter()
+                .for_each(|x| st.fields.push(field_to_protobuf(x)));
+
+            ctypes::c_type::InnerType::Structure(st)
+        }
+    }
+}
+fn convert_ctype_to_protobuf(internal_ty: CType) -> ctypes::CType {
+    let mut ty = ctypes::CType::default();
+    ty.inner_type = Some(produce_inner_types(internal_ty));
+    ty
+}
+
+// TODO(ian): dont unwrap u32s
+pub fn convert_mapping_to_profobuf(mp: HashMap<NodeIndex, CType>) -> CTypeMapping {
+    let mut mapping = CTypeMapping::default();
+    mp.into_iter().for_each(|(idx, ctype)| {
+        mapping.node_types.insert(
+            idx.index().try_into().unwrap(),
+            convert_ctype_to_protobuf(ctype),
+        );
+    });
+
+    mapping
 }
