@@ -1,1 +1,4 @@
 
+[submodule "cwe_checker"]
+	path = cwe_checker
+	url = git@github.com:trailofbits/cwe_checker.git
