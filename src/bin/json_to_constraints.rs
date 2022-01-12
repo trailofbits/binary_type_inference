@@ -29,12 +29,20 @@ fn main() -> anyhow::Result<()> {
         .arg(Arg::with_name("lattice_json").required(true))
         .arg(Arg::with_name("additional_constraints_file").required(true))
         .arg(Arg::with_name("interesting_tids").required(true))
+        .arg(
+            Arg::with_name("out")
+                .long("out")
+                .required(true)
+                .takes_value(true),
+        )
         .get_matches();
 
     let input_bin = matches.value_of("input_bin").unwrap();
     let input_json = matches.value_of("input_json").unwrap();
     let lattice_json = matches.value_of("lattice_json").unwrap();
     let tids_file = matches.value_of("interesting_tids").unwrap();
+    let out_file = matches.value_of("out").unwrap();
+
     let tids_file = std::fs::File::open(tids_file)?;
     let interesting_tids: Vec<Tid> = serde_json::from_reader(tids_file)?;
     let interesting_tids: HashSet<Tid> = interesting_tids.into_iter().collect();
@@ -172,8 +180,8 @@ fn main() -> anyhow::Result<()> {
 
     let mut buf = Vec::new();
     pb.encode(&mut buf)?;
-
-    std::io::stdout().write_all(&buf)?;
+    let mut out_file = std::fs::File::create(out_file)?;
+    out_file.write_all(&buf);
 
     Ok(())
 }
