@@ -29,5 +29,10 @@ pub mod graph_algos;
 /// Takes a sketch graph of types and lowers this type information to ctypes, using datalog defined heurisitics.
 pub mod lowering;
 
+/// Protobuf ctypes
+pub mod ctypes {
+    include!(concat!(env!("OUT_DIR"), "/ctypes.rs"));
+}
+
 #[cfg(test)]
 mod tests {}

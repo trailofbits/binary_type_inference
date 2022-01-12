@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+package ctypes;
+
 message CTypeMapping {
   map<uint32, CType> node_types = 1;
   map<string, uint32> type_variable_repr_nodes = 2;
@@ -29,7 +31,7 @@ message Primitive { string type_constant = 1; }
 
 message Pointer { uint32 to_type = 1; }
 
-message CTypes {
+message CType {
   oneof inner_type {
     Function function = 1;
     Structure structure = 2;

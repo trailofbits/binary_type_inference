@@ -15,6 +15,7 @@ use petgraph::dot::Dot;
 use regex::Regex;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+use tempdir::TempDir;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -143,12 +144,16 @@ fn main() -> anyhow::Result<()> {
 
     println!("{}", Dot::new(&displayable_graph));
 
+    let facts_in_path = TempDir::new("facts_in")?;
+    let facts_out_path = TempDir::new("facts_out")?;
+
     let ctype = binary_type_inference::lowering::collect_ctypes(
         &labeled_graph,
-        "/tmp/facts_in",
-        "/tmp/facts_out",
+        facts_in_path.path(),
+        facts_out_path.path(),
     )?;
-    println!("{:?}", ctype);
+
+    let pb = binary_type_inference::lowering::convert_mapping_to_profobuf(ctype);
 
     Ok(())
 }
