@@ -181,7 +181,7 @@ fn main() -> anyhow::Result<()> {
     let mut buf = Vec::new();
     pb.encode(&mut buf)?;
     let mut out_file = std::fs::File::create(out_file)?;
-    out_file.write_all(&buf);
+    out_file.write_all(&buf)?;
 
     Ok(())
 }
