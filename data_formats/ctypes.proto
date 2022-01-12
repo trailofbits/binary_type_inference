@@ -2,9 +2,20 @@ syntax = "proto3";
 
 package ctypes;
 
+message Tid {
+  string name = 1;
+  string address = 2;
+}
+
+
+message TidToNodeIndex {
+  Tid tid = 1;
+  uint32 node_index = 2;
+}
+
 message CTypeMapping {
   map<uint32, CType> node_types = 1;
-  map<string, uint32> type_variable_repr_nodes = 2;
+  repeated TidToNodeIndex type_variable_repr_nodes = 2;
 }
 
 message Parameter {
@@ -40,3 +51,4 @@ message CType {
     Pointer pointer = 5;
   }
 }
+

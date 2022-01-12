@@ -160,6 +160,11 @@ impl<T: Clone> SketchGraph<T> {
             .get(dtv)
             .map(|x| self.get_graph_for_idx(*x))
     }
+
+    /// Gets the representing node index for the given tvar if it exists
+    pub fn get_node_index_for_variable(&self, dtv: &DerivedTypeVar) -> Option<NodeIndex> {
+        self.dtv_to_group.get(dtv).cloned()
+    }
 }
 
 impl<T> SketchGraph<T> {
