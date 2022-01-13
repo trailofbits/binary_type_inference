@@ -1,10 +1,35 @@
-let pkgs = import <nixpkgs> {};
-    p = { lib, fetchFromGitHub, rustPlatform }:
-      rustPlatform.buildRustPackage rec {
-        pname = "binary_type_inference";
-        version = "0.1.0";
+let
+  pkgs = import <nixpkgs> { };
 
-        src = ./.;
-        cargoSha256 = "sha256-+3Sb7BhxCJTm7UbJ31sjggyHBJD826d5T1+c6l2gW6g=";
+  lowering-datalog = pkgs.stdenv.mkDerivation
+    {
+      name = "lowering-datalog";
+      src = ./.;
+
+      nativeBuildInputs = [ pkgs.souffle ];
+
+      buildPhase = "souffle -o lowertypes ./lowering/type_inference.dl";
+
+      installPhase = ''
+        mkdir -p $out/bin
+        cp lowertypes $out/bin/
+      '';
+    };
+
+  p = { lib, fetchFromGitHub, rustPlatform }:
+    rustPlatform.buildRustPackage rec {
+      pname = "binary_type_inference";
+      version = "0.1.0";
+
+      src = ./.;
+      cargoLock = {
+        lockFile = ./Cargo.lock;
       };
-in pkgs.rustPackages.callPackage p {}
+    };
+
+  rust-bin = pkgs.rustPackages.callPackage p { };
+in
+pkgs.symlinkJoin {
+  name = "bti";
+  paths = [ rust-bin lowering-datalog ];
+}
