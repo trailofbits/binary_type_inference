@@ -566,21 +566,30 @@ fn generate_datalog_context<U: NamedLatticeElement, P: AsRef<Path>>(
     generate_facts_files(grph, facts_file_config)
 }
 
-fn run_datalog_binary<S1: AsRef<OsStr>, S2: AsRef<OsStr>, S3: AsRef<OsStr>, S4: AsRef<OsStr>>(
-    souffle_command: S1,
-    datalog_file: S2,
+fn get_datalog_command() -> anyhow::Result<process::Command> {
+    let mut pbuf = std::env::current_exe()?;
+    pbuf.pop();
+    pbuf.push("lowertypes");
+    Ok(process::Command::new(pbuf))
+}
+
+fn run_datalog_binary<S3: AsRef<OsStr>, S4: AsRef<OsStr>>(
     in_facts_path: S3,
     out_facts_path: S4,
 ) -> anyhow::Result<()> {
-    let _ = process::Command::new(souffle_command)
-        .arg(datalog_file)
-        .arg("-F")
+    let mut comm = get_datalog_command()?;
+    comm.arg("-F")
         .arg(in_facts_path)
         .arg("-D")
-        .arg(out_facts_path)
-        .output()?;
+        .arg(out_facts_path);
 
-    Ok(())
+    let res = comm.output()?;
+
+    if !res.status.success() {
+        Err(anyhow::anyhow!("Failed to run souffle command: {:?}", comm))
+    } else {
+        Ok(())
+    }
 }
 
 /// Generates a facts dir from the sketch graph and runs souffle to infer lowered relations in the output directory
@@ -591,8 +600,6 @@ fn run_datalog<U: NamedLatticeElement, T1: AsRef<Path>, T2: AsRef<Path>>(
 ) -> anyhow::Result<()> {
     generate_datalog_context(grph, in_facts_path.as_ref())?;
     run_datalog_binary(
-        "souffle",
-        "./lowering/type_inference.dl",
         in_facts_path.as_ref().as_os_str(),
         out_facts_path.as_ref().as_os_str(),
     )

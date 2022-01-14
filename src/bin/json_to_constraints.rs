@@ -153,11 +153,13 @@ fn main() -> anyhow::Result<()> {
 
     let facts_in_path = TempDir::new("facts_in")?;
     let facts_out_path = TempDir::new("facts_out")?;
+    //let facts_in_path = "/tmp/facts_in";
+    //let facts_out_path = "/tmp/facts_out";
 
     let ctype = binary_type_inference::lowering::collect_ctypes(
         &labeled_graph,
-        facts_in_path.path(),
-        facts_out_path.path(),
+        facts_in_path,
+        facts_out_path,
     )?;
 
     let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(ctype);
