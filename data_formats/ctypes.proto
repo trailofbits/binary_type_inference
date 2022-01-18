@@ -7,7 +7,6 @@ message Tid {
   string address = 2;
 }
 
-
 message TidToNodeIndex {
   Tid tid = 1;
   uint32 node_index = 2;
@@ -51,4 +50,3 @@ message CType {
     Pointer pointer = 5;
   }
 }
-

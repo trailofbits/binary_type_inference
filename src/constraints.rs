@@ -12,11 +12,14 @@ use nom::sequence::preceded;
 use nom::{bytes::complete::tag, combinator::map, sequence::tuple, IResult};
 use nom::{AsChar, InputTakeAtPosition};
 use std::collections::BTreeSet;
+use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Write};
 use std::iter::FromIterator;
 use std::num::ParseIntError;
 use std::ops::{Deref, DerefMut};
 use std::vec::Vec;
+
+use crate::pb_constraints;
 
 fn identifier_char<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
 where
@@ -379,6 +382,67 @@ impl DerivedTypeVar {
     }
 }
 
+impl TryFrom<pb_constraints::Field> for Field {
+    type Error = anyhow::Error;
+
+    fn try_from(value: pb_constraints::Field) -> Result<Self, Self::Error> {
+        let offset = value.byte_offset.try_into()?;
+        let size = value.bit_size.try_into()?;
+        Ok(Field { offset, size })
+    }
+}
+
+impl TryFrom<pb_constraints::FieldLabel> for FieldLabel {
+    type Error = anyhow::Error;
+
+    fn try_from(value: pb_constraints::FieldLabel) -> Result<Self, Self::Error> {
+        let inner = value
+            .inner_type
+            .ok_or(anyhow::anyhow!("No inner_type for field label"))?;
+        match inner {
+            pb_constraints::field_label::InnerType::Ptr(ptr_ty) => {
+                match pb_constraints::Pointer::from_i32(ptr_ty)
+                    .unwrap_or(pb_constraints::Pointer::LoadUnspecified)
+                {
+                    pb_constraints::Pointer::LoadUnspecified => Ok(FieldLabel::Load),
+                    pb_constraints::Pointer::Store => Ok(FieldLabel::Store),
+                }
+            }
+            pb_constraints::field_label::InnerType::InParam(idx) => {
+                let idx = idx.try_into()?;
+                Ok(FieldLabel::In(idx))
+            }
+            pb_constraints::field_label::InnerType::OutParam(idx) => {
+                let idx = idx.try_into()?;
+                Ok(FieldLabel::Out(idx))
+            }
+            pb_constraints::field_label::InnerType::Field(fld) => {
+                let fld = Field::try_from(fld)?;
+                Ok(FieldLabel::Field(fld))
+            }
+        }
+    }
+}
+
+impl TryFrom<pb_constraints::DerivedTypeVariable> for DerivedTypeVar {
+    type Error = anyhow::Error;
+
+    fn try_from(dtv: pb_constraints::DerivedTypeVariable) -> Result<Self, Self::Error> {
+        let bv = dtv.base_var;
+
+        let labels = dtv
+            .field_labels
+            .into_iter()
+            .map(|f| FieldLabel::try_from(f))
+            .collect::<Result<Vec<FieldLabel>, Self::Error>>()?;
+
+        Ok(DerivedTypeVar {
+            var: TypeVariable::new(bv),
+            labels,
+        })
+    }
+}
+
 /// Expresses a subtyping constraint of the form lhs ⊑ rhs
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SubtypeConstraint {
@@ -386,6 +450,23 @@ pub struct SubtypeConstraint {
     pub lhs: DerivedTypeVar,
     /// The right hand side of the subtyping constraint
     pub rhs: DerivedTypeVar,
+}
+
+impl TryFrom<pb_constraints::SubtypingConstraint> for SubtypeConstraint {
+    type Error = anyhow::Error;
+
+    fn try_from(value: pb_constraints::SubtypingConstraint) -> Result<Self, Self::Error> {
+        let lhs = value
+            .lhs
+            .ok_or(anyhow::anyhow!("No lhs in dtv"))
+            .and_then(|x| DerivedTypeVar::try_from(x))?;
+        let rhs = value
+            .rhs
+            .ok_or(anyhow::anyhow!("No rhs in dtv"))
+            .and_then(|x| DerivedTypeVar::try_from(x))?;
+
+        Ok(SubtypeConstraint { lhs, rhs })
+    }
 }
 
 impl SubtypeConstraint {

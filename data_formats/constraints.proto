@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package constraints;
+
+enum Pointer {
+  POINTER_LOAD_UNSPECIFIED = 0;
+  POINTER_STORE = 1;
+};
+
+message Field {
+  uint32 bit_size = 1;
+  uint32 byte_offset = 2;
+}
+
+message FieldLabel {
+  oneof inner_type {
+    Pointer ptr = 1;
+    uint32 in_param = 2;
+    uint32 out_param = 3;
+    Field field = 4;
+  }
+}
+
+message DerivedTypeVariable {
+  string base_var = 1;
+  repeated FieldLabel field_labels = 2;
+}
+
+message SubtypingConstraint {
+  DerivedTypeVariable lhs = 1;
+  DerivedTypeVariable rhs = 2;
+}
