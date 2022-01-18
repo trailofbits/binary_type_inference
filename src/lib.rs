@@ -34,5 +34,10 @@ pub mod ctypes {
     include!(concat!(env!("OUT_DIR"), "/ctypes.rs"));
 }
 
+/// Protobuf constraints
+pub mod pb_constraints {
+    include!(concat!(env!("OUT_DIR"), "/constraints.rs"));
+}
+
 #[cfg(test)]
 mod tests {}
