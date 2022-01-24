@@ -37,7 +37,7 @@ struct PointerRecord {
 
 impl NodeRepr for PointerRecord {
     fn get_node(&self) -> NodeIndex {
-        self.tgt
+        self.node
     }
 }
 
@@ -334,13 +334,14 @@ impl FactsReader {
         let functions = self.get_functions()?;
         let prims = self.get_primitive()?;
         let alias = self.get_aliases()?;
-
+        let ptrs = self.get_pointers()?;
         let mut total = HashMap::new();
 
         total.extend(structs);
         total.extend(functions);
         total.extend(prims);
         total.extend(alias);
+        total.extend(ptrs);
         Ok(total)
     }
 }
