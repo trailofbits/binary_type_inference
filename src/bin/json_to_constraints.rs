@@ -1,7 +1,12 @@
 use binary_type_inference::{
     constraint_generation,
-    constraints::{parse_constraint_set, DerivedTypeVar, TyConstraint, TypeVariable},
-    ctypes, node_context,
+    constraints::{
+        parse_constraint_set, ConstraintSet, DerivedTypeVar, SubtypeConstraint, TyConstraint,
+        TypeVariable,
+    },
+    ctypes::{self},
+    node_context,
+    pb_constraints::{self},
     solver::{
         constraint_graph::{RuleContext, FSA},
         type_lattice::{LatticeDefinition, NamedLatticeElement},
@@ -9,17 +14,50 @@ use binary_type_inference::{
     },
     util,
 };
+use byteorder::{BigEndian, ReadBytesExt};
 use clap::{App, Arg};
 use cwe_checker_lib::{
-    analysis::pointer_inference::Config, intermediate_representation::Tid,
+    analysis::pointer_inference::Config,
+    intermediate_representation::{self, Tid},
     utils::binary::RuntimeMemoryImage,
 };
 use petgraph::dot::Dot;
 use prost::Message;
 use regex::Regex;
-use std::{collections::BTreeSet, convert::TryFrom, io::Write};
+use std::{
+    any,
+    collections::BTreeSet,
+    convert::TryFrom,
+    io::{Read, Write},
+};
 use std::{collections::HashSet, convert::TryInto};
 use tempdir::TempDir;
+
+fn parse_collection_from_file<T: Message + Default>(filename: &str) -> anyhow::Result<Vec<T>> {
+    let mut f = std::fs::File::open(filename)?;
+    let mut total = Vec::new();
+    loop {
+        let res = f.read_u32::<BigEndian>();
+
+        match res {
+            Err(err) => {
+                if matches!(err.kind(), std::io::ErrorKind::UnexpectedEof) {
+                    return Ok(total);
+                } else {
+                    return Err(anyhow::Error::from(err));
+                }
+            }
+            Ok(sz) => {
+                let mut buf = vec![0; sz as usize];
+                f.read_exact(&mut buf)?;
+
+                let res = T::decode(buf.as_ref())
+                    .map_err(|_err| anyhow::anyhow!("Decoding error for type T"))?;
+                total.push(res);
+            }
+        }
+    }
+}
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -43,16 +81,27 @@ fn main() -> anyhow::Result<()> {
     let tids_file = matches.value_of("interesting_tids").unwrap();
     let out_file = matches.value_of("out").unwrap();
 
-    let tids_file = std::fs::File::open(tids_file)?;
-    let interesting_tids: Vec<Tid> = serde_json::from_reader(tids_file)?;
-    let interesting_tids: HashSet<Tid> = interesting_tids.into_iter().collect();
+    let interesting_tids: Vec<ctypes::Tid> = parse_collection_from_file(tids_file)?;
+    let interesting_tids: HashSet<Tid> = interesting_tids
+        .into_iter()
+        .map(|ctype_tid| {
+            intermediate_representation::Tid::create(ctype_tid.name, ctype_tid.address)
+        })
+        .collect();
+
+    println!("Interesting: {:?}", interesting_tids);
 
     let additional_constraints_file = matches.value_of("additional_constraints_file").unwrap();
-    let constraints_string = std::fs::read_to_string(additional_constraints_file)
-        .expect("unable to read constraints file");
-    let (rest, additional_constraints) =
-        parse_constraint_set(&constraints_string).expect("unable to parse additional constraints");
-    println!("leftover {}", rest);
+
+    let constraints: Vec<pb_constraints::SubtypingConstraint> =
+        parse_collection_from_file(additional_constraints_file)?;
+
+    let additional_constraints: BTreeSet<TyConstraint> = constraints
+        .into_iter()
+        .map(|x| SubtypeConstraint::try_from(x).map(|x| TyConstraint::SubTy(x)))
+        .collect::<anyhow::Result<BTreeSet<TyConstraint>>>()?;
+
+    let additional_constraints = ConstraintSet::from(additional_constraints);
 
     let lattice_fl =
         std::fs::File::open(lattice_json).expect("Should be able to open lattice file.");
@@ -151,16 +200,18 @@ fn main() -> anyhow::Result<()> {
 
     println!("{}", Dot::new(&displayable_graph));
 
-    let facts_in_path = TempDir::new("facts_in")?;
-    let facts_out_path = TempDir::new("facts_out")?;
-    //let facts_in_path = "/tmp/facts_in";
-    //let facts_out_path = "/tmp/facts_out";
+    //let facts_in_path = TempDir::new("facts_in")?;
+    //let facts_out_path = TempDir::new("facts_out")?;
+    let facts_in_path = "/tmp/facts_in";
+    let facts_out_path = "/tmp/facts_out";
 
     let ctype = binary_type_inference::lowering::collect_ctypes(
         &labeled_graph,
         facts_in_path,
         facts_out_path,
     )?;
+
+    println!("Mapping {:#?}", ctype);
 
     let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(ctype);
 
