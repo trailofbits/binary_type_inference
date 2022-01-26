@@ -200,10 +200,10 @@ fn main() -> anyhow::Result<()> {
 
     println!("{}", Dot::new(&displayable_graph));
 
-    //let facts_in_path = TempDir::new("facts_in")?;
-    //let facts_out_path = TempDir::new("facts_out")?;
-    let facts_in_path = "/tmp/facts_in";
-    let facts_out_path = "/tmp/facts_out";
+    let facts_in_path = TempDir::new("facts_in")?;
+    let facts_out_path = TempDir::new("facts_out")?;
+    //let facts_in_path = "/tmp/facts_in";
+    //let facts_out_path = "/tmp/facts_out";
 
     let ctype = binary_type_inference::lowering::collect_ctypes(
         &labeled_graph,
