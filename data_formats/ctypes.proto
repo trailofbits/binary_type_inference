@@ -25,6 +25,7 @@ message Parameter {
 message Function {
   repeated Parameter parameters = 1;
   uint32 return_type = 2;
+  bool has_return = 3;
 }
 
 message Field {

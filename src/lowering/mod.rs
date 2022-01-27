@@ -54,7 +54,7 @@ pub enum CType {
     /// Represents the set of parameters and return type. The parameters may be out of order or missing types. One should consider missing parameters as
     Function {
         params: Vec<Parameter>,
-        return_ty: NodeIndex,
+        return_ty: Option<NodeIndex>,
     },
 }
 
@@ -293,12 +293,10 @@ impl FactsReader {
         Ok(function_params
             .into_iter()
             .map(|(idx, params)| {
-                let return_type = function_returns
-                    .get(&idx)
-                    .expect("Should not type as a function if does not have a return type");
+                let return_type = function_returns.get(&idx).map(|x| x.dst_node);
                 let func = CType::Function {
                     params,
-                    return_ty: return_type.dst_node,
+                    return_ty: return_type,
                 };
                 (idx, func)
             })
@@ -645,7 +643,13 @@ pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
                 .into_iter()
                 .for_each(|x| func.parameters.push(param_to_protofbuf(x)));
 
-            func.return_type = return_ty.index().try_into().unwrap();
+            if let Some(return_ty) = return_ty {
+                func.return_type = return_ty.index().try_into().unwrap();
+                func.has_return = true;
+            } else {
+                func.has_return = false;
+            }
+
             ctypes::c_type::InnerType::Function(func)
         }
         CType::Pointer { target } => {
