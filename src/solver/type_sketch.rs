@@ -350,16 +350,16 @@ impl<T> SketchGraph<T> {
 
 /// The context under which a labeling of sketches can be computed. Based on subtyping constraints
 /// Sketch nodes will be lableed by computing joins and meets of euqivalence relations.
-pub struct LabelingContext<U: NamedLatticeElement, T: NamedLattice<U>> {
-    lattice: T,
+pub struct LabelingContext<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
+    lattice: &'a T,
     nm: std::marker::PhantomData<U>,
     type_lattice_elements: HashSet<TypeVariable>,
 }
 
-impl<U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<U, T> {
+impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<'a, U, T> {
     /// Creates a new lattice context described by the named lattice itself which returns the lattice elem for a given string type var
     /// and the set of available elements.
-    pub fn new(lattice: T, elements: HashSet<TypeVariable>) -> Self {
+    pub fn new(lattice: &'a T, elements: HashSet<TypeVariable>) -> Self {
         Self {
             lattice,
             type_lattice_elements: elements,

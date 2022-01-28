@@ -39,5 +39,18 @@ pub mod pb_constraints {
     include!(concat!(env!("OUT_DIR"), "/constraints.rs"));
 }
 
+/// Parses a context of file inputs into an inference job which can be run to retrieve generated constraints,
+/// simplified constraints, and lowered types.
+pub mod inference_job;
+
+// Integration tests
 #[cfg(test)]
-mod tests {}
+mod tests {
+
+    struct TestCase {
+        binary_path: String,
+        ir_json_path: String,
+        interesting_tid_path: String,
+        additional_constraints_path: String,
+    }
+}

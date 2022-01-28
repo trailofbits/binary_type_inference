@@ -21,7 +21,7 @@ use crate::constraints::{
 };
 
 use std::{
-    collections::{btree_set::BTreeSet, BTreeMap, HashMap},
+    collections::{btree_set::BTreeSet, BTreeMap, HashMap, HashSet},
     convert::TryInto,
 };
 
@@ -659,6 +659,7 @@ where
     graph: &'a Graph<'a>,
     node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
+    function_filter: Option<HashSet<Tid>>,
 }
 
 impl<'a, R, P, S> Context<'a, R, P, S>
@@ -672,11 +673,13 @@ where
         graph: &'a Graph<'a>,
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
         extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
+        function_filter: Option<HashSet<Tid>>,
     ) -> Context<'a, R, P, S> {
         Context {
             graph,
             node_contexts,
             extern_symbols,
+            function_filter,
         }
     }
 
@@ -775,6 +778,13 @@ where
         cons
     }
 
+    fn should_generate_for_block(&self, nd: Node) -> bool {
+        self.function_filter
+            .as_ref()
+            .map(|funcs| funcs.contains(&nd.get_sub().tid))
+            .unwrap_or(true)
+    }
+
     fn generate_constraints_for_node(
         &self,
         nd_ind: NodeIndex,
@@ -782,6 +792,9 @@ where
     ) -> ConstraintSet {
         let nd_cont = self.node_contexts.get(&nd_ind);
         let nd = self.graph[nd_ind];
+        if !self.should_generate_for_block(nd) {
+            return ConstraintSet::default();
+        }
 
         if let Some(nd_cont) = nd_cont {
             match nd {
