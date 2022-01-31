@@ -565,6 +565,7 @@ fn get_datalog_command() -> anyhow::Result<process::Command> {
     let mut pbuf = std::env::current_exe()?;
     pbuf.pop();
     pbuf.push("lowertypes");
+    println!("Path of bin: {}", &pbuf.to_string_lossy());
     Ok(process::Command::new(pbuf))
 }
 

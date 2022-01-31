@@ -6,6 +6,7 @@ use alga::general::AbstractMagma;
 use anyhow::{anyhow, Result};
 
 use nom::{branch::alt, bytes::complete::tag, multi::separated_list0, sequence::tuple, IResult};
+use petgraph::dot::Dot;
 
 use crate::graph_algos::all_simple_paths;
 use petgraph::visit::IntoNodeReferences;
@@ -17,7 +18,7 @@ use petgraph::{
 };
 
 use std::{
-    collections::{BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::{Display, Write},
     vec,
 };
@@ -493,8 +494,8 @@ impl Display for FSAEdge {
 /// Then given a constraint set C that derives the following judgement C ⊢ X.u ⊑ Y.v:
 pub struct FSA {
     grph: StableDiGraph<FiniteState, FSAEdge>,
-    mp: HashMap<FiniteState, NodeIndex>,
-    cant_pop_nodes: HashMap<FiniteState, NodeIndex>,
+    mp: BTreeMap<FiniteState, NodeIndex>,
+    cant_pop_nodes: BTreeMap<FiniteState, NodeIndex>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
@@ -519,7 +520,7 @@ impl EdgeDefinition {
 impl FSA {
     /// Finds the intersection of nodes that are both reachable from the start and end of the automata.
     pub fn remove_unreachable(&mut self) {
-        let mut reachable_from_start = HashSet::new();
+        let mut reachable_from_start = BTreeSet::new();
 
         let start_idx = *self.mp.get(&FiniteState::Start).unwrap();
 
@@ -540,7 +541,7 @@ impl FSA {
         );
 
         let reachable_from_end = dfs.iter(&rev_graph).collect();
-        let mut reachable: HashSet<_> = reachable_from_start
+        let mut reachable: BTreeSet<_> = reachable_from_start
             .intersection(&reachable_from_end)
             .collect();
 
@@ -554,8 +555,8 @@ impl FSA {
         }
     }
 
-    fn get_entries_to_scc(&self, idxs: &[NodeIndex]) -> HashSet<NodeIndex> {
-        let canidates = idxs.to_owned().into_iter().collect::<HashSet<_>>();
+    fn get_entries_to_scc(&self, idxs: &[NodeIndex]) -> BTreeSet<NodeIndex> {
+        let canidates = idxs.to_owned().into_iter().collect::<BTreeSet<_>>();
 
         idxs.iter()
             .cloned()
@@ -595,8 +596,8 @@ impl FSA {
     }
 
     // todo this is slow, use a trie
-    fn select_entry_reprs(&self, it: HashSet<NodeIndex>) -> HashSet<NodeIndex> {
-        let repr_vars: HashSet<DerivedTypeVar> = it
+    fn select_entry_reprs(&self, it: BTreeSet<NodeIndex>) -> BTreeSet<NodeIndex> {
+        let repr_vars: BTreeSet<DerivedTypeVar> = it
             .iter()
             .map(|x| {
                 let root = Self::get_root_type_var(self.grph.node_weight(*x).unwrap().clone())
@@ -723,11 +724,11 @@ impl FSA {
     }
 
     /// Gets the set of all edges in the FSA.
-    pub fn get_edge_set(&self) -> HashSet<(NodeIndex, FSAEdge, NodeIndex)> {
+    pub fn get_edge_set(&self) -> BTreeSet<(NodeIndex, FSAEdge, NodeIndex)> {
         self.grph
             .edge_references()
             .map(|e| (e.source(), e.weight().clone(), e.target()))
-            .collect::<HashSet<_>>()
+            .collect::<BTreeSet<_>>()
     }
 
     /// Determines if the edges set of this FSA is exactly represented by the vector of edge definitions.
@@ -749,7 +750,7 @@ impl FSA {
         let edge_set = edges
             .into_iter()
             .map(|x| x.unwrap())
-            .collect::<HashSet<_>>();
+            .collect::<BTreeSet<_>>();
 
         let self_edge_set = self.get_edge_set();
 
@@ -757,11 +758,13 @@ impl FSA {
     }
 
     /// Gets edge definitions for all edges that should be inserted by saturation.
-    pub fn get_saturation_edges(&self) -> HashSet<EdgeDefinition> {
-        let mut new_edges = HashSet::new();
-        let mut reaching_pushes: HashMap<FiniteState, HashMap<StackSymbol, HashSet<FiniteState>>> =
-            HashMap::new();
-        let mut all_edges: HashSet<EdgeDefinition> = self
+    pub fn get_saturation_edges(&self) -> BTreeSet<EdgeDefinition> {
+        let mut new_edges = BTreeSet::new();
+        let mut reaching_pushes: BTreeMap<
+            FiniteState,
+            BTreeMap<StackSymbol, BTreeSet<FiniteState>>,
+        > = BTreeMap::new();
+        let mut all_edges: BTreeSet<EdgeDefinition> = self
             .grph
             .edge_references()
             .map(|x| EdgeDefinition {
@@ -772,7 +775,7 @@ impl FSA {
             .collect();
 
         for (_nd_idx, weight) in self.grph.node_references() {
-            reaching_pushes.insert(weight.clone(), HashMap::new());
+            reaching_pushes.insert(weight.clone(), BTreeMap::new());
         }
 
         for edge in all_edges.iter() {
@@ -780,7 +783,7 @@ impl FSA {
                 let dst_pushes = reaching_pushes.get_mut(&edge.dst).unwrap();
                 dst_pushes
                     .entry(l.clone())
-                    .or_insert_with(HashSet::new)
+                    .or_insert_with(BTreeSet::new)
                     .insert(edge.src.clone());
             }
         }
@@ -792,7 +795,7 @@ impl FSA {
             // merge trivial predecessor nodes reaching push set with the dests reaching set
             for edg in all_edges.iter() {
                 if let FSAEdge::Success = edg.edge_weight {
-                    let src_pushes: HashMap<StackSymbol, HashSet<FiniteState>> =
+                    let src_pushes: BTreeMap<StackSymbol, BTreeSet<FiniteState>> =
                         reaching_pushes.get(&edg.src).unwrap().clone();
                     let dst_pushes = reaching_pushes.get_mut(&edg.dst).unwrap();
 
@@ -806,11 +809,15 @@ impl FSA {
                 }
             }
 
-            let mut additional_edges = HashSet::new();
+            let mut additional_edges = BTreeSet::new();
             for edg in all_edges.iter() {
                 if let FSAEdge::Pop(l) = &edg.edge_weight {
                     let rpushes = reaching_pushes.get_mut(&edg.src).unwrap();
-                    for definer in rpushes.entry(l.clone()).or_insert_with(HashSet::new).iter() {
+                    for definer in rpushes
+                        .entry(l.clone())
+                        .or_insert_with(BTreeSet::new)
+                        .iter()
+                    {
                         let new_edge = EdgeDefinition {
                             src: definer.clone(),
                             dst: edg.dst.clone(),
@@ -840,16 +847,16 @@ impl FSA {
                     .get_mut(v_contra)
                     .unwrap()
                     .entry(StackSymbol::Label(FieldLabel::Store))
-                    .or_insert_with(HashSet::new)
+                    .or_insert_with(BTreeSet::new)
                     .iter()
                     .cloned()
-                    .collect::<HashSet<FiniteState>>()
+                    .collect::<BTreeSet<FiniteState>>()
                 {
                     let equiv_ptr = v_contra.not();
                     let def_map = reaching_pushes.get_mut(&equiv_ptr).unwrap();
                     def_map
                         .entry(StackSymbol::Label(FieldLabel::Load))
-                        .or_insert_with(HashSet::new)
+                        .or_insert_with(BTreeSet::new)
                         .insert(definer);
                 }
 
@@ -857,16 +864,16 @@ impl FSA {
                     .get_mut(v_contra)
                     .unwrap()
                     .entry(StackSymbol::Label(FieldLabel::Load))
-                    .or_insert_with(HashSet::new)
+                    .or_insert_with(BTreeSet::new)
                     .iter()
                     .cloned()
-                    .collect::<HashSet<FiniteState>>()
+                    .collect::<BTreeSet<FiniteState>>()
                 {
                     let equiv_ptr = v_contra.not();
                     let def_map = reaching_pushes.get_mut(&equiv_ptr).unwrap();
                     def_map
                         .entry(StackSymbol::Label(FieldLabel::Store))
-                        .or_insert_with(HashSet::new)
+                        .or_insert_with(BTreeSet::new)
                         .insert(definer);
                 }
             }
@@ -1245,11 +1252,11 @@ impl FSA {
 
         let mut new_fsa = FSA {
             grph: StableDiGraph::new(),
-            mp: HashMap::new(),
-            cant_pop_nodes: HashMap::new(),
+            mp: BTreeMap::new(),
+            cant_pop_nodes: BTreeMap::new(),
         };
 
-        let mut edges = HashSet::new();
+        let mut edges = BTreeSet::new();
         total_edges.into_iter().for_each(|x| {
             edges.insert(x);
         });
