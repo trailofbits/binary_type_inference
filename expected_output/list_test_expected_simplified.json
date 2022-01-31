@@ -38,28 +38,6 @@
     {
         "lhs": {
             "var": {
-                "name": "loop_breaker1"
-            },
-            "labels": []
-        },
-        "rhs": {
-            "var": {
-                "name": "loop_breaker1"
-            },
-            "labels": [
-                "Load",
-                {
-                    "Field": {
-                        "offset": 0,
-                        "size": 32
-                    }
-                }
-            ]
-        }
-    },
-    {
-        "lhs": {
-            "var": {
                 "name": "loop_breaker0"
             },
             "labels": [
