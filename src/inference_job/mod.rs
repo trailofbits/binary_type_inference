@@ -194,7 +194,7 @@ impl InferenceJob {
         Ok(HashSet::from_iter(tids.into_iter()))
     }
 
-    fn get_graph(&self) -> Graph {
+    pub fn get_graph(&self) -> Graph {
         let graph = cwe_checker_lib::analysis::graph::get_program_cfg(
             &self.proj.program,
             self.proj

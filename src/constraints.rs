@@ -483,7 +483,7 @@ impl Display for SubtypeConstraint {
 }
 
 /// A set of [SubtypeConstraint]
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ConstraintSet(BTreeSet<TyConstraint>);
 
 /// Constraints the representation type variable to the addition of two dynamic ty vars

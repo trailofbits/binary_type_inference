@@ -25,10 +25,6 @@ use crate::{
     solver::{type_lattice::NamedLatticeElement, type_sketch::SketchGraph},
 };
 
-pub struct CTypeAssignments {
-    assignments: HashMap<NodeIndex, CType>,
-}
-
 #[derive(Deserialize)]
 struct PointerRecord {
     node: NodeIndex,
@@ -41,7 +37,7 @@ impl NodeRepr for PointerRecord {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub enum CType {
     /// Primitive means the node has a primitive type associated with its label
     Primitive(String),
@@ -58,7 +54,7 @@ pub enum CType {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 /// Represents a parameter at a given index.
 pub struct Parameter {
     index: usize,
@@ -74,7 +70,7 @@ impl From<InParamRecord> for Parameter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 /// Represents a field with an offset and type.
 pub struct Field {
     byte_offset: usize,
