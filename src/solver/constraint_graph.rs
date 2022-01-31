@@ -632,6 +632,7 @@ impl FSA {
 
                     let entries = self.get_entries_to_scc(&scc);
                     assert!(!entries.is_empty());
+                    println!("Num entries: {}", entries.len());
                     let non_redundant_removes = self.select_entry_reprs(entries);
                     assert!(!non_redundant_removes.is_empty());
                     for idx in non_redundant_removes.into_iter() {
@@ -648,8 +649,20 @@ impl FSA {
         }
     }
 
-    // Replaces all type vars that are exactly equal (name and variance) with a type variable that is covariant
+    // Replaces all type vars that are exactly equal (name and variance) with a type variable that is of matching variance
     fn replace_nodes_with_interesting_variable(&mut self, to_replace: NodeIndex, tv: TypeVariable) {
+        let weight = self
+            .grph
+            .node_weight(to_replace)
+            .expect("State must be valid");
+
+        let var = match &weight {
+            // if the start or end nodes are in an scc we really screwed up
+            &FiniteState::End => unreachable!(),
+            &FiniteState::Start => unreachable!(),
+            &FiniteState::Tv(tv) => tv.base_var.variance.clone(),
+        };
+
         let ivlhs = InterestingVar {
             tv: tv.clone(),
             dir: Direction::Lhs,
@@ -657,7 +670,7 @@ impl FSA {
         let entry_node = FiniteState::Tv(TypeVarNode {
             base_var: TypeVarControlState {
                 dt_var: VHat::Interesting(ivlhs.clone()),
-                variance: Variance::Covariant,
+                variance: var.clone(),
             },
             access_path: vec![],
         });
@@ -669,7 +682,7 @@ impl FSA {
         let exit_node = FiniteState::Tv(TypeVarNode {
             base_var: TypeVarControlState {
                 dt_var: VHat::Interesting(ivrhs.clone()),
-                variance: Variance::Covariant,
+                variance: var.clone(),
             },
             access_path: vec![],
         });
@@ -683,14 +696,14 @@ impl FSA {
         self.grph.add_edge(
             *start_ind,
             entry,
-            FSAEdge::Pop(StackSymbol::InterestingVar(ivlhs, Variance::Covariant)),
+            FSAEdge::Pop(StackSymbol::InterestingVar(ivlhs, var.clone())),
         );
 
         let end_ind = self.cant_pop_nodes.get(&FiniteState::End).unwrap();
         self.grph.add_edge(
             exit,
             *end_ind,
-            FSAEdge::Push(StackSymbol::InterestingVar(ivrhs, Variance::Covariant)),
+            FSAEdge::Push(StackSymbol::InterestingVar(ivrhs, var)),
         );
 
         for (edge_id, source_node, weight) in self
@@ -967,7 +980,9 @@ impl FSA {
         self.saturate();
         self.intersect_with_pop_push();
         self.remove_unreachable();
+        println!("{}", Dot::new(self.get_graph()));
         self.generate_recursive_type_variables();
+        println!("{}", Dot::new(self.get_graph()));
         self.remove_unreachable();
     }
 
