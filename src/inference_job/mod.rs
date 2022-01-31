@@ -9,7 +9,7 @@ use cwe_checker_lib::{
     intermediate_representation::{ExternSymbol, Project, Tid},
     utils::binary::RuntimeMemoryImage,
 };
-use petgraph::graph::NodeIndex;
+use petgraph::{dot::Dot, graph::NodeIndex};
 use serde::de::DeserializeOwned;
 use tempdir::TempDir;
 
@@ -305,7 +305,12 @@ impl InferenceJob {
 
         let mut fsa_res = FSA::new(&orig_constraints, &context)?;
 
+        //println!("{}", Dot::new(fsa_res.get_graph()));
+
         fsa_res.simplify_graph();
+
+        //println!("{}", Dot::new(fsa_res.get_graph()));
+
         let new_cons = fsa_res.walk_constraints();
         Ok(new_cons)
     }
