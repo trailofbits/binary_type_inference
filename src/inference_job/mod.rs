@@ -283,7 +283,10 @@ impl InferenceJob {
             .map(|(name, _elem)| TypeVariable::new(name.clone()))
     }
 
-    pub fn get_simplified_constraints(&self, orig_constraints: &ConstraintSet) -> ConstraintSet {
+    pub fn get_simplified_constraints(
+        &self,
+        orig_constraints: &ConstraintSet,
+    ) -> anyhow::Result<ConstraintSet> {
         let mut only_interestings = BTreeSet::new();
 
         self.interesting_tids.iter().for_each(|x| {
@@ -300,11 +303,11 @@ impl InferenceJob {
 
         let context = RuleContext::new(interesting_and_lattice);
 
-        let mut fsa_res = FSA::new(&orig_constraints, &context).unwrap();
+        let mut fsa_res = FSA::new(&orig_constraints, &context)?;
 
         fsa_res.simplify_graph();
         let new_cons = fsa_res.walk_constraints();
-        new_cons
+        Ok(new_cons)
     }
 
     pub fn get_labeled_sketch_graph(
@@ -331,7 +334,7 @@ impl InferenceJob {
         &self,
     ) -> anyhow::Result<(SketchGraph<CustomLatticeElement>, HashMap<NodeIndex, CType>)> {
         let orig_cons = self.get_all_constraints_to_solve(&self.get_graph())?;
-        let cons = self.get_simplified_constraints(&orig_cons);
+        let cons = self.get_simplified_constraints(&orig_cons)?;
         let labeled_graph = self.get_labeled_sketch_graph(&cons);
         let lowered = Self::lower_labeled_sketch_graph(&labeled_graph)?;
         Ok((labeled_graph, lowered))

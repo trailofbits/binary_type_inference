@@ -1,0 +1,148 @@
+[
+    {
+        "lhs": {
+            "var": {
+                "name": "sub_00001000"
+            },
+            "labels": [
+                {
+                    "Out": 0
+                }
+            ]
+        },
+        "rhs": {
+            "var": {
+                "name": "int"
+            },
+            "labels": []
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "file_descriptor"
+            },
+            "labels": []
+        },
+        "rhs": {
+            "var": {
+                "name": "sub_00001000"
+            },
+            "labels": [
+                {
+                    "In": 0
+                }
+            ]
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "loop_breaker0"
+            },
+            "labels": [
+                "Load",
+                {
+                    "Field": {
+                        "offset": 0,
+                        "size": 32
+                    }
+                }
+            ]
+        },
+        "rhs": {
+            "var": {
+                "name": "loop_breaker0"
+            },
+            "labels": []
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "loop_breaker0"
+            },
+            "labels": [
+                "Load",
+                {
+                    "Field": {
+                        "offset": 4,
+                        "size": 32
+                    }
+                }
+            ]
+        },
+        "rhs": {
+            "var": {
+                "name": "sub_00001000"
+            },
+            "labels": [
+                {
+                    "In": 0
+                }
+            ]
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "sub_00000000"
+            },
+            "labels": [
+                {
+                    "In": 0
+                }
+            ]
+        },
+        "rhs": {
+            "var": {
+                "name": "loop_breaker0"
+            },
+            "labels": []
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "sub_00001000"
+            },
+            "labels": [
+                {
+                    "Out": 0
+                }
+            ]
+        },
+        "rhs": {
+            "var": {
+                "name": "sub_00000000"
+            },
+            "labels": [
+                {
+                    "Out": 0
+                }
+            ]
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "loop_breaker1"
+            },
+            "labels": []
+        },
+        "rhs": {
+            "var": {
+                "name": "loop_breaker1"
+            },
+            "labels": [
+                "Load",
+                {
+                    "Field": {
+                        "offset": 0,
+                        "size": 32
+                    }
+                }
+            ]
+        }
+    }
+]

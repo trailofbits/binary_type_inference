@@ -37,7 +37,7 @@ impl NodeRepr for PointerRecord {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CType {
     /// Primitive means the node has a primitive type associated with its label
     Primitive(String),
@@ -54,7 +54,7 @@ pub enum CType {
     },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 /// Represents a parameter at a given index.
 pub struct Parameter {
     index: usize,
@@ -70,7 +70,7 @@ impl From<InParamRecord> for Parameter {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 /// Represents a field with an offset and type.
 pub struct Field {
     byte_offset: usize,

@@ -124,7 +124,7 @@ mod tests {
     }
 
     fn run_test_case(tc: TestCase) {
-        let job = InferenceJob::parse::<JsonDef>(&tc.job_def).expect("could not get inference job");
+        let job = InferenceJob::parse::<JsonDef>(&tc.job_def).unwrap();
         let expected_values = ExpectedOutputs::try_from(tc.expected_outputs)
             .expect("could not open expected outputs");
         let grph = job.get_graph();
@@ -136,10 +136,18 @@ mod tests {
 
         let simplified = job.get_simplified_constraints(&genned_cons);
 
+        let simplified = simplified.expect("should be able to get simplified constraints");
+        println!("{}", simplified);
         assert_eq_if_available(
             &simplified,
             expected_values.constraint_simplification.as_ref(),
         );
+
+        let labeled_graph = job.get_labeled_sketch_graph(&simplified);
+        let lowered = InferenceJob::lower_labeled_sketch_graph(&labeled_graph)
+            .expect("Should be able to lower graph");
+
+        assert_eq_if_available(&lowered, expected_values.ctype_mapping.as_ref());
     }
 
     #[derive(Default)]
@@ -258,7 +266,8 @@ mod tests {
             .set_ir_json_path("list_test.json".to_owned())
             .set_additional_constraints("list_test_additional_constraints.json".to_owned())
             .set_lattice_json("list_test_lattice.json".to_owned())
-            .set_interesting_tids_file("list_test_interesting_tids.json".to_owned());
+            .set_interesting_tids_file("list_test_interesting_tids.json".to_owned())
+            .set_expec_constraint_simplification("list_test_expected_simplified.json".to_string());
         run_test_case(bldr.build());
     }
 }

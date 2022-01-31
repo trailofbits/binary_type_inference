@@ -1,0 +1,38 @@
+[
+    {
+        "lhs": {
+            "var": {
+                "name": "sub_00001000"
+            },
+            "labels": [
+                {
+                    "Out": 0
+                }
+            ]
+        },
+        "rhs": {
+            "var": {
+                "name": "int"
+            },
+            "labels": []
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "file_descriptor"
+            },
+            "labels": []
+        },
+        "rhs": {
+            "var": {
+                "name": "sub_00001000"
+            },
+            "labels": [
+                {
+                    "In": 0
+                }
+            ]
+        }
+    }
+]
