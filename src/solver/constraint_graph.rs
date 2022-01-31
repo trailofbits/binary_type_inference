@@ -1016,6 +1016,10 @@ impl FSA {
                 FSAEdge::Failed => (),
             };
         }
+
+        if !self.cant_pop_nodes.contains_key(&FiniteState::End) {
+            self.add_cant_push_node(&FiniteState::End);
+        }
     }
 
     fn get_start(&self) -> NodeIndex {
@@ -1251,6 +1255,10 @@ impl FSA {
         });
 
         edges.into_iter().for_each(|x| new_fsa.insert_edge(x));
+
+        // Preserve invariant that graphs have a start and end
+        new_fsa.get_or_insert_nd(FiniteState::Start);
+        new_fsa.get_or_insert_nd(FiniteState::End);
 
         Ok(new_fsa)
     }
