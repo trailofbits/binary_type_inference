@@ -4,6 +4,7 @@ use std::{
     iter::FromIterator,
 };
 
+use anyhow::Context;
 use cwe_checker_lib::{
     analysis::{graph::Graph, pointer_inference::Config},
     intermediate_representation::{ExternSymbol, Project, Tid},
@@ -149,13 +150,14 @@ fn parse_collection_from_file<T: Message + Default, R: Read>(mut r: R) -> anyhow
 
 impl InferenceJob {
     fn parse_binary(bin_path: &str) -> anyhow::Result<Vec<u8>> {
-        std::fs::read(bin_path).map_err(|err| anyhow::Error::from(err))
+        std::fs::read(bin_path).map_err(|err| anyhow::Error::from(err).context("parsing_binary"))
     }
 
     fn parse_project(proj_path: &str, bin_bytes: &[u8]) -> anyhow::Result<Project> {
         let json_file = std::fs::File::open(proj_path)?;
 
-        let mut ir = crate::util::get_intermediate_representation_for_reader(json_file, bin_bytes)?;
+        let mut ir = crate::util::get_intermediate_representation_for_reader(json_file, bin_bytes)
+            .context("parsing_project")?;
         log::info!("Retrieved IR");
         ir.normalize()
             .iter()
@@ -167,7 +169,8 @@ impl InferenceJob {
 
     fn parse_lattice_json(lattice_json: &str) -> anyhow::Result<EnumeratedNamedLattice> {
         let lattice_fl = std::fs::File::open(lattice_json)?;
-        let lattice_def: LatticeDefinition = serde_json::from_reader(lattice_fl)?;
+        let lattice_def: LatticeDefinition = serde_json::from_reader(lattice_fl)
+            .map_err(|e| anyhow::Error::from(e).context("lattice json"))?;
         let named_lattice = lattice_def.generate_lattice();
         Ok(named_lattice)
     }
@@ -175,7 +178,8 @@ impl InferenceJob {
     fn parse_additional_constraints<T: InferenceParsing<SubtypeConstraint>>(
         additional_constraints_file: &str,
     ) -> anyhow::Result<ConstraintSet> {
-        let constraint_file = std::fs::File::open(additional_constraints_file)?;
+        let constraint_file =
+            std::fs::File::open(additional_constraints_file).context("additional constraints")?;
         let constraints = T::parse_collection(constraint_file)?;
 
         let additional_constraints: BTreeSet<TyConstraint> = constraints
@@ -189,7 +193,8 @@ impl InferenceJob {
     fn parse_tid_set<T: InferenceParsing<Tid>>(
         interesting_tid_file: &str,
     ) -> anyhow::Result<HashSet<Tid>> {
-        let constraint_file = std::fs::File::open(interesting_tid_file)?;
+        let constraint_file =
+            std::fs::File::open(interesting_tid_file).context("parsing interesting tids")?;
         let tids = T::parse_collection(constraint_file)?;
         Ok(HashSet::from_iter(tids.into_iter()))
     }

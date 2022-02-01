@@ -132,12 +132,13 @@ mod tests {
             .get_all_constraints_to_solve(&grph)
             .expect("could not get constraints");
 
+        println!("complex: {}", genned_cons);
         assert_eq_if_available(&genned_cons, expected_values.constraint_gen.as_ref());
 
         let simplified = job.get_simplified_constraints(&genned_cons);
 
         let simplified = simplified.expect("should be able to get simplified constraints");
-        println!("{}", simplified);
+        println!("simplified: {}", simplified);
         assert_eq_if_available(
             &simplified,
             expected_values.constraint_simplification.as_ref(),
@@ -268,6 +269,18 @@ mod tests {
             .set_lattice_json("list_test_lattice.json".to_owned())
             .set_interesting_tids_file("list_test_interesting_tids.json".to_owned())
             .set_expec_constraint_simplification("list_test_expected_simplified.json".to_string());
+        run_test_case(bldr.build());
+    }
+
+    #[test]
+    fn mooosl_tc() {
+        let mut bldr = TestCaseBuilder::new();
+        bldr.set_binary_path("mooosl".to_owned())
+            .set_ir_json_path("mooosl.json".to_owned())
+            .set_additional_constraints("mooosl_additional_constraints.json".to_owned())
+            .set_lattice_json("mooosl_test_lattice.json".to_owned())
+            .set_interesting_tids_file("mooosl_test_interesting_tids.json".to_owned())
+            .set_function_filter_file("mooosl_tid_filter.json".to_owned());
         run_test_case(bldr.build());
     }
 }

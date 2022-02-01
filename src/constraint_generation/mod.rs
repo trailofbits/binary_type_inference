@@ -548,7 +548,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     }
 
     /// make each formal the subtype of the addressing info for this parameter within the current state
-    fn handle_retun_formals(&self, sub: &Term<Sub>, vman: &mut VariableManager) -> ConstraintSet {
+    fn handle_return_formals(&self, sub: &Term<Sub>, vman: &mut VariableManager) -> ConstraintSet {
         self.make_constraints(
             sub,
             &sub.term.formal_rets,
@@ -778,10 +778,27 @@ where
         cons
     }
 
+    fn get_func_tid(nd: Node) -> Tid {
+        match nd {
+            Node::BlkStart(_blk, sub) => &sub.tid,
+            Node::CallReturn {
+                call: (_call_blk, _calling_proc),
+                return_: (_returned_to_blk, return_proc),
+            } => &return_proc.tid,
+            Node::CallSource {
+                source: _source,
+                target: (calling_blk, _target_func),
+            } => &calling_blk.tid,
+            // block post conditions arent needed to generate constraints
+            Node::BlkEnd(_blk, sub) => &sub.tid,
+        }
+        .clone()
+    }
+
     fn should_generate_for_block(&self, nd: Node) -> bool {
         self.function_filter
             .as_ref()
-            .map(|funcs| funcs.contains(&nd.get_sub().tid))
+            .map(|funcs| funcs.contains(&Self::get_func_tid(nd)))
             .unwrap_or(true)
     }
 
@@ -840,7 +857,7 @@ where
 
                     // TODO(ian): if there is an outgoing extern call then we need to add the actual args
                     if Self::blk_does_return(blk) {
-                        cs.insert_all(&nd_cont.handle_retun_formals(sub, vman));
+                        cs.insert_all(&nd_cont.handle_return_formals(sub, vman));
                     }
 
                     cs
