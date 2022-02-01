@@ -1,0 +1,18 @@
+{
+    "less_than_relations_between_handles": [
+        [
+            "file_descriptor",
+            "int"
+        ],
+        [
+            "int",
+            "T"
+        ],
+        [
+            "bottom",
+            "file_descriptor"
+        ]
+    ],
+    "top_handle": "T",
+    "bottom_handle": "bottom"
+}
