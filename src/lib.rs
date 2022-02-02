@@ -61,6 +61,10 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
 
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     struct ExpectedOutputFiles {
         constraint_gen: Option<String>,
         constraint_simplification: Option<String>,
@@ -124,6 +128,7 @@ mod tests {
     }
 
     fn run_test_case(tc: TestCase) {
+        init();
         let mut job = InferenceJob::parse::<JsonDef>(&tc.job_def).unwrap();
         job.recover_additional_shared_returns();
 
