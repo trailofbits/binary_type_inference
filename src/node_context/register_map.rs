@@ -77,6 +77,10 @@ impl RegisterContext {
             }
         }
     }
+
+    pub fn get_register_context(&self) -> &BTreeMap<Variable, TermSet> {
+        &self.mapping
+    }
 }
 
 impl NodeContextMapping for RegisterContext {
