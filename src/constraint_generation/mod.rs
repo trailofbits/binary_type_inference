@@ -508,6 +508,8 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         displacement: i64,
         vm: &mut VariableManager,
     ) -> ConstraintSet {
+        println!("{}", sub.tid);
+        println!("{:#?}", args);
         let mut start_constraints = ConstraintSet::default();
         for (i, arg) in args.iter().enumerate() {
             let formal_tv = Self::create_formal_tvar(i, index_to_field_label, sub);
@@ -569,14 +571,17 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         vman: &mut VariableManager,
         return_address_displacement: i64,
     ) -> ConstraintSet {
-        self.make_constraints(
+        println!("Reached return from {}", sub.tid);
+        let res = self.make_constraints(
             sub,
             &sub.term.formal_rets,
             &|i| FieldLabel::Out(i),
             true,
             return_address_displacement,
             vman,
-        )
+        );
+        println!("res: {}", res);
+        res
     }
 
     fn handle_call_actual(
@@ -778,13 +783,24 @@ where
         cons
     }
 
-    fn get_func_tid(nd: Node) -> Tid {
+    fn get_func_tid(&self, nd: Node) -> Tid {
         match nd {
             Node::BlkStart(_blk, sub) => &sub.tid,
             Node::CallReturn {
-                call: (_call_blk, _calling_proc),
+                call: (_call_blk, calling_proc),
                 return_: (_returned_to_blk, return_proc),
-            } => &return_proc.tid,
+            } => {
+                info!(
+                    "Call-return pre caller {}  retrun {}, \n Call-return {:?}",
+                    calling_proc.tid,
+                    return_proc.tid,
+                    self.function_filter
+                        .as_ref()
+                        .map(|x| x.contains(&calling_proc.tid))
+                );
+
+                &calling_proc.tid
+            }
             Node::CallSource {
                 source: _source,
                 target: (calling_blk, _target_func),
@@ -798,7 +814,7 @@ where
     fn should_generate_for_block(&self, nd: Node) -> bool {
         self.function_filter
             .as_ref()
-            .map(|funcs| funcs.contains(&Self::get_func_tid(nd)))
+            .map(|funcs| funcs.contains(&self.get_func_tid(nd)))
             .unwrap_or(true)
     }
 
@@ -839,9 +855,15 @@ where
                     total_cons
                 }
                 Node::CallReturn {
-                    call: (_call_blk, _calling_proc),
+                    call: (_call_blk, calling_proc),
                     return_: (_returned_to_blk, return_proc),
-                } => nd_cont.handle_return_actual(return_proc, vman, 0),
+                } => {
+                    info!(
+                        "Call-return caller: {}, return {}",
+                        calling_proc.tid, return_proc.tid
+                    );
+                    nd_cont.handle_return_actual(return_proc, vman, 0)
+                }
                 Node::CallSource {
                     source: _source,
                     target: (_calling_blk, target_func),
