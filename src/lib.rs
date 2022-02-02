@@ -124,7 +124,9 @@ mod tests {
     }
 
     fn run_test_case(tc: TestCase) {
-        let job = InferenceJob::parse::<JsonDef>(&tc.job_def).unwrap();
+        let mut job = InferenceJob::parse::<JsonDef>(&tc.job_def).unwrap();
+        job.recover_additional_shared_returns();
+
         let expected_values = ExpectedOutputs::try_from(tc.expected_outputs)
             .expect("could not open expected outputs");
         let grph = job.get_graph();

@@ -6,7 +6,10 @@ use std::{
 
 use anyhow::Context;
 use cwe_checker_lib::{
-    analysis::{graph::Graph, pointer_inference::Config},
+    analysis::{
+        graph::{Graph, Node},
+        pointer_inference::Config,
+    },
     intermediate_representation::{ExternSymbol, Project, Tid},
     utils::binary::RuntimeMemoryImage,
 };
@@ -15,11 +18,14 @@ use serde::de::DeserializeOwned;
 use tempdir::TempDir;
 
 use crate::{
+    analysis::fixup_returns,
     constraint_generation::NodeContext,
     constraints::{ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable},
     lowering::CType,
     node_context::{
-        points_to::PointsToContext, register_map::RegisterContext, subproc_loc::ProcedureContext,
+        points_to::PointsToContext,
+        register_map::{self, RegisterContext},
+        subproc_loc::ProcedureContext,
     },
     solver::{
         constraint_graph::{RuleContext, FSA},
@@ -288,6 +294,23 @@ impl InferenceJob {
             .map(|(name, _elem)| TypeVariable::new(name.clone()))
     }
 
+    pub fn recover_additional_shared_returns<'a>(&mut self) {
+        let grph = self.get_graph();
+        let reg_context = register_map::run_analysis(&self.proj, &grph);
+        let reaching_defs_start_of_block = reg_context
+            .iter()
+            .filter_map(|(k, v)| {
+                let nd = grph[k.clone()];
+                match nd {
+                    Node::BlkStart(blk, _sub) => Some((blk.tid.clone(), v.clone())),
+                    _ => None,
+                }
+            })
+            .collect();
+        let mut rets = fixup_returns::Context::new(&mut self.proj, reaching_defs_start_of_block);
+        rets.apply_psuedo_returns();
+    }
+
     pub fn get_simplified_constraints(
         &self,
         orig_constraints: &ConstraintSet,
@@ -341,8 +364,9 @@ impl InferenceJob {
     }
 
     pub fn infer_ctypes(
-        &self,
+        &mut self,
     ) -> anyhow::Result<(SketchGraph<CustomLatticeElement>, HashMap<NodeIndex, CType>)> {
+        self.recover_additional_shared_returns();
         let orig_cons = self.get_all_constraints_to_solve(&self.get_graph())?;
         let cons = self.get_simplified_constraints(&orig_cons)?;
         let labeled_graph = self.get_labeled_sketch_graph(&cons);

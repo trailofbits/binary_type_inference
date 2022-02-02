@@ -96,7 +96,7 @@ fn main() -> anyhow::Result<()> {
             .map(|x| x.to_owned()),
     };
 
-    let if_job = if matches.is_present("human_readable") {
+    let mut if_job = if matches.is_present("human_readable") {
         InferenceJob::parse::<JsonDef>(&job_def)
     } else {
         InferenceJob::parse::<ProtobufDef>(&job_def)
