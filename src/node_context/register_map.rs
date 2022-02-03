@@ -168,6 +168,7 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
         .collect()
 }
 
+#[cfg(test)]
 mod test {
     use std::path::{Path, PathBuf};
 

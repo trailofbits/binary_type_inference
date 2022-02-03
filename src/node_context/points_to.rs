@@ -232,3 +232,188 @@ pub fn run_analysis<'a>(
         })
         .collect())
 }
+
+#[cfg(test)]
+mod test {
+    use std::path::{Path, PathBuf};
+
+    use cwe_checker_lib::{
+        analysis::pointer_inference::Config,
+        intermediate_representation::{ByteSize, Expression, Tid, Variable},
+    };
+    use petgraph::visit::IntoNodeReferences;
+
+    use crate::{
+        analysis::reaching_definitions::Definition,
+        constraint_generation::{NodeContextMapping, PointsToMapping, RegisterMapping},
+        constraints::VariableManager,
+        inference_job::InferenceJob,
+    };
+
+    use super::run_analysis;
+
+    fn test_data_dir<P: AsRef<Path>>(pth: P) -> String {
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("test_data");
+        d.push(pth);
+        d.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn regression_globals_test() {
+        let bin = InferenceJob::parse_binary(&test_data_dir("mooosl")).expect("Couldnt get binary");
+        let proj = InferenceJob::parse_project(&test_data_dir("mooosl.json"), &bin)
+            .expect("Couldnt get project");
+        let grph = InferenceJob::graph_from_project(&proj);
+
+        let rt_mem =
+            InferenceJob::get_runtime_image(&proj, &bin).expect("coudlnt build memory image");
+        let pointer_analysis = run_analysis(
+            &proj,
+            Config {
+                allocation_symbols: vec![
+                    "malloc".to_owned(),
+                    "calloc".to_owned(),
+                    "xmalloc".to_owned(),
+                    "realloc".to_owned(),
+                ],
+                deallocation_symbols: vec!["free".to_owned()],
+            },
+            &grph,
+            &rt_mem,
+        )
+        .expect("pointer analysis failed");
+
+        let (target_idx, blk) = grph
+            .node_references()
+            .filter_map(|(idx, nd)| match nd {
+                cwe_checker_lib::analysis::graph::Node::BlkStart(blk, prc) => {
+                    if blk.tid.address == "00101522" {
+                        Some((idx, blk))
+                    } else {
+                        None
+                    }
+                }
+                cwe_checker_lib::analysis::graph::Node::BlkEnd(_, _) => None,
+                cwe_checker_lib::analysis::graph::Node::CallReturn { .. } => None,
+                cwe_checker_lib::analysis::graph::Node::CallSource { .. } => None,
+            })
+            .next()
+            .expect("couldnt find tartget node");
+
+        let point_to_res = pointer_analysis.get(&target_idx).expect("expected_context");
+
+        let mut target_points_to = point_to_res.clone();
+        let mut found = false;
+        // fast forward the state to the target address
+        for def in blk.term.defs.iter() {
+            if !found {
+                found = def.tid.address == "00101540";
+            }
+
+            if !found {
+                target_points_to = point_to_res.apply_def(def);
+            }
+        }
+
+        assert!(found);
+
+        let mut fake_vman = VariableManager::new();
+        let access = target_points_to.points_to(
+            &Expression::Var(Variable {
+                name: "RAX".to_owned(),
+                size: ByteSize::new(8),
+                is_temp: false,
+            }),
+            ByteSize::new(8),
+            &mut fake_vman,
+        );
+
+        println!("{:#?}", access);
+    }
+
+    #[test]
+    fn stack_allocated_list_heads() {
+        let bin = InferenceJob::parse_binary(&test_data_dir("new_moosl_bin"))
+            .expect("Couldnt get binary");
+        let proj = InferenceJob::parse_project(&test_data_dir("new_moosl.json"), &bin)
+            .expect("Couldnt get project");
+        let grph = InferenceJob::graph_from_project(&proj);
+
+        let rt_mem =
+            InferenceJob::get_runtime_image(&proj, &bin).expect("coudlnt build memory image");
+        let pointer_analysis = run_analysis(
+            &proj,
+            Config {
+                allocation_symbols: vec![
+                    "malloc".to_owned(),
+                    "calloc".to_owned(),
+                    "xmalloc".to_owned(),
+                    "realloc".to_owned(),
+                ],
+                deallocation_symbols: vec!["free".to_owned()],
+            },
+            &grph,
+            &rt_mem,
+        )
+        .expect("pointer analysis failed");
+
+        let (target_idx, blk) = grph
+            .node_references()
+            .filter_map(|(idx, nd)| match nd {
+                cwe_checker_lib::analysis::graph::Node::BlkStart(blk, prc) => {
+                    if blk.tid.address == "00101526" {
+                        Some((idx, blk))
+                    } else {
+                        None
+                    }
+                }
+                cwe_checker_lib::analysis::graph::Node::BlkEnd(_, _) => None,
+                cwe_checker_lib::analysis::graph::Node::CallReturn { .. } => None,
+                cwe_checker_lib::analysis::graph::Node::CallSource { .. } => None,
+            })
+            .next()
+            .expect("couldnt find tartget node");
+
+        let point_to_res = pointer_analysis.get(&target_idx).expect("expected_context");
+
+        let mut target_points_to = point_to_res.clone();
+        let mut found = false;
+        // fast forward the state to the target address
+        for def in blk.term.defs.iter() {
+            println!("{}", def.tid.address);
+            println!("{:#?}", def.term);
+            if !found {
+                found = def.tid.address == "00101544";
+            }
+
+            if !found {
+                target_points_to = point_to_res.apply_def(def);
+            }
+        }
+
+        assert!(found);
+
+        let mut fake_vman = VariableManager::new();
+        let access = target_points_to.points_to(
+            &Expression::Var(Variable {
+                name: "RAX".to_owned(),
+                size: ByteSize::new(8),
+                is_temp: false,
+            }),
+            ByteSize::new(8),
+            &mut fake_vman,
+        );
+
+        println!(
+            "{:#?}",
+            target_points_to
+                .pointer_state
+                .state
+                .memory
+                .get_all_object_ids()
+        );
+
+        println!("{:#?}", access);
+    }
+}
