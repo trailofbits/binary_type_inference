@@ -13,6 +13,7 @@
             "file_descriptor"
         ]
     ],
+    "weakest_integral_type": "int",
     "top_handle": "T",
     "bottom_handle": "bottom"
 }

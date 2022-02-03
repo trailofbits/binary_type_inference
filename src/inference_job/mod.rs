@@ -67,6 +67,7 @@ pub struct InferenceJob {
     binary_bytes: Vec<u8>,
     proj: Project,
     lattice: EnumeratedNamedLattice,
+    weakest_integral_type: TypeVariable,
     additional_constraints: ConstraintSet,
     interesting_tids: HashSet<Tid>,
     function_filter_tids: Option<HashSet<Tid>>,
@@ -173,12 +174,17 @@ impl InferenceJob {
         Ok(ir)
     }
 
-    fn parse_lattice_json(lattice_json: &str) -> anyhow::Result<EnumeratedNamedLattice> {
+    fn parse_lattice_json(
+        lattice_json: &str,
+    ) -> anyhow::Result<(EnumeratedNamedLattice, TypeVariable)> {
         let lattice_fl = std::fs::File::open(lattice_json)?;
         let lattice_def: LatticeDefinition = serde_json::from_reader(lattice_fl)
             .map_err(|e| anyhow::Error::from(e).context("lattice json"))?;
         let named_lattice = lattice_def.generate_lattice();
-        Ok(named_lattice)
+        Ok((
+            named_lattice,
+            TypeVariable::new(lattice_def.get_weakest_integral_type().to_owned()),
+        ))
     }
 
     fn parse_additional_constraints<T: InferenceParsing<SubtypeConstraint>>(
@@ -236,6 +242,7 @@ impl InferenceJob {
             node_context,
             &self.proj.program.term.extern_symbols,
             self.function_filter_tids.clone(),
+            self.weakest_integral_type.clone(),
         )
     }
 
@@ -274,6 +281,7 @@ impl InferenceJob {
                 deallocation_symbols: vec!["free".to_owned()],
             },
             &rt_mem,
+            self.weakest_integral_type.clone(),
         )?;
 
         Ok(nd_context)
@@ -391,7 +399,7 @@ impl InferenceJob {
     ) -> anyhow::Result<InferenceJob> {
         let bin = Self::parse_binary(&def.binary_path)?;
         let proj = Self::parse_project(&def.ir_json_path, &bin)?;
-        let lat = Self::parse_lattice_json(&def.lattice_json)?;
+        let (lat, weakest_integral_type) = Self::parse_lattice_json(&def.lattice_json)?;
         let additional_constraints =
             Self::parse_additional_constraints::<T>(&def.additional_constraints_file)?;
         let interesting_tids = Self::parse_tid_set::<T>(&def.interesting_tids)?;
@@ -409,6 +417,7 @@ impl InferenceJob {
             additional_constraints,
             interesting_tids,
             function_filter_tids,
+            weakest_integral_type,
         })
     }
 }

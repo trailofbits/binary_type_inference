@@ -71,9 +71,14 @@ pub struct LatticeDefinition {
     less_than_relations_between_handles: Vec<(String, String)>,
     top_handle: String,
     bottom_handle: String,
+    weakest_integral_type: String,
 }
 
 impl LatticeDefinition {
+    pub fn get_weakest_integral_type(&self) -> &str {
+        &self.weakest_integral_type
+    }
+
     fn get_lt_graph(&self) -> Graph<String, (), Directed> {
         let mut lt_grph = petgraph::Graph::new();
         let mut temp_node_holder = HashMap::new();

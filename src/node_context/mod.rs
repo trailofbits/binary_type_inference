@@ -7,8 +7,9 @@ use cwe_checker_lib::{
 };
 use petgraph::graph::NodeIndex;
 
-use crate::constraint_generation::{
-    NodeContext, PointsToMapping, RegisterMapping, SubprocedureLocators,
+use crate::{
+    constraint_generation::{NodeContext, PointsToMapping, RegisterMapping, SubprocedureLocators},
+    constraints::TypeVariable,
 };
 
 /// Wraps the cwe_checker points to analysis to generate type variables related to stores and loads based on the [cwe_checker_lib::abstract_domain::AbstractIdentifier].
@@ -33,6 +34,7 @@ pub fn make_node_contexts<R: RegisterMapping, P: PointsToMapping, S: Subprocedur
     mut points_to_contexts: HashMap<NodeIndex, P>,
     mut subproc_contexts: HashMap<NodeIndex, S>,
     nodes: impl Iterator<Item = NodeIndex>,
+    weakest_integral_type: TypeVariable,
 ) -> HashMap<NodeIndex, NodeContext<R, P, S>> {
     nodes
         .filter_map(|idx| {
@@ -41,7 +43,10 @@ pub fn make_node_contexts<R: RegisterMapping, P: PointsToMapping, S: Subprocedur
             let s = subproc_contexts.remove(&idx);
 
             match (r, p, s) {
-                (Some(r), Some(p), Some(s)) => Some((idx, NodeContext::new(r, p, s))),
+                (Some(r), Some(p), Some(s)) => Some((
+                    idx,
+                    NodeContext::new(r, p, s, weakest_integral_type.clone()),
+                )),
                 _ => None,
             }
         })
@@ -54,6 +59,7 @@ pub fn create_default_context(
     graph: &Graph,
     config: Config,
     rt_mem: &RuntimeMemoryImage,
+    weakest_integral_type: TypeVariable,
 ) -> Result<HashMap<NodeIndex, NodeContext<RegisterContext, PointsToContext, ProcedureContext>>> {
     let reg_context = register_map::run_analysis(proj, graph);
 
@@ -72,5 +78,6 @@ pub fn create_default_context(
         points_to_context,
         proc_context,
         graph.node_indices(),
+        weakest_integral_type,
     ))
 }

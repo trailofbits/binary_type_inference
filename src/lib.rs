@@ -287,7 +287,8 @@ mod tests {
             .set_additional_constraints("mooosl_additional_constraints.json".to_owned())
             .set_lattice_json("mooosl_test_lattice.json".to_owned())
             .set_interesting_tids_file("mooosl_test_interesting_tids.json".to_owned())
-            .set_function_filter_file("mooosl_tid_filter.json".to_owned());
+            .set_function_filter_file("mooosl_tid_filter.json".to_owned())
+            .set_expec_constraint_simplification("mooosl_simple_return_inference.json".to_owned());
         run_test_case(bldr.build());
     }
 }

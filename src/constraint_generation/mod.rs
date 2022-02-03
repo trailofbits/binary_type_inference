@@ -22,6 +22,7 @@ use crate::constraints::{
 };
 
 use std::{
+    any::Any,
     collections::{btree_set::BTreeSet, BTreeMap, HashMap, HashSet},
     convert::TryInto,
 };
@@ -153,6 +154,7 @@ pub struct NodeContext<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLo
     reg_map: R,
     points_to: P,
     subprocedure_locators: S,
+    weakest_integral_type: TypeVariable,
 }
 
 impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContextMapping
@@ -162,17 +164,18 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         let r = self.reg_map.apply_def(term);
         let p = self.points_to.apply_def(term);
         let s = self.subprocedure_locators.apply_def(term);
-        NodeContext::new(r, p, s)
+        NodeContext::new(r, p, s, self.weakest_integral_type.clone())
     }
 }
 
 impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContext<R, P, S> {
     /// Given a register, pointer, and subprocedure mapping, generates a full NodeContext.
-    pub fn new(r: R, p: P, s: S) -> NodeContext<R, P, S> {
+    pub fn new(r: R, p: P, s: S, weakest_integral_type: TypeVariable) -> NodeContext<R, P, S> {
         NodeContext {
             reg_map: r,
             points_to: p,
             subprocedure_locators: s,
+            weakest_integral_type,
         }
     }
 
@@ -247,6 +250,25 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         }
     }
 
+    fn unhandled_expr(
+        value: &Expression,
+        vman: &mut VariableManager,
+    ) -> (DerivedTypeVar, ConstraintSet) {
+        let repr = vman.fresh();
+        warn!(
+            "Unhandled expression: {:?} representing with {}",
+            value, repr
+        );
+        (DerivedTypeVar::new(repr), ConstraintSet::empty())
+    }
+
+    fn assume_weak_integral(&self) -> (DerivedTypeVar, ConstraintSet) {
+        (
+            DerivedTypeVar::new(self.weakest_integral_type.clone()),
+            ConstraintSet::default(),
+        )
+    }
+
     fn evaluate_expression(
         &self,
         value: &Expression,
@@ -258,14 +280,31 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                 (DerivedTypeVar::new(rhs_type_var), additional_constraints)
             }
             Expression::BinOp { op, lhs, rhs } => self.evaluate_binop(op, lhs, rhs, vman),
-            _ => {
-                let repr = vman.fresh();
-                warn!(
-                    "Unhandled expression: {:?} representing with {}",
-                    value, repr
-                );
-                (DerivedTypeVar::new(repr), ConstraintSet::empty())
-            } // TODO(ian) handle additional constraints, add/sub
+            Expression::Cast {
+                op,
+                size: _,
+                arg: _,
+            } => match op {
+                cwe_checker_lib::intermediate_representation::CastOpType::IntZExt => {
+                    self.assume_weak_integral()
+                }
+                cwe_checker_lib::intermediate_representation::CastOpType::IntSExt => {
+                    self.assume_weak_integral()
+                }
+                cwe_checker_lib::intermediate_representation::CastOpType::Int2Float => {
+                    Self::unhandled_expr(value, vman)
+                }
+                cwe_checker_lib::intermediate_representation::CastOpType::Float2Float => {
+                    Self::unhandled_expr(value, vman)
+                }
+                cwe_checker_lib::intermediate_representation::CastOpType::Trunc => {
+                    self.assume_weak_integral()
+                }
+                cwe_checker_lib::intermediate_representation::CastOpType::PopCount => {
+                    Self::unhandled_expr(value, vman)
+                }
+            },
+            _ => Self::unhandled_expr(value, vman), // TODO(ian) handle additional constraints, add/sub
         }
     }
 
@@ -666,6 +705,7 @@ where
     node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
     function_filter: Option<HashSet<Tid>>,
+    weak_integral_type: TypeVariable,
 }
 
 impl<'a, R, P, S> Context<'a, R, P, S>
@@ -680,12 +720,14 @@ where
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
         extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
         function_filter: Option<HashSet<Tid>>,
+        weak_integral_type: TypeVariable,
     ) -> Context<'a, R, P, S> {
         Context {
             graph,
             node_contexts,
             extern_symbols,
             function_filter,
+            weak_integral_type,
         }
     }
 
