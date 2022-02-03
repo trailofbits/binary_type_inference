@@ -167,3 +167,64 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
         })
         .collect()
 }
+
+mod test {
+    use std::path::{Path, PathBuf};
+
+    use cwe_checker_lib::intermediate_representation::{ByteSize, Tid, Variable};
+    use petgraph::visit::IntoNodeReferences;
+
+    use crate::{
+        analysis::reaching_definitions::Definition, constraint_generation::RegisterMapping,
+        inference_job::InferenceJob,
+    };
+
+    use super::run_analysis;
+
+    fn test_data_dir<P: AsRef<Path>>(pth: P) -> String {
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("test_data");
+        d.push(pth);
+        d.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn regression_test_for_actual_return_definition() {
+        let bin = InferenceJob::parse_binary(&test_data_dir("mooosl")).expect("Couldnt get binary");
+        let proj = InferenceJob::parse_project(&test_data_dir("mooosl.json"), &bin)
+            .expect("Couldnt get project");
+        let grph = InferenceJob::graph_from_project(&proj);
+        let reaching_defs = run_analysis(&proj, &grph);
+
+        let (target_idx, nd) = grph
+            .node_references()
+            .find(|(_, nd)| match nd {
+                cwe_checker_lib::analysis::graph::Node::BlkStart(_, _) => false,
+                cwe_checker_lib::analysis::graph::Node::BlkEnd(_, _) => false,
+                cwe_checker_lib::analysis::graph::Node::CallReturn { call, return_ } => {
+                    println!(
+                        "{} {} {} {}",
+                        call.0.tid, call.1.tid, return_.0.tid, return_.1.tid
+                    );
+                    call.1.tid.address == "001012ed" && return_.1.tid.address == "0010128f"
+                }
+                cwe_checker_lib::analysis::graph::Node::CallSource { .. } => false,
+            })
+            .expect("couldnt find tartget node");
+
+        let defs = reaching_defs.get(&target_idx).expect("expected_context");
+        let defs = defs
+            .mapping
+            .get(&Variable {
+                name: "RAX".to_owned(),
+                size: ByteSize::new(8),
+                is_temp: false,
+            })
+            .expect("couldnt get precondition of context");
+
+        assert!(defs.contains(&Definition::ActualRet(
+            Tid::create("instr_001012d2_2".to_owned(), "001012d2".to_owned()),
+            0
+        )));
+    }
+}
