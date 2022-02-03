@@ -155,11 +155,11 @@ fn parse_collection_from_file<T: Message + Default, R: Read>(mut r: R) -> anyhow
 }
 
 impl InferenceJob {
-    fn parse_binary(bin_path: &str) -> anyhow::Result<Vec<u8>> {
+    pub fn parse_binary(bin_path: &str) -> anyhow::Result<Vec<u8>> {
         std::fs::read(bin_path).map_err(|err| anyhow::Error::from(err).context("parsing_binary"))
     }
 
-    fn parse_project(proj_path: &str, bin_bytes: &[u8]) -> anyhow::Result<Project> {
+    pub fn parse_project(proj_path: &str, bin_bytes: &[u8]) -> anyhow::Result<Project> {
         let json_file = std::fs::File::open(proj_path)?;
 
         let mut ir = crate::util::get_intermediate_representation_for_reader(json_file, bin_bytes)
@@ -205,19 +205,21 @@ impl InferenceJob {
         Ok(HashSet::from_iter(tids.into_iter()))
     }
 
-    pub fn get_graph(&self) -> Graph {
-        let graph = cwe_checker_lib::analysis::graph::get_program_cfg(
-            &self.proj.program,
-            self.proj
-                .program
+    pub fn graph_from_project(proj: &Project) -> Graph {
+        cwe_checker_lib::analysis::graph::get_program_cfg(
+            &proj.program,
+            proj.program
                 .term
                 .extern_symbols
                 .keys()
                 .into_iter()
                 .cloned()
                 .collect(),
-        );
-        graph
+        )
+    }
+
+    pub fn get_graph(&self) -> Graph {
+        Self::graph_from_project(&self.proj)
     }
 
     fn get_constraint_generation_context<'a>(
@@ -237,21 +239,27 @@ impl InferenceJob {
         )
     }
 
+    pub fn get_runtime_image(proj: &Project, bytes: &[u8]) -> anyhow::Result<RuntimeMemoryImage> {
+        let mut rt_mem = RuntimeMemoryImage::new(bytes)?;
+
+        log::info!("Created RuntimeMemoryImage");
+
+        if proj.program.term.address_base_offset != 0 {
+            // We adjust the memory addresses once globally
+            // so that other analyses do not have to adjust their addresses.
+            rt_mem.add_global_memory_offset(proj.program.term.address_base_offset);
+        }
+
+        Ok(rt_mem)
+    }
+
     fn get_node_context<'a>(
         &self,
         graph: &'a Graph<'a>,
     ) -> anyhow::Result<
         HashMap<NodeIndex, NodeContext<RegisterContext, PointsToContext, ProcedureContext>>,
     > {
-        let mut rt_mem = RuntimeMemoryImage::new(&self.binary_bytes)?;
-
-        log::info!("Created RuntimeMemoryImage");
-
-        if self.proj.program.term.address_base_offset != 0 {
-            // We adjust the memory addresses once globally
-            // so that other analyses do not have to adjust their addresses.
-            rt_mem.add_global_memory_offset(self.proj.program.term.address_base_offset);
-        }
+        let rt_mem = Self::get_runtime_image(&self.proj, &self.binary_bytes)?;
 
         let nd_context = crate::node_context::create_default_context(
             &self.proj,

@@ -8,6 +8,7 @@ use cwe_checker_lib::{
 use log::{info, warn};
 use petgraph::{
     graph::{Edges, IndexType, NodeIndex},
+    visit::EdgeRef,
     EdgeDirection, EdgeType,
 };
 
@@ -839,10 +840,11 @@ where
                     let incoming_edges = Self::edges_to_edge_iter(
                         self.graph.edges_directed(nd_ind, EdgeDirection::Incoming),
                     );
-
+                    info!("Collecting extern constraints for {} {}", sub.tid, blk.tid);
                     let add_cons =
                         self.collect_extern_ret_constraints(incoming_edges, nd_cont, vman);
 
+                    info!("Cons extern: {}", add_cons);
                     total_cons.insert_all(&add_cons);
 
                     if blk.tid == sub.term.blocks[0].tid {
@@ -862,7 +864,23 @@ where
                         "Call-return caller: {}, return {}",
                         calling_proc.tid, return_proc.tid
                     );
-                    nd_cont.handle_return_actual(return_proc, vman, 0)
+
+                    // We want to apply return actuals after the def of ths return has been applied in the nd_context
+                    // Could do this on blk start maybe, incoming edges type thing
+
+                    let mut total_cons = ConstraintSet::default();
+                    for e in self.graph.edges_directed(nd_ind, EdgeDirection::Outgoing) {
+                        let tgt = e.target();
+                        if let Some(child_ctxt) = self.node_contexts.get(&tgt) {
+                            total_cons.insert_all(&child_ctxt.handle_return_actual(
+                                return_proc,
+                                vman,
+                                0,
+                            ));
+                        }
+                    }
+
+                    total_cons
                 }
                 Node::CallSource {
                     source: _source,
@@ -879,6 +897,7 @@ where
 
                     // TODO(ian): if there is an outgoing extern call then we need to add the actual args
                     if Self::blk_does_return(blk) {
+                        info!("Handling formals: {}", sub.tid);
                         cs.insert_all(&nd_cont.handle_return_formals(sub, vman));
                     }
 
