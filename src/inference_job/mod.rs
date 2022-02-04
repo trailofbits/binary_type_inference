@@ -18,7 +18,7 @@ use serde::de::DeserializeOwned;
 use tempdir::TempDir;
 
 use crate::{
-    analysis::fixup_returns,
+    analysis::{callgraph, fixup_returns},
     constraint_generation::NodeContext,
     constraints::{ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable},
     lowering::CType,
@@ -29,6 +29,7 @@ use crate::{
     },
     solver::{
         constraint_graph::{RuleContext, FSA},
+        scc_constraint_generation::{self, SCCConstraints},
         type_lattice::{CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition},
         type_sketch::{LabelingContext, SketchGraph},
     },
@@ -228,24 +229,6 @@ impl InferenceJob {
         Self::graph_from_project(&self.proj)
     }
 
-    fn get_constraint_generation_context<'a>(
-        &'a self,
-        graph: &'a Graph<'a>,
-        node_context: HashMap<
-            NodeIndex,
-            NodeContext<RegisterContext, PointsToContext, ProcedureContext>,
-        >,
-    ) -> crate::constraint_generation::Context<'a, RegisterContext, PointsToContext, ProcedureContext>
-    {
-        crate::constraint_generation::Context::new(
-            &graph,
-            node_context,
-            &self.proj.program.term.extern_symbols,
-            self.function_filter_tids.clone(),
-            self.weakest_integral_type.clone(),
-        )
-    }
-
     pub fn get_runtime_image(proj: &Project, bytes: &[u8]) -> anyhow::Result<RuntimeMemoryImage> {
         let mut rt_mem = RuntimeMemoryImage::new(bytes)?;
 
@@ -287,22 +270,6 @@ impl InferenceJob {
         Ok(nd_context)
     }
 
-    pub fn generate_constraints<'a>(&self, grph: &Graph<'a>) -> anyhow::Result<ConstraintSet> {
-        let node_ctxt = self.get_node_context(&grph)?;
-        let gen_ctxt = self.get_constraint_generation_context(&grph, node_ctxt);
-
-        Ok(gen_ctxt.generate_constraints())
-    }
-
-    pub fn get_all_constraints_to_solve<'a>(
-        &self,
-        grph: &Graph<'a>,
-    ) -> anyhow::Result<ConstraintSet> {
-        let mut genned = self.generate_constraints(grph)?;
-        genned.insert_all(&self.additional_constraints);
-        Ok(genned)
-    }
-
     fn get_lattice_elems(&self) -> impl Iterator<Item = TypeVariable> + '_ {
         self.lattice
             .get_nds()
@@ -329,8 +296,12 @@ impl InferenceJob {
 
     pub fn get_simplified_constraints(
         &self,
-        orig_constraints: &ConstraintSet,
-    ) -> anyhow::Result<ConstraintSet> {
+    ) -> anyhow::Result<Vec<scc_constraint_generation::SCCConstraints>> {
+        let grph = self.get_graph();
+        let node_ctxt = self.get_node_context(&grph)?;
+
+        let cg = callgraph::Context::new(&self.proj).get_graph();
+
         let mut only_interestings = BTreeSet::new();
 
         self.interesting_tids.iter().for_each(|x| {
@@ -345,18 +316,15 @@ impl InferenceJob {
             interesting_and_lattice.insert(x.clone());
         });
 
-        let context = RuleContext::new(interesting_and_lattice);
-
-        let mut fsa_res = FSA::new(&orig_constraints, &context)?;
-
-        //println!("{}", Dot::new(fsa_res.get_graph()));
-
-        fsa_res.simplify_graph();
-
-        //println!("{}", Dot::new(fsa_res.get_graph()));
-
-        let new_cons = fsa_res.walk_constraints();
-        Ok(new_cons)
+        let rule_context = RuleContext::new(interesting_and_lattice);
+        scc_constraint_generation::Context::new(
+            cg,
+            &grph,
+            node_ctxt,
+            &self.proj.program.term.extern_symbols,
+            rule_context,
+        )
+        .get_simplified_constraints()
     }
 
     pub fn get_labeled_sketch_graph(
@@ -379,12 +347,21 @@ impl InferenceJob {
         crate::lowering::collect_ctypes(&sg, facts_in_path, facts_out_path)
     }
 
+    pub fn scc_constraints_to_constraints(scc_constraints: Vec<SCCConstraints>) -> ConstraintSet {
+        scc_constraints.into_iter().map(|x| x.constraints).fold(
+            ConstraintSet::default(),
+            |mut x, y| {
+                x.insert_all(&y);
+                x
+            },
+        )
+    }
+
     pub fn infer_ctypes(
         &mut self,
     ) -> anyhow::Result<(SketchGraph<CustomLatticeElement>, HashMap<NodeIndex, CType>)> {
         self.recover_additional_shared_returns();
-        let orig_cons = self.get_all_constraints_to_solve(&self.get_graph())?;
-        let cons = self.get_simplified_constraints(&orig_cons)?;
+        let mut cons = Self::scc_constraints_to_constraints(self.get_simplified_constraints()?);
         let labeled_graph = self.get_labeled_sketch_graph(&cons);
         let lowered = Self::lower_labeled_sketch_graph(&labeled_graph)?;
         Ok((labeled_graph, lowered))

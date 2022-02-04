@@ -548,8 +548,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         displacement: i64,
         vm: &mut VariableManager,
     ) -> ConstraintSet {
-        println!("{}", sub.tid);
-        println!("{:#?}", args);
         let mut start_constraints = ConstraintSet::default();
         for (i, arg) in args.iter().enumerate() {
             let formal_tv = Self::create_formal_tvar(i, index_to_field_label, sub);
@@ -611,7 +609,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         vman: &mut VariableManager,
         return_address_displacement: i64,
     ) -> ConstraintSet {
-        println!("Reached return from {}", sub.tid);
         let res = self.make_constraints(
             sub,
             &sub.term.formal_rets,
@@ -620,10 +617,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             return_address_displacement,
             vman,
         );
-        println!("res: {}", res);
+
         res
     }
 
+    //TODO(Ian): implement callsite cloning
     fn handle_call_actual(
         &self,
         sub: &Term<Sub>,
@@ -702,10 +700,9 @@ where
     S: SubprocedureLocators,
 {
     graph: &'a Graph<'a>,
-    node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
+    node_contexts: &'a HashMap<NodeIndex, NodeContext<R, P, S>>,
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
     function_filter: Option<HashSet<Tid>>,
-    weak_integral_type: TypeVariable,
 }
 
 impl<'a, R, P, S> Context<'a, R, P, S>
@@ -717,17 +714,15 @@ where
     /// Creates a new context for type constraint generation.
     pub fn new(
         graph: &'a Graph<'a>,
-        node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
+        node_contexts: &'a HashMap<NodeIndex, NodeContext<R, P, S>>,
         extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
         function_filter: Option<HashSet<Tid>>,
-        weak_integral_type: TypeVariable,
     ) -> Context<'a, R, P, S> {
         Context {
             graph,
             node_contexts,
             extern_symbols,
             function_filter,
-            weak_integral_type,
         }
     }
 
@@ -832,18 +827,7 @@ where
             Node::CallReturn {
                 call: (_call_blk, calling_proc),
                 return_: (_returned_to_blk, return_proc),
-            } => {
-                info!(
-                    "Call-return pre caller {}  retrun {}, \n Call-return {:?}",
-                    calling_proc.tid,
-                    return_proc.tid,
-                    self.function_filter
-                        .as_ref()
-                        .map(|x| x.contains(&calling_proc.tid))
-                );
-
-                &calling_proc.tid
-            }
+            } => &calling_proc.tid,
             Node::CallSource {
                 source: _source,
                 target: (calling_blk, _target_func),
@@ -913,12 +897,15 @@ where
                     let mut total_cons = ConstraintSet::default();
                     for e in self.graph.edges_directed(nd_ind, EdgeDirection::Outgoing) {
                         let tgt = e.target();
-                        if let Some(child_ctxt) = self.node_contexts.get(&tgt) {
-                            total_cons.insert_all(&child_ctxt.handle_return_actual(
-                                return_proc,
-                                vman,
-                                0,
-                            ));
+
+                        if self.should_generate_for_block(self.graph[tgt]) {
+                            if let Some(child_ctxt) = self.node_contexts.get(&tgt) {
+                                total_cons.insert_all(&child_ctxt.handle_return_actual(
+                                    return_proc,
+                                    vman,
+                                    0,
+                                ));
+                            }
                         }
                     }
 
@@ -952,12 +939,11 @@ where
     }
 
     /// Walks all of the nodes and gather the inferred subtyping constraints.
-    pub fn generate_constraints(&self) -> ConstraintSet {
-        let mut vman = VariableManager::new();
+    pub fn generate_constraints(&self, vman: &mut VariableManager) -> ConstraintSet {
         let mut cs: ConstraintSet = Default::default();
         for nd_ind in self.graph.node_indices() {
             cs = ConstraintSet::from(
-                cs.union(&self.generate_constraints_for_node(nd_ind, &mut vman))
+                cs.union(&self.generate_constraints_for_node(nd_ind, vman))
                     .cloned()
                     .collect::<BTreeSet<TyConstraint>>(),
             );
