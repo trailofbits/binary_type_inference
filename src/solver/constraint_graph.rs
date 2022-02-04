@@ -6,10 +6,11 @@ use alga::general::AbstractMagma;
 use anyhow::{anyhow, Result};
 
 use nom::{branch::alt, bytes::complete::tag, multi::separated_list0, sequence::tuple, IResult};
+use petgraph::data::DataMap;
 use petgraph::dot::Dot;
 
 use crate::graph_algos::all_simple_paths;
-use petgraph::visit::IntoNodeReferences;
+use petgraph::visit::{IntoNeighborsDirected, IntoNodeReferences};
 use petgraph::{
     graph::EdgeIndex,
     graph::NodeIndex,
@@ -17,6 +18,7 @@ use petgraph::{
     visit::{EdgeRef, IntoEdgeReferences, Reversed, Walker},
 };
 
+use std::collections::HashSet;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::{Display, Write},
@@ -518,6 +520,26 @@ impl EdgeDefinition {
 }
 
 impl FSA {
+    fn collect_covariant_neighbors<T: IntoNeighborsDirected>(
+        grph: T,
+        ent: T::NodeId,
+    ) -> Vec<T::NodeId>
+    where
+        T: DataMap<NodeWeight = FiniteState>,
+    {
+        grph.neighbors_directed(ent, petgraph::EdgeDirection::Outgoing)
+            .into_iter()
+            .filter(|x| {
+                let nd = grph.node_weight(*x).unwrap();
+                match nd {
+                    FiniteState::Tv(tv) => tv.base_var.variance == Variance::Covariant,
+                    FiniteState::Start => false,
+                    FiniteState::End => false,
+                }
+            })
+            .collect()
+    }
+
     /// Finds the intersection of nodes that are both reachable from the start and end of the automata.
     pub fn remove_unreachable(&mut self) {
         let mut reachable_from_start = BTreeSet::new();
@@ -529,16 +551,20 @@ impl FSA {
         assert!(self.grph.contains_node(start_idx));
         assert!(self.grph.contains_node(end_idx));
 
-        let dfs = petgraph::visit::Dfs::new(&self.grph, *self.mp.get(&FiniteState::Start).unwrap());
+        let cov_entries_start = Self::collect_covariant_neighbors(&self.grph, start_idx);
+
+        let mut dfs = petgraph::visit::Dfs::empty(&self.grph);
+        dfs.stack = cov_entries_start;
+
         dfs.iter(&self.grph).for_each(|x| {
             reachable_from_start.insert(x);
         });
 
         let rev_graph = Reversed(&self.grph);
-        let dfs = petgraph::visit::Dfs::new(
-            &rev_graph,
-            *self.cant_pop_nodes.get(&FiniteState::End).unwrap(),
-        );
+        let cov_entries_end = Self::collect_covariant_neighbors(rev_graph, end_idx);
+
+        let mut dfs = petgraph::visit::Dfs::empty(&rev_graph);
+        dfs.stack = cov_entries_end;
 
         let reachable_from_end = dfs.iter(&rev_graph).collect();
         let mut reachable: BTreeSet<_> = reachable_from_start
