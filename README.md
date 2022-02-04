@@ -21,5 +21,5 @@ Run `cargo doc --document-private-items --open`
 
 ## Running the Demo
 
-We have implimented a [Ghidra frontend](https://github.com/trailofbits/BTIGhidra) for this type inference library. Please use that frontend to try 
+We have implemented a [Ghidra frontend](https://github.com/trailofbits/BTIGhidra) for this type inference library. Please use that frontend to try 
 out the type inference.
