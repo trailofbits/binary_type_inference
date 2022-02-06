@@ -138,6 +138,63 @@ impl From<BaseValueDomain> for (DerivedTypeVar, ConstraintSet) {
     }
 }
 
+// this is kinda a hack
+// Maybe there is a cleaner way to introduce the rule
+// Var x.+y.load.field{size=a, offset=b}
+// --------------------------------------
+//  Var x.load.field{size=a, offset=b+y}
+//As well as  Var +x.+y -> Var +(x+y)
+/// Distributes adds into a field if possible
+pub fn simplify_path(orig: &DerivedTypeVar) -> DerivedTypeVar {
+    let pth = orig.get_field_labels();
+    let mut new_path = Vec::new();
+    let mut delayed_adds = Vec::new();
+    let mut ind = 0;
+
+    fn handle_adds_and_orig(
+        new_path: &mut Vec<FieldLabel>,
+        adds: &mut Vec<&i128>,
+        orig: FieldLabel,
+    ) {
+        adds.drain(..)
+            .for_each(|x| new_path.push(FieldLabel::Add(*x)));
+        new_path.push(orig);
+    }
+
+    while ind < pth.len() {
+        match &pth[ind] {
+            FieldLabel::Add(cst) => delayed_adds.push(cst),
+            FieldLabel::Load | FieldLabel::Store => {
+                let loadorstore = pth[ind].clone();
+                if ind < pth.len() - 1 {
+                    let next = ind + 1;
+                    if let FieldLabel::Field(fld) = &pth[next] {
+                        let mut new_fld = fld.clone();
+                        let total: i128 = delayed_adds.drain(..).copied().sum();
+                        let total: i64 =
+                            total.try_into().expect("Sums of adds should fit in an i64");
+                        new_fld.offset += total;
+                        new_path.push(loadorstore);
+                        new_path.push(FieldLabel::Field(new_fld));
+                        ind += 1;
+                    } else {
+                        handle_adds_and_orig(&mut new_path, &mut delayed_adds, loadorstore);
+                    }
+                } else {
+                    handle_adds_and_orig(&mut new_path, &mut delayed_adds, loadorstore);
+                }
+            }
+            _ => handle_adds_and_orig(&mut new_path, &mut delayed_adds, pth[ind].clone()),
+        }
+        ind += 1;
+    }
+    delayed_adds
+        .drain(..)
+        .for_each(|x| new_path.push(FieldLabel::Add(*x)));
+
+    DerivedTypeVar::create_with_path(orig.get_base_variable().clone(), new_path)
+}
+
 /// Represents the flow-sensitive context needed by flow-insensitive constraint generation to generate type variables and constraints at a given program point.
 /// The register mapping provides constraints and type variables to represent a register when it is accessed via some notion of reaching definitions.
 /// The PointsToMapping determines the set of a type variables a load or store points to in order to generate constraints.
@@ -395,62 +452,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         base_set
     }
 
-    // this is kinda a hack
-    // Maybe there is a cleaner way to introduce the rule
-    // Var x.+y.load.field{size=a, offset=b}
-    // --------------------------------------
-    //  Var x.load.field{size=a, offset=b+y}
-    //As well as  Var +x.+y -> Var +(x+y)
-    fn simplify_path(orig: &DerivedTypeVar) -> DerivedTypeVar {
-        let pth = orig.get_field_labels();
-        let mut new_path = Vec::new();
-        let mut delayed_adds = Vec::new();
-        let mut ind = 0;
-
-        fn handle_adds_and_orig(
-            new_path: &mut Vec<FieldLabel>,
-            adds: &mut Vec<&i128>,
-            orig: FieldLabel,
-        ) {
-            adds.drain(..)
-                .for_each(|x| new_path.push(FieldLabel::Add(*x)));
-            new_path.push(orig);
-        }
-
-        while ind < pth.len() {
-            match &pth[ind] {
-                FieldLabel::Add(cst) => delayed_adds.push(cst),
-                FieldLabel::Load | FieldLabel::Store => {
-                    let loadorstore = pth[ind].clone();
-                    if ind < pth.len() - 1 {
-                        let next = ind + 1;
-                        if let FieldLabel::Field(fld) = &pth[next] {
-                            let mut new_fld = fld.clone();
-                            let total: i128 = delayed_adds.drain(..).copied().sum();
-                            let total: i64 =
-                                total.try_into().expect("Sums of adds should fit in an i64");
-                            new_fld.offset += total;
-                            new_path.push(loadorstore);
-                            new_path.push(FieldLabel::Field(new_fld));
-                            ind += 1;
-                        } else {
-                            handle_adds_and_orig(&mut new_path, &mut delayed_adds, loadorstore);
-                        }
-                    } else {
-                        handle_adds_and_orig(&mut new_path, &mut delayed_adds, loadorstore);
-                    }
-                }
-                _ => handle_adds_and_orig(&mut new_path, &mut delayed_adds, pth[ind].clone()),
-            }
-            ind += 1;
-        }
-        delayed_adds
-            .drain(..)
-            .for_each(|x| new_path.push(FieldLabel::Add(*x)));
-
-        DerivedTypeVar::create_with_path(orig.get_base_variable().clone(), new_path)
-    }
-
     fn build_addressing_representation(
         &self,
         adressing_expr: &Expression,
@@ -467,7 +468,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         representation.add_field_label(field_label);
         representation.add_field_label(FieldLabel::Field(Field::new(0, sz.as_bit_length())));
 
-        representation = Self::simplify_path(&representation);
+        representation = simplify_path(&representation);
 
         for acc in tv_access.iter() {
             let mut dt_repr = DerivedTypeVar::new(acc.ty_var.clone());

@@ -169,6 +169,12 @@ impl VariableManager {
         self.curr_id += 1;
         TypeVariable { name: next_name }
     }
+
+    pub fn fresh_loop_breaker(&mut self) -> TypeVariable {
+        let next_name = format!("loop_breaker{}", self.curr_id.to_string());
+        self.curr_id += 1;
+        TypeVariable { name: next_name }
+    }
 }
 
 impl Default for VariableManager {
