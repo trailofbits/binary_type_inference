@@ -50,9 +50,12 @@ edge(src_node, dst_node) :-
     out_param(src_node, dst_node).
 
 
+.decl NonAliasedFirstClassType(node: NodeId)
+NonAliasedFirstClassType(node) :- Structure(node); Pointer(node, _); Scalar(node).
+
 // a node gets associated with a type where the type gets an id
 .decl FirstClassType(node: NodeId)
-FirstClassType(node) :- Structure(node); Pointer(node, _); Alias(node, _); Scalar(node).
+FirstClassType(node) :- NonAliasedFirstClassType(node); Alias(node, _).
 
 .decl Scalar(node: NodeId)
 Scalar(node) :- !is_bottom(node), !is_top(node), node(node).
@@ -139,7 +142,7 @@ NodesCanBeAliased(node, tgt) :- NodesCanBeAliased(node, mid), NodesCanBeAliased(
 
 // Catch one field structs as type aliases
 .decl Alias(node: NodeId, tgt: NodeId)
-Alias(node, tgt) :- NodesCanBeAliased(node, tgt), FirstClassType(tgt).
+Alias(node, tgt) :- NodesCanBeAliased(node, tgt), FirstClassType(tgt), NonAliasedFirstClassType(tgt), node != tgt.
 .output Alias(headers=true)
 
 

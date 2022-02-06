@@ -61,7 +61,6 @@ pub struct JobDefinition {
     pub lattice_json: String,
     pub additional_constraints_file: String,
     pub interesting_tids: String,
-    pub function_filter_file: Option<String>,
 }
 
 pub struct InferenceJob {
@@ -71,7 +70,6 @@ pub struct InferenceJob {
     weakest_integral_type: TypeVariable,
     additional_constraints: ConstraintSet,
     interesting_tids: HashSet<Tid>,
-    function_filter_tids: Option<HashSet<Tid>>,
 }
 
 pub trait InferenceParsing<T> {
@@ -277,6 +275,10 @@ impl InferenceJob {
             .map(|(name, _elem)| TypeVariable::new(name.clone()))
     }
 
+    pub fn get_additional_constraints(&self) -> &ConstraintSet {
+        &self.additional_constraints
+    }
+
     pub fn recover_additional_shared_returns<'a>(&mut self) {
         let grph = self.get_graph();
         let reg_context = register_map::run_analysis(&self.proj, &grph);
@@ -362,6 +364,7 @@ impl InferenceJob {
     ) -> anyhow::Result<(SketchGraph<CustomLatticeElement>, HashMap<NodeIndex, CType>)> {
         self.recover_additional_shared_returns();
         let mut cons = Self::scc_constraints_to_constraints(self.get_simplified_constraints()?);
+        cons.insert_all(&self.additional_constraints);
         let labeled_graph = self.get_labeled_sketch_graph(&cons);
         let lowered = Self::lower_labeled_sketch_graph(&labeled_graph)?;
         Ok((labeled_graph, lowered))
@@ -380,12 +383,6 @@ impl InferenceJob {
         let additional_constraints =
             Self::parse_additional_constraints::<T>(&def.additional_constraints_file)?;
         let interesting_tids = Self::parse_tid_set::<T>(&def.interesting_tids)?;
-        let function_filter_tids = if let Some(fl) = &def.function_filter_file {
-            let prsed = Self::parse_tid_set::<T>(fl)?;
-            Some(prsed)
-        } else {
-            None
-        };
 
         Ok(InferenceJob {
             binary_bytes: bin,
@@ -393,7 +390,6 @@ impl InferenceJob {
             lattice: lat,
             additional_constraints,
             interesting_tids,
-            function_filter_tids,
             weakest_integral_type,
         })
     }

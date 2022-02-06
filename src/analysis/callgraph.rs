@@ -49,7 +49,6 @@ impl Context<'_> {
             .map(|x| (x.tid.clone(), grph.add_node(x.tid.clone())))
             .collect();
 
-        println!("{:#?}", proj);
         for sub in self.proj.program.term.subs.iter() {
             let start_nd = proj.get(&sub.tid).unwrap();
 
