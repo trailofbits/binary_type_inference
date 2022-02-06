@@ -12,7 +12,7 @@ use nom::multi::{many0, separated_list0};
 use nom::sequence::preceded;
 use nom::{bytes::complete::tag, combinator::map, sequence::tuple, IResult};
 use nom::{AsChar, InputTakeAtPosition};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{Debug, Display, Write};
@@ -29,7 +29,7 @@ where
     input.split_at_position1_complete(
         |x| {
             let chr = x.as_char();
-            chr != '_' && !chr.is_alphanumeric()
+            chr != '$' && chr != '_' && !chr.is_alphanumeric()
         },
         nom::error::ErrorKind::AlphaNumeric,
     )
@@ -127,7 +127,7 @@ pub fn parse_constraint_set(input: &str) -> IResult<&str, ConstraintSet> {
 }
 
 /// A static type variable with a name
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct TypeVariable {
     name: String,
 }
@@ -178,7 +178,7 @@ impl Default for VariableManager {
 }
 
 /// A field constraint of the form .σN@k where N is the bit-width of the field at byte offset k
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct Field {
     /// Offset in bytes of the field.
     pub offset: i64,
@@ -209,7 +209,7 @@ pub struct In {
 }
 
 /// A field label specifies the capabilities of a [DerivedTypeVar]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub enum FieldLabel {
     /// The previous label can be loaded from
     Load,
@@ -304,7 +304,7 @@ impl AbstractSemigroup<Multiplicative> for Variance {}
 /// Variance is determined by the sign monoid of the component [FieldLabel] variances ⊕·⊕ = ⊖·⊖ = ⊕ and ⊕·⊖ = ⊖·⊕ = ⊖
 /// [DerivedTypeVar] forms the expression αw where α ∈ V and w ∈ Σ^*
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash, Ord, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash, Ord, Deserialize, Serialize)]
 pub struct DerivedTypeVar {
     var: TypeVariable,
     labels: Vec<FieldLabel>,
@@ -444,7 +444,7 @@ impl TryFrom<pb_constraints::DerivedTypeVariable> for DerivedTypeVar {
 }
 
 /// Expresses a subtyping constraint of the form lhs ⊑ rhs
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 pub struct SubtypeConstraint {
     /// The left hand side of the subtyping constraint
     pub lhs: DerivedTypeVar,

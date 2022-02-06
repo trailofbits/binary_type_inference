@@ -48,6 +48,7 @@ pub mod inference_job;
 mod tests {
     use std::{
         collections::{BTreeSet, HashMap},
+        f32::MIN_POSITIVE,
         iter::FromIterator,
         path::{Path, PathBuf},
     };
@@ -56,7 +57,9 @@ mod tests {
         constraints::{ConstraintSet, SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
         lowering::CType,
+        solver::scc_constraint_generation::SCCConstraints,
     };
+    use cwe_checker_lib::intermediate_representation::Tid;
     use petgraph::graph::NodeIndex;
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
@@ -79,6 +82,29 @@ mod tests {
         )))
     }
 
+    use serde::{Deserialize, Serialize};
+    #[derive(Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
+    struct DeserSCCCons {
+        scc: Vec<Tid>,
+        constraints: Vec<SubtypeConstraint>,
+    }
+
+    fn normalize_cons(cons: &mut Vec<DeserSCCCons>) {
+        cons.iter_mut().for_each(|c| {
+            c.scc.sort();
+            c.constraints.sort();
+        });
+        cons.sort();
+    }
+
+    fn parse_scc_constraints(fname: &str) -> anyhow::Result<Vec<DeserSCCCons>> {
+        let f = std::fs::File::open(fname)?;
+
+        let mut v: Vec<DeserSCCCons> = serde_json::from_reader(f)?;
+        normalize_cons(&mut v);
+        Ok(v)
+    }
+
     fn parse_ctype_mapping(fname: &str) -> anyhow::Result<HashMap<NodeIndex, CType>> {
         let f = std::fs::File::open(fname)?;
         let content: HashMap<NodeIndex, CType> = serde_json::from_reader(f)?;
@@ -86,7 +112,7 @@ mod tests {
     }
 
     struct ExpectedOutputs {
-        constraint_gen: Option<ConstraintSet>,
+        constraint_gen: Option<Vec<DeserSCCCons>>,
         constraint_simplification: Option<ConstraintSet>,
         ctype_mapping: Option<HashMap<NodeIndex, CType>>,
     }
@@ -97,7 +123,7 @@ mod tests {
         fn try_from(value: ExpectedOutputFiles) -> Result<Self, Self::Error> {
             let expected_gen = value
                 .constraint_gen
-                .map_or(Ok(None), |op| parse_constraint_set_test(&op).map(Some))?;
+                .map_or(Ok(None), |op| parse_scc_constraints(&op).map(Some))?;
 
             let constrain_simpl_expec = value
                 .constraint_simplification
@@ -138,8 +164,29 @@ mod tests {
             .get_simplified_constraints()
             .expect("could not get constraints");
 
-        let simplified = InferenceJob::scc_constraints_to_constraints(genned_cons);
-        //assert_eq_if_available(&genned_cons, expected_values.constraint_gen.as_ref());
+        let mut normalized = genned_cons
+            .iter()
+            .map(|c| DeserSCCCons {
+                scc: c.scc.clone(),
+                constraints: c
+                    .constraints
+                    .iter()
+                    .filter_map(|x| {
+                        if let TyConstraint::SubTy(s) = x {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+
+        normalize_cons(&mut normalized);
+
+        assert_eq_if_available(&normalized, expected_values.constraint_gen.as_ref());
+
+        let mut simplified = InferenceJob::scc_constraints_to_constraints(genned_cons);
 
         println!("simplified: {}", simplified);
         assert_eq_if_available(
@@ -147,10 +194,12 @@ mod tests {
             expected_values.constraint_simplification.as_ref(),
         );
 
+        simplified.insert_all(job.get_additional_constraints());
+
         let labeled_graph = job.get_labeled_sketch_graph(&simplified);
+
         let lowered = InferenceJob::lower_labeled_sketch_graph(&labeled_graph)
             .expect("Should be able to lower graph");
-
         assert_eq_if_available(&lowered, expected_values.ctype_mapping.as_ref());
     }
 
@@ -161,7 +210,6 @@ mod tests {
         lattice_json: Option<String>,
         additional_constraints: Option<String>,
         interesting_tids_file: Option<String>,
-        function_filter_file: Option<String>,
         expec_constraint_gen: Option<String>,
         expec_constraint_simplification: Option<String>,
         expec_ctype_mapping: Option<String>,
@@ -198,11 +246,6 @@ mod tests {
 
         fn set_lattice_json(&mut self, v: String) -> &mut Self {
             self.lattice_json = Some(v);
-            self
-        }
-
-        fn set_function_filter_file(&mut self, v: String) -> &mut Self {
-            self.function_filter_file = Some(v);
             self
         }
 
@@ -246,9 +289,6 @@ mod tests {
                     interesting_tids: Self::test_data_dir(
                         self.interesting_tids_file.expect("need initeresting tids"),
                     ),
-                    function_filter_file: self
-                        .function_filter_file
-                        .map(|fil| Self::test_data_dir(fil)),
                 },
                 expected_outputs: ExpectedOutputFiles {
                     constraint_gen: self
@@ -272,32 +312,19 @@ mod tests {
             .set_lattice_json("list_test_lattice.json".to_owned())
             .set_interesting_tids_file("list_test_interesting_tids.json".to_owned())
             .set_expec_constraint_simplification("list_test_expected_simplified.json".to_string());
+        // TODO(ian): comaprisons on types arent actually useful since ordering can change .set_expec_ctype_mapping("list_test_expected_types.json".to_string());
         run_test_case(bldr.build());
     }
 
-    /*
     #[test]
-    fn mooosl_tc_readkey() {
+    fn mooosl_lookup() {
         let mut bldr = TestCaseBuilder::new();
-        bldr.set_binary_path("mooosl".to_owned())
-            .set_ir_json_path("mooosl.json".to_owned())
-            .set_additional_constraints("mooosl_additional_constraints.json".to_owned())
-            .set_lattice_json("mooosl_test_lattice.json".to_owned())
-            .set_interesting_tids_file("mooosl_test_interesting_tids.json".to_owned())
-            .set_function_filter_file("mooosl_tid_filter.json".to_owned())
-            .set_expec_constraint_simplification("mooosl_simple_return_inference.json".to_owned());
+        bldr.set_binary_path("new_moosl_bin".to_owned())
+            .set_ir_json_path("new_moosl.json".to_owned())
+            .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
+            .set_lattice_json("new_moosl_lattice.json".to_owned())
+            .set_interesting_tids_file("new_moosl_test_interesting_tids.json".to_owned())
+            .set_expec_constraint_gen("new_moosl_scc_cons.json".to_owned());
         run_test_case(bldr.build());
-    }*/
-
-    /*  #[test]
-    fn mooosl_tc_lookup() {
-        let mut bldr = TestCaseBuilder::new();
-        bldr.set_binary_path("mooosl".to_owned())
-            .set_ir_json_path("mooosl.json".to_owned())
-            .set_additional_constraints("mooosl_additional_constraints.json".to_owned())
-            .set_lattice_json("mooosl_test_lattice.json".to_owned())
-            .set_interesting_tids_file("mooosl_test_interesting_tids.json".to_owned());
-        //.set_function_filter_file("mooosl_lookup_tid_filter.json".to_owned());
-        run_test_case(bldr.build());
-    }*/
+    }
 }

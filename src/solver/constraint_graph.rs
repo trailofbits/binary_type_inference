@@ -520,26 +520,6 @@ impl EdgeDefinition {
 }
 
 impl FSA {
-    fn collect_covariant_neighbors<T: IntoNeighborsDirected>(
-        grph: T,
-        ent: T::NodeId,
-    ) -> Vec<T::NodeId>
-    where
-        T: DataMap<NodeWeight = FiniteState>,
-    {
-        grph.neighbors_directed(ent, petgraph::EdgeDirection::Outgoing)
-            .into_iter()
-            .filter(|x| {
-                let nd = grph.node_weight(*x).unwrap();
-                match nd {
-                    FiniteState::Tv(tv) => tv.base_var.variance == Variance::Covariant,
-                    FiniteState::Start => false,
-                    FiniteState::End => false,
-                }
-            })
-            .collect()
-    }
-
     /// Finds the intersection of nodes that are both reachable from the start and end of the automata.
     pub fn remove_unreachable(&mut self) {
         let mut reachable_from_start = BTreeSet::new();
@@ -551,21 +531,13 @@ impl FSA {
         assert!(self.grph.contains_node(start_idx));
         assert!(self.grph.contains_node(end_idx));
 
-        let cov_entries_start = Self::collect_covariant_neighbors(&self.grph, start_idx);
-
-        let mut dfs = petgraph::visit::Dfs::empty(&self.grph);
-        dfs.stack = cov_entries_start;
-
+        let dfs = petgraph::visit::Dfs::new(&self.grph, start_idx);
         dfs.iter(&self.grph).for_each(|x| {
             reachable_from_start.insert(x);
         });
 
         let rev_graph = Reversed(&self.grph);
-        let cov_entries_end = Self::collect_covariant_neighbors(rev_graph, end_idx);
-
-        let mut dfs = petgraph::visit::Dfs::empty(&rev_graph);
-        dfs.stack = cov_entries_end;
-
+        let dfs = petgraph::visit::Dfs::new(&rev_graph, end_idx);
         let reachable_from_end = dfs.iter(&rev_graph).collect();
         let mut reachable: BTreeSet<_> = reachable_from_start
             .intersection(&reachable_from_end)
@@ -970,7 +942,7 @@ impl FSA {
         let src = FiniteState::Tv(TypeVarNode {
             base_var: TypeVarControlState {
                 dt_var: tv1.dt_var.clone(),
-                variance: tv1.variance.clone(),
+                variance: rule.orig_variance.clone(),
             },
             access_path: flds_lhs,
         });
@@ -978,7 +950,7 @@ impl FSA {
         let dst = FiniteState::Tv(TypeVarNode {
             base_var: TypeVarControlState {
                 dt_var: tv2.dt_var.clone(),
-                variance: tv2.variance.clone(),
+                variance: rule.orig_variance.clone(),
             },
             access_path: flds_rhs,
         });
@@ -1003,8 +975,11 @@ impl FSA {
     /// Looping type variables are removed and represented with a fresh interesting type variable.
     /// Finally, unreachable nodes that can neither be reached from the start or end are removed.
     pub fn simplify_graph(&mut self) {
+        println!("{}", Dot::new(self.get_graph()));
         self.saturate();
+        println!("{}", Dot::new(self.get_graph()));
         self.intersect_with_pop_push();
+        println!("{}", Dot::new(self.get_graph()));
         self.remove_unreachable();
         println!("{}", Dot::new(self.get_graph()));
         self.generate_recursive_type_variables();
@@ -1082,15 +1057,11 @@ impl FSA {
         &self,
         ed: &EdgeIndex,
         pat_cons: &impl Fn(&FSAEdge) -> Option<&StackSymbol>,
-    ) -> Option<DerivedTypeVar> {
+    ) -> Option<(DerivedTypeVar, Variance)> {
         let opt = self.grph.edge_weight(*ed).and_then(|x| pat_cons(x));
 
         if let Some(StackSymbol::InterestingVar(iv, var)) = opt {
-            if var == &Variance::Covariant {
-                Some(DerivedTypeVar::new(iv.tv.clone()))
-            } else {
-                None
-            }
+            Some((DerivedTypeVar::new(iv.tv.clone()), var.clone()))
         } else {
             None
         }
@@ -1127,8 +1098,8 @@ impl FSA {
             })
         });
 
-        pop_it.and_then(|lhs| {
-            push_it.and_then(|rhs| {
+        pop_it.and_then(|(lhs, lhs_start_var)| {
+            push_it.and_then(|(rhs, rhs_start_var)| {
                 let mut lhs_path = Vec::new();
                 let mut rhs_path = Vec::new();
                 for edge_idx in &path[1..path.len() - 1] {
@@ -1143,11 +1114,20 @@ impl FSA {
                     }
                 }
                 // pushes occur in reverse order so put to front
+
                 rhs_path.reverse();
-                Some(SubtypeConstraint::new(
-                    DerivedTypeVar::create_with_path(lhs.get_base_variable().clone(), lhs_path),
-                    DerivedTypeVar::create_with_path(rhs.get_base_variable().clone(), rhs_path),
-                ))
+                let lhs_dtv =
+                    DerivedTypeVar::create_with_path(lhs.get_base_variable().clone(), lhs_path);
+                let rhs_dtv =
+                    DerivedTypeVar::create_with_path(rhs.get_base_variable().clone(), rhs_path);
+
+                if lhs_dtv.path_variance().operate(&lhs_start_var) == Variance::Covariant
+                    && rhs_dtv.path_variance().operate(&rhs_start_var) == Variance::Covariant
+                {
+                    Some(SubtypeConstraint::new(lhs_dtv, rhs_dtv))
+                } else {
+                    None
+                }
             })
         })
     }
@@ -1320,6 +1300,7 @@ mod tests {
     use petgraph::dot::Dot;
     use pretty_assertions::assert_eq;
 
+    use std::collections::BTreeMap;
     use std::{collections::BTreeSet, iter::FromIterator, vec};
 
     use crate::{
@@ -1677,11 +1658,11 @@ mod tests {
                 },
                 access_path: vec![],
             }),
-            // This is a covariant constriant going into a stack state that is contravariant so we get cov*contra which since contra is negative and cov is the identity we get contra
+            // Contrary to the paper we keep the covariant of the rule so A <= x.store gives covariant on both rather than multipling by <store>.
             dst: FiniteState::Tv(TypeVarNode {
                 base_var: TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
-                    variance: Variance::Contravariant,
+                    variance: Variance::Covariant,
                 },
                 access_path: vec![FieldLabel::Store],
             }),
@@ -1690,10 +1671,10 @@ mod tests {
 
         let contravar_cons3 = EdgeDefinition {
             src: FiniteState::Tv(TypeVarNode {
-                // This case we have a contravariant constraint with a contravariant stack so contra*contra=cov
+                // We keep around the contravariant here
                 base_var: TypeVarControlState {
                     dt_var: VHat::Uninteresting(TypeVariable::new("x".to_owned())),
-                    variance: Variance::Covariant,
+                    variance: Variance::Contravariant,
                 },
                 access_path: vec![FieldLabel::Store],
             }),
@@ -2100,15 +2081,19 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         fsa_res.simplify_graph();
-        println!("{}", Dot::new(fsa_res.get_graph()));
 
-        /*assert_edges(
-            &fsa_res,
-            "
-                start(pop_a_L⊕)a_L⊕
-                start(pop_a_L⊕)a_L⊕
-             ",
-        );*/
+        let mut x_dtv = DerivedTypeVar::new(TypeVariable::new("x".to_owned()));
+        x_dtv.add_field_label(FieldLabel::Store);
+
+        let sub_cons = TyConstraint::SubTy(SubtypeConstraint::new(
+            DerivedTypeVar::new(TypeVariable::new("y".to_owned())),
+            x_dtv,
+        ));
+
+        let cons2 = fsa_res.walk_constraints();
+        let mut exepeccons = BTreeSet::new();
+        exepeccons.insert(sub_cons);
+        assert_eq!(cons2, ConstraintSet::from(exepeccons));
     }
 
     #[test]
@@ -2133,6 +2118,19 @@ mod tests {
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         fsa_res.simplify_graph();
 
+        let mut a_dtv = DerivedTypeVar::new(TypeVariable::new("a".to_owned()));
+        a_dtv.add_field_label(FieldLabel::Store);
+
+        let sub_cons = TyConstraint::SubTy(SubtypeConstraint::new(
+            a_dtv,
+            DerivedTypeVar::new(TypeVariable::new("b".to_owned())),
+        ));
+
+        let cons2 = fsa_res.walk_constraints();
+        let mut exepeccons = BTreeSet::new();
+        exepeccons.insert(sub_cons);
+        assert_eq!(cons2, ConstraintSet::from(exepeccons));
+
         /*assert_edges(
             &fsa_res,
             "
@@ -2141,12 +2139,75 @@ mod tests {
              ",
         );*/
     }
+
+    #[test]
+    fn func_arg_regression() {
+        let (remaining, cs_set) = constraints::parse_constraint_set(
+            "
+            instr_001016ba_0_RSI <= τ717
+            instr_0010176b_0_RSI <= τ717
+            sub_001014fb.in_1 <= instr_001016ba_0_RSI
+            sub_001014fb.in_1 <= instr_0010176b_0_RSI
+            τ717 <= instr_00101500_0_RBP.store.σ64@32
+            instr_00101500_0_RBP.load.σ64@32 <= instr_00101517_1_$Uc000
+            instr_00101517_1_$Uc000 <= instr_0010151e_0_RDI
+            instr_0010151e_0_RDI <= sub_001013db.in_0
+        ",
+        )
+        .unwrap();
+        println!("test");
+        println!("{}", cs_set);
+
+        assert!(remaining.len() == 0);
+
+        let rc = RuleContext::new(BTreeSet::from_iter(
+            vec![
+                TypeVariable::new("sub_001013db".to_owned()),
+                TypeVariable::new("sub_001014fb".to_owned()),
+            ]
+            .into_iter(),
+        ));
+
+        let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
+        fsa_res.simplify_graph();
+
+        println!("{}", Dot::new(fsa_res.get_graph()));
+
+        println!("{}", fsa_res.walk_constraints());
+    }
+
+    #[test]
+    fn func_store_variance_transitivity_regression() {
+        let (remaining, cs_set) = constraints::parse_constraint_set(
+            "
+            a <= x.store
+            x.load <= c
+        ",
+        )
+        .unwrap();
+        println!("test");
+        println!("{}", cs_set);
+
+        assert!(remaining.len() == 0);
+
+        let rc = RuleContext::new(BTreeSet::from_iter(
+            vec![
+                TypeVariable::new("a".to_owned()),
+                TypeVariable::new("c".to_owned()),
+            ]
+            .into_iter(),
+        ));
+
+        let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
+        fsa_res.simplify_graph();
+        println!("{}", Dot::new(fsa_res.get_graph()));
+        let cons = fsa_res.walk_constraints();
+
+        let mut expeccons = BTreeSet::new();
+        expeccons.insert(TyConstraint::SubTy(SubtypeConstraint::new(
+            DerivedTypeVar::new(TypeVariable::new("a".to_owned())),
+            DerivedTypeVar::new(TypeVariable::new("c".to_owned())),
+        )));
+        assert_eq!(cons, ConstraintSet::from(expeccons));
+    }
 }
-/*
-Next steps: generate a new simplified constraint set that is over interesting variables and fixed types only
-
-From that constraint set, generate initial sketches, using the unification algorithm.
-
-Label initial sketches by performing lattice operations on the nodes when the transducer recogonizes a relationship between X.u and an uninterpretted lattice.
-
-*/

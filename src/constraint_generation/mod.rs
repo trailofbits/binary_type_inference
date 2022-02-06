@@ -505,11 +505,21 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
-        match &df.term {
+        if df.tid.address == "0010150b" {
+            println!("Found the define!!! {:#?}", df);
+        }
+
+        let cs_set = match &df.term {
             Def::Load { var, address } => self.apply_load(&df.tid, var, address, vman),
             Def::Store { address, value } => self.apply_store(&df.tid, value, address, vman),
             Def::Assign { var, value } => self.apply_assign(&df.tid, var, value, vman),
+        };
+
+        if df.tid.address == "0010150b" {
+            println!("{}", cs_set);
         }
+
+        cs_set
     }
 
     fn argtvar_to_dtv(tvar: ArgTvar, displacement: i64) -> DerivedTypeVar {
@@ -826,12 +836,12 @@ where
             Node::BlkStart(_blk, sub) => &sub.tid,
             Node::CallReturn {
                 call: (_call_blk, calling_proc),
-                return_: (_returned_to_blk, return_proc),
+                return_: (_returned_to_blk, _return_proc),
             } => &calling_proc.tid,
             Node::CallSource {
-                source: _source,
-                target: (calling_blk, _target_func),
-            } => &calling_blk.tid,
+                source: (_source_blk, source_func),
+                target: (_target_blk, _target_func),
+            } => &source_func.tid,
             // block post conditions arent needed to generate constraints
             Node::BlkEnd(_blk, sub) => &sub.tid,
         }

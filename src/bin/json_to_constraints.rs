@@ -29,6 +29,7 @@ use std::{
     any,
     collections::BTreeSet,
     convert::TryFrom,
+    fmt::format,
     io::{Read, Write},
 };
 use std::{collections::HashSet, convert::TryInto};
@@ -68,7 +69,6 @@ fn main() -> anyhow::Result<()> {
         .arg(Arg::with_name("lattice_json").required(true))
         .arg(Arg::with_name("additional_constraints_file").required(true))
         .arg(Arg::with_name("interesting_tids").required(true))
-        .arg(Arg::with_name("function_filter_list").required(false))
         .arg(
             Arg::with_name("human_readable_input")
                 .long("human_readable_input")
@@ -100,9 +100,6 @@ fn main() -> anyhow::Result<()> {
         lattice_json: lattice_json.to_owned(),
         interesting_tids: tids_file.to_owned(),
         additional_constraints_file: additional_constraints_file.to_owned(),
-        function_filter_file: matches
-            .value_of("function_filter_list")
-            .map(|x| x.to_owned()),
     };
 
     let mut if_job = if matches.is_present("human_readable_input") {
@@ -112,6 +109,13 @@ fn main() -> anyhow::Result<()> {
     }?;
 
     let (grph, ctypes) = if_job.infer_ctypes()?;
+
+    let mapped_graph = grph.get_graph().map(
+        |idx, nd_elem| format!("{}:{}", idx.index(), nd_elem.get_name()),
+        |_e, fld_label| format!("{}", fld_label),
+    );
+
+    println!("{}", Dot::new(&mapped_graph));
 
     let mut out_file = std::fs::File::create(out_file)?;
     if !matches.is_present("human_readable_output") {

@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    iter::FromIterator,
+};
 
 use cwe_checker_lib::{
     analysis::graph::Graph,
@@ -29,9 +32,9 @@ where
     rule_context: RuleContext,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct SCCConstraints {
-    pub scc: HashSet<Tid>,
+    pub scc: Vec<Tid>,
     pub constraints: ConstraintSet,
 }
 
@@ -58,7 +61,6 @@ where
     }
 
     pub fn get_simplified_constraints(&self) -> anyhow::Result<Vec<SCCConstraints>> {
-        let mut curr_cons = ConstraintSet::default();
         let mut vman = VariableManager::new();
         let maybe_scc: anyhow::Result<Vec<SCCConstraints>> = petgraph::algo::tarjan_scc(&self.cg)
             .into_iter()
@@ -76,11 +78,19 @@ where
                 );
 
                 let basic_cons = cont.generate_constraints(&mut vman);
+
+                if tid_filter.contains(&Tid::create(
+                    "sub_001014fb".to_owned(),
+                    "001014fb".to_owned(),
+                )) {
+                    println!("{}", basic_cons);
+                }
                 let mut fsa = FSA::new(&basic_cons, &self.rule_context)?;
                 fsa.simplify_graph();
                 let cons = fsa.walk_constraints();
+
                 Ok(SCCConstraints {
-                    scc: tid_filter,
+                    scc: Vec::from_iter(tid_filter.into_iter()),
                     constraints: cons,
                 })
             })
