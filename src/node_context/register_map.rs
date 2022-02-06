@@ -37,34 +37,14 @@ impl RegisterContext {
         vman.fresh()
     }
 
-    fn create_def_constraint(
-        repr: TypeVariable,
-        defined_var: &Variable,
-        def: &Definition,
-    ) -> SubtypeConstraint {
-        let def_tvar = RegisterContext::type_variable_from_def(def, defined_var);
-        SubtypeConstraint::new(DerivedTypeVar::new(def_tvar), DerivedTypeVar::new(repr))
-    }
-
     fn generate_multi_def_constraint(
         defined_var: &Variable,
         defs: &TermSet,
-        vman: &mut crate::constraints::VariableManager,
-    ) -> (TypeVariable, ConstraintSet) {
-        let repr = vman.fresh();
-        let constraints = ConstraintSet::from(
-            defs.0
-                .iter()
-                .map(|tid| {
-                    TyConstraint::SubTy(RegisterContext::create_def_constraint(
-                        repr.clone(),
-                        defined_var,
-                        tid,
-                    ))
-                })
-                .collect::<BTreeSet<TyConstraint>>(),
-        );
-        (repr, constraints)
+    ) -> BTreeSet<TypeVariable> {
+        defs.0
+            .iter()
+            .map(|def| RegisterContext::type_variable_from_def(def, defined_var))
+            .collect::<BTreeSet<TypeVariable>>()
     }
 
     fn type_variable_from_def(def: &Definition, defined_variable: &Variable) -> TypeVariable {
@@ -95,29 +75,11 @@ impl NodeContextMapping for RegisterContext {
 }
 
 impl RegisterMapping for RegisterContext {
-    fn access(
-        &self,
-        var: &Variable,
-        vman: &mut crate::constraints::VariableManager,
-    ) -> (
-        crate::constraints::TypeVariable,
-        crate::constraints::ConstraintSet,
-    ) {
+    fn access(&self, var: &Variable) -> BTreeSet<crate::constraints::TypeVariable> {
         let ts = self.mapping.get(var);
-        ts.map(|ts| {
-            if ts.0.len() == 1 {
-                (
-                    RegisterContext::type_variable_from_def(ts.iter().next().unwrap(), var),
-                    ConstraintSet::empty(),
-                )
-            } else {
-                Self::generate_multi_def_constraint(var, ts, vman)
-            }
-        })
-        .unwrap_or((
-            Self::create_empty_var_name(var, vman),
-            ConstraintSet::empty(),
-        ))
+
+        ts.map(|x| Self::generate_multi_def_constraint(var, x))
+            .unwrap_or(BTreeSet::new())
     }
 }
 
