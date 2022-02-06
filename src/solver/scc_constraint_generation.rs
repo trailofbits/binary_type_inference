@@ -86,7 +86,7 @@ where
                     println!("{}", basic_cons);
                 }
                 let mut fsa = FSA::new(&basic_cons, &self.rule_context)?;
-                fsa.simplify_graph();
+                fsa.simplify_graph(&mut vman);
                 let cons = fsa.walk_constraints();
 
                 Ok(SCCConstraints {

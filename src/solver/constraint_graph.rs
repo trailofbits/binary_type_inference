@@ -1,6 +1,8 @@
+use crate::constraint_generation;
 use crate::constraints::{
     parse_field_label, parse_fields, parse_type_variable, parse_whitespace_delim, ConstraintSet,
-    DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable, Variance,
+    DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable, VariableManager,
+    Variance,
 };
 use alga::general::AbstractMagma;
 use anyhow::{anyhow, Result};
@@ -19,6 +21,7 @@ use petgraph::{
 };
 
 use std::collections::HashSet;
+use std::env::VarError;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt::{Display, Write},
@@ -618,7 +621,7 @@ impl FSA {
     /// Removes SCC by selecting a representative node that receives a new interesting type variable.
     /// Recursive constraints will end up expressed in terms of this new loop_breaker type variable.
     /// This function ensures that walk_constraints collects all elementary proofs.
-    pub fn generate_recursive_type_variables(&mut self) {
+    pub fn generate_recursive_type_variables(&mut self, vman: &mut VariableManager) {
         let mut ctr: usize = 0;
 
         loop {
@@ -634,7 +637,7 @@ impl FSA {
                     let non_redundant_removes = self.select_entry_reprs(entries);
                     assert!(!non_redundant_removes.is_empty());
                     for idx in non_redundant_removes.into_iter() {
-                        let tv = TypeVariable::new(format!("loop_breaker{}", ctr));
+                        let tv = vman.fresh_loop_breaker();
                         self.replace_nodes_with_interesting_variable(idx, tv);
                         ctr += 1;
                     }
@@ -974,7 +977,7 @@ impl FSA {
     /// The process then removes the language where pops occur after pushes.
     /// Looping type variables are removed and represented with a fresh interesting type variable.
     /// Finally, unreachable nodes that can neither be reached from the start or end are removed.
-    pub fn simplify_graph(&mut self) {
+    pub fn simplify_graph(&mut self, vman: &mut VariableManager) {
         println!("{}", Dot::new(self.get_graph()));
         self.saturate();
         println!("{}", Dot::new(self.get_graph()));
@@ -982,7 +985,7 @@ impl FSA {
         println!("{}", Dot::new(self.get_graph()));
         self.remove_unreachable();
         println!("{}", Dot::new(self.get_graph()));
-        self.generate_recursive_type_variables();
+        self.generate_recursive_type_variables(vman);
         println!("{}", Dot::new(self.get_graph()));
         self.remove_unreachable();
     }
@@ -1124,7 +1127,10 @@ impl FSA {
                 if lhs_dtv.path_variance().operate(&lhs_start_var) == Variance::Covariant
                     && rhs_dtv.path_variance().operate(&rhs_start_var) == Variance::Covariant
                 {
-                    Some(SubtypeConstraint::new(lhs_dtv, rhs_dtv))
+                    Some(SubtypeConstraint::new(
+                        constraint_generation::simplify_path(&lhs_dtv),
+                        constraint_generation::simplify_path(&rhs_dtv),
+                    ))
                 } else {
                     None
                 }
@@ -2027,7 +2033,7 @@ mod tests {
 
         assert_eq!(actual_edges, expected_edges)
     }
-    use crate::constraints;
+    use crate::constraints::{self, VariableManager};
     #[test]
     fn constraints_simple_pointer_passing() {
         /*
@@ -2080,7 +2086,8 @@ mod tests {
         ));
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
-        fsa_res.simplify_graph();
+        let mut vman = VariableManager::new();
+        fsa_res.simplify_graph(&mut vman);
 
         let mut x_dtv = DerivedTypeVar::new(TypeVariable::new("x".to_owned()));
         x_dtv.add_field_label(FieldLabel::Store);
@@ -2116,7 +2123,8 @@ mod tests {
         ));
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
-        fsa_res.simplify_graph();
+        let mut vman = VariableManager::new();
+        fsa_res.simplify_graph(&mut vman);
 
         let mut a_dtv = DerivedTypeVar::new(TypeVariable::new("a".to_owned()));
         a_dtv.add_field_label(FieldLabel::Store);
@@ -2169,7 +2177,8 @@ mod tests {
         ));
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
-        fsa_res.simplify_graph();
+        let mut vman = VariableManager::new();
+        fsa_res.simplify_graph(&mut vman);
 
         println!("{}", Dot::new(fsa_res.get_graph()));
 
@@ -2199,7 +2208,8 @@ mod tests {
         ));
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
-        fsa_res.simplify_graph();
+        let mut vman = VariableManager::new();
+        fsa_res.simplify_graph(&mut vman);
         println!("{}", Dot::new(fsa_res.get_graph()));
         let cons = fsa_res.walk_constraints();
 
