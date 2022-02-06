@@ -31,13 +31,14 @@ impl SubprocedureLocators for ProcedureContext {
         reg: &impl crate::constraint_generation::RegisterMapping,
         points_to: &impl crate::constraint_generation::PointsToMapping,
         vm: &mut crate::constraints::VariableManager,
-    ) -> (BTreeSet<ArgTvar>, ConstraintSet) {
+    ) -> BTreeSet<ArgTvar> {
         match arg {
             Arg::Register { var, .. } => {
-                let (var, cons) = reg.access(var, vm);
-                let mut tvset = BTreeSet::new();
-                tvset.insert(ArgTvar::VariableTvar(var));
-                (tvset, cons)
+                let var_set = reg.access(var);
+                var_set
+                    .into_iter()
+                    .map(|x| ArgTvar::VariableTvar(x))
+                    .collect()
             }
             Arg::Stack { offset, size, .. } => {
                 // Reason this is ok in the case of actuals: at an actual call site the stack pointer is going to be below the newly pushed EIP which is the 0 offset of the new frame.
@@ -49,16 +50,12 @@ impl SubprocedureLocators for ProcedureContext {
                 let accessed_pointers = points_to.points_to(
                     &Expression::Var(self.stack_pointer.clone()).plus_const(*offset),
                     *size,
-                    vm,
                 );
 
-                (
-                    accessed_pointers
-                        .into_iter()
-                        .map(ArgTvar::MemTvar)
-                        .collect(),
-                    ConstraintSet::empty(),
-                )
+                accessed_pointers
+                    .into_iter()
+                    .map(ArgTvar::MemTvar)
+                    .collect()
             }
         }
     }

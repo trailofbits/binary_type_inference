@@ -158,7 +158,6 @@ impl PointsToMapping for PointsToContext {
         &self,
         address: &cwe_checker_lib::intermediate_representation::Expression,
         sz: cwe_checker_lib::intermediate_representation::ByteSize,
-        _vman: &mut crate::constraints::VariableManager,
     ) -> std::collections::BTreeSet<TypeVariableAccess> {
         let dom_val = self.pointer_state.state.eval(address);
         self.dom_val_to_tvars(&dom_val, sz)
@@ -326,7 +325,6 @@ mod test {
                 is_temp: false,
             }),
             ByteSize::new(8),
-            &mut fake_vman,
         );
 
         println!("{:#?}", access);
@@ -402,7 +400,6 @@ mod test {
                 is_temp: false,
             }),
             ByteSize::new(8),
-            &mut fake_vman,
         );
 
         println!(

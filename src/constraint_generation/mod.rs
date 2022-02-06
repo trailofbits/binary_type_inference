@@ -57,9 +57,8 @@ pub trait NodeContextMapping: Clone {
 /// Maps a variable (register) to it's representing type variable at this time step in the program. This type variable is some representation of
 /// all reaching definitions of this register.
 pub trait RegisterMapping: NodeContextMapping {
-    /// Creates or returns the type variable representing this register at this program point. Takes a [VariableManager] so it
-    /// can create fresh type variables.
-    fn access(&self, var: &Variable, vman: &mut VariableManager) -> (TypeVariable, ConstraintSet);
+    /// Returns the set of TypeVariables that define the target variable at this point. We return the set rather than grouped constraints so that the client can decide the direction in which constraints should go
+    fn access(&self, var: &Variable) -> BTreeSet<TypeVariable>;
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -76,14 +75,8 @@ pub struct TypeVariableAccess {
 /// Maps an address expression and a size to the possible type variables representing the loaded address at this program point.
 /// Implementors of this trait effectively act as memory managers for the type inference algorithm.
 pub trait PointsToMapping: NodeContextMapping {
-    /// Gets the set of type variables this address expression points to.  Takes a [VariableManager] so it
-    /// can create fresh type variables.
-    fn points_to(
-        &self,
-        address: &Expression,
-        sz: ByteSize,
-        vman: &mut VariableManager,
-    ) -> BTreeSet<TypeVariableAccess>;
+    /// Gets the set of type variables this address expression points to.
+    fn points_to(&self, address: &Expression, sz: ByteSize) -> BTreeSet<TypeVariableAccess>;
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -106,7 +99,7 @@ pub trait SubprocedureLocators: NodeContextMapping {
         reg: &impl RegisterMapping,
         points_to: &impl PointsToMapping,
         vm: &mut VariableManager,
-    ) -> (BTreeSet<ArgTvar>, ConstraintSet);
+    ) -> BTreeSet<ArgTvar>;
 }
 
 // TODO(ian): this should have some sort of function on it that takes a lambda and basically joins constraints together to acess the derived type variable or something to prevent
@@ -194,22 +187,39 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         &self,
         lhs: &Expression,
         rhs: &Expression,
+        defining_tvars_are_subtype_of_repr: bool,
         vman: &mut VariableManager,
     ) -> (DerivedTypeVar, ConstraintSet) {
         match (lhs, rhs) {
             (Expression::Const(lhs_const), other_e) => Self::generate_const_add_repr(
                 lhs_const.to_owned(),
-                BaseValueDomain::from(self.evaluate_expression(other_e, vman)),
+                BaseValueDomain::from(self.evaluate_expression(
+                    other_e,
+                    defining_tvars_are_subtype_of_repr,
+                    vman,
+                )),
             )
             .into(),
             (other_e, Expression::Const(rhs_const)) => Self::generate_const_add_repr(
                 rhs_const.to_owned(),
-                BaseValueDomain::from(self.evaluate_expression(other_e, vman)),
+                BaseValueDomain::from(self.evaluate_expression(
+                    other_e,
+                    defining_tvars_are_subtype_of_repr,
+                    vman,
+                )),
             )
             .into(),
             (exp_lhs, exp_rhs) => {
-                let exp1_repr = BaseValueDomain::from(self.evaluate_expression(exp_lhs, vman));
-                let exp2_rep = BaseValueDomain::from(self.evaluate_expression(exp_rhs, vman));
+                let exp1_repr = BaseValueDomain::from(self.evaluate_expression(
+                    exp_lhs,
+                    defining_tvars_are_subtype_of_repr,
+                    vman,
+                ));
+                let exp2_rep = BaseValueDomain::from(self.evaluate_expression(
+                    exp_rhs,
+                    defining_tvars_are_subtype_of_repr,
+                    vman,
+                ));
                 let nvar = DerivedTypeVar::new(vman.fresh());
                 exp1_repr
                     .merge(exp2_rep, &|lhs, rhs, mut cons| {
@@ -230,16 +240,18 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         op: &BinOpType,
         lhs: &Expression,
         rhs: &Expression,
+        defining_tvars_are_subtype_of_repr: bool,
         vman: &mut VariableManager,
     ) -> (DerivedTypeVar, ConstraintSet) {
         match op {
-            BinOpType::IntAdd => self.eval_add(lhs, rhs, vman),
+            BinOpType::IntAdd => self.eval_add(lhs, rhs, defining_tvars_are_subtype_of_repr, vman),
             BinOpType::IntSub => self.eval_add(
                 lhs,
                 &Expression::UnOp {
                     op: UnOpType::IntNegate,
                     arg: Box::new(rhs.clone()),
                 },
+                defining_tvars_are_subtype_of_repr,
                 vman,
             ),
             _ => {
@@ -272,14 +284,42 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     fn evaluate_expression(
         &self,
         value: &Expression,
+        defining_tvars_are_subtype_of_repr: bool,
         vman: &mut VariableManager,
     ) -> (DerivedTypeVar, ConstraintSet) {
         match &value {
             Expression::Var(v2) => {
-                let (rhs_type_var, additional_constraints) = self.reg_map.access(v2, vman);
-                (DerivedTypeVar::new(rhs_type_var), additional_constraints)
+                let vars = self.reg_map.access(v2);
+                if vars.len() == 1 {
+                    let repr = vars.into_iter().next().unwrap();
+                    (DerivedTypeVar::new(repr), ConstraintSet::default())
+                } else if vars.len() == 0 {
+                    (DerivedTypeVar::new(vman.fresh()), ConstraintSet::default())
+                } else {
+                    let repr = DerivedTypeVar::new(vman.fresh());
+                    let cons: BTreeSet<TyConstraint> = vars
+                        .into_iter()
+                        .map(|def_var| {
+                            if defining_tvars_are_subtype_of_repr {
+                                TyConstraint::SubTy(SubtypeConstraint::new(
+                                    DerivedTypeVar::new(def_var),
+                                    repr.clone(),
+                                ))
+                            } else {
+                                TyConstraint::SubTy(SubtypeConstraint::new(
+                                    repr.clone(),
+                                    DerivedTypeVar::new(def_var),
+                                ))
+                            }
+                        })
+                        .collect();
+
+                    (repr, ConstraintSet::from(cons))
+                }
             }
-            Expression::BinOp { op, lhs, rhs } => self.evaluate_binop(op, lhs, rhs, vman),
+            Expression::BinOp { op, lhs, rhs } => {
+                self.evaluate_binop(op, lhs, rhs, defining_tvars_are_subtype_of_repr, vman)
+            }
             Expression::Cast {
                 op,
                 size: _,
@@ -317,13 +357,13 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     ) -> ConstraintSet {
         info!("Working on tid {}", tid);
         info!("Assigning {:?} to {:?}", value, var);
-        let (rhs_type_var, mut constraints) = self.evaluate_expression(value, vman);
-        info!("{}", rhs_type_var);
+        let (value_type_var, mut constraints) = self.evaluate_expression(value, true, vman);
+        info!("{}", value_type_var);
         for repr_cons in constraints.iter() {
             info!("{}", repr_cons);
         }
 
-        let cons = Self::reg_update(tid, var, rhs_type_var);
+        let cons = Self::reg_update(tid, var, value_type_var);
         constraints.insert_all(&cons);
         constraints
     }
@@ -419,8 +459,9 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         address_is_subtype: bool,
         vman: &mut VariableManager,
     ) -> BaseValueDomain {
-        let tv_access = self.points_to.points_to(adressing_expr, sz, vman);
-        let (reg_repr, mut cons) = self.evaluate_expression(adressing_expr, vman);
+        let tv_access = self.points_to.points_to(adressing_expr, sz);
+        let (reg_repr, mut cons) =
+            self.evaluate_expression(adressing_expr, !address_is_subtype, vman);
 
         let mut representation = reg_repr;
         representation.add_field_label(field_label);
@@ -483,7 +524,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
         let ptr_repr = bv_dom.repr_var;
 
-        let (value_repr, value_cons) = self.evaluate_expression(value_expr, vman);
+        let (value_repr, value_cons) = self.evaluate_expression(value_expr, true, vman);
 
         cons.insert_all(&value_cons);
 
@@ -561,7 +602,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         let mut start_constraints = ConstraintSet::default();
         for (i, arg) in args.iter().enumerate() {
             let formal_tv = Self::create_formal_tvar(i, index_to_field_label, sub);
-            let (arg_tvars, add_cons) = self
+            let arg_tvars = self
                 .subprocedure_locators
                 .get_type_variables_and_constraints_for_arg(
                     arg,
@@ -569,8 +610,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                     &self.points_to,
                     vm,
                 );
-
-            start_constraints.insert_all(&add_cons);
 
             for arg_repr_tvar in arg_tvars {
                 let dt = Self::argtvar_to_dtv(arg_repr_tvar, displacement);
