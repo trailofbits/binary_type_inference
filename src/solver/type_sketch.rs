@@ -516,3 +516,34 @@ impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> LabelingContext<'a, U, T> {
             });
     }
 }
+
+#[cfg(test)]
+mod test {
+    use petgraph::dot::Dot;
+
+    use crate::constraints::parse_constraint_set;
+
+    use super::SketchGraph;
+
+    #[test]
+    fn test_simple_equivalence() {
+        // should reduce to one type
+        let (rem, test_set) = parse_constraint_set(
+            "
+        a.load.σ64@40 <= a
+        c <= a
+        c <= b.store.σ64@40
+        ",
+        )
+        .expect("Should parse constraints");
+
+        assert!(rem.len() == 0);
+
+        let grph = SketchGraph::<()>::new(&test_set);
+
+        println!(
+            "{}",
+            Dot::new(&grph.quotient_graph.map(|_, _| "", |_e, e2| e2))
+        );
+    }
+}

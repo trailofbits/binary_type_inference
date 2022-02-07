@@ -52,7 +52,7 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use crate::solver::type_lattice::NamedLatticeElement;
+    use crate::{constraints::DerivedTypeVar, solver::type_lattice::NamedLatticeElement};
     use crate::{
         constraints::{ConstraintSet, SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
@@ -209,6 +209,24 @@ mod tests {
             .expect("Should be able to lower graph");
 
         println!("{:#?}", &lowered);
+        let tid_map = job
+            .get_interesting_tids()
+            .iter()
+            .filter_map(|x| {
+                let tvar = crate::constraint_generation::tid_to_tvar(x);
+
+                if let Some(idx) =
+                    labeled_graph.get_node_index_for_variable(&DerivedTypeVar::new(tvar))
+                {
+                    Some((x.clone(), idx))
+                } else {
+                    None
+                }
+            })
+            .collect::<HashMap<_, _>>();
+
+        println!("{:#?}", tid_map);
+
         assert_eq_if_available(&lowered, expected_values.ctype_mapping.as_ref());
     }
 
