@@ -56,19 +56,13 @@ pub struct PointsToContext {
     pointer_state: PointerState,
     /// Stack pointer for the program, used to determine the stack offset
     pub stack_pointer: Variable,
-    stack_depths: Arc<HashMap<AbstractIdentifier, i64>>,
 }
 
 impl PointsToContext {
-    fn new(
-        st: PointerState,
-        stack_pointer: Variable,
-        stack_depths: Arc<HashMap<AbstractIdentifier, i64>>,
-    ) -> PointsToContext {
+    fn new(st: PointerState, stack_pointer: Variable) -> PointsToContext {
         PointsToContext {
             pointer_state: st,
             stack_pointer,
-            stack_depths,
         }
     }
 }
@@ -92,24 +86,7 @@ impl PointsToContext {
     ) -> TypeVariableAccess {
         // TODO(ian): we may want to normalize this offset to the abstract object offset
         TypeVariableAccess {
-            offset: offset.try_to_offset().ok().and_then(|off| {
-                let mut curr_offset = off;
-                if let Some(min_depth) = self.stack_depths.get(object_id) {
-                    curr_offset += -min_depth;
-                }
-
-                if curr_offset.is_negative() {
-                    warn!(
-                        "Unhandled negative offset {:?} {} stack_id: {},",
-                        object_id.to_string(),
-                        curr_offset,
-                        self.pointer_state.state.stack_id,
-                    );
-                    None
-                } else {
-                    Some(curr_offset)
-                }
-            }),
+            offset: offset.try_to_offset().ok(),
             ty_var: TypeVariable::new(
                 object_id
                     .to_string()
@@ -143,11 +120,7 @@ impl NodeContextMapping for PointsToContext {
     ) -> Self {
         let new_ptr_state = self.pointer_state.apply_def(term);
 
-        PointsToContext::new(
-            new_ptr_state,
-            self.stack_pointer.clone(),
-            self.stack_depths.clone(),
-        )
+        PointsToContext::new(new_ptr_state, self.stack_pointer.clone())
     }
 }
 
@@ -209,24 +182,12 @@ pub fn run_analysis<'a>(
         })
         .collect();
 
-    let depth_context = stack_depth_analysis::Context::new(
-        &state_mapping,
-        cfg,
-        proj.stack_pointer_register.clone(),
-    );
-
-    let stack_depths = Arc::new(depth_context.get_stack_depths());
-    info!("{:?}", stack_depths);
     Ok(state_mapping
         .into_iter()
         .map(|(idx, ps)| {
             (
                 idx,
-                PointsToContext::new(
-                    ps,
-                    proj.stack_pointer_register.clone(),
-                    stack_depths.clone(),
-                ),
+                PointsToContext::new(ps, proj.stack_pointer_register.clone()),
             )
         })
         .collect())
@@ -392,7 +353,6 @@ mod test {
 
         assert!(found);
 
-        let mut fake_vman = VariableManager::new();
         let access = target_points_to.points_to(
             &Expression::Var(Variable {
                 name: "RAX".to_owned(),

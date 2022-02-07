@@ -2,7 +2,43 @@
     {
         "lhs": {
             "var": {
-                "name": "loop_breaker0"
+                "name": "loop_breaker19"
+            },
+            "labels": []
+        },
+        "rhs": {
+            "var": {
+                "name": "loop_breaker21"
+            },
+            "labels": []
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "loop_breaker21"
+            },
+            "labels": [
+                "Load",
+                {
+                    "Field": {
+                        "offset": 0,
+                        "size": 32
+                    }
+                }
+            ]
+        },
+        "rhs": {
+            "var": {
+                "name": "loop_breaker19"
+            },
+            "labels": []
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "loop_breaker21"
             },
             "labels": [
                 "Load",
@@ -28,7 +64,7 @@
     {
         "lhs": {
             "var": {
-                "name": "loop_breaker0"
+                "name": "loop_breaker21"
             },
             "labels": [
                 "Load",
@@ -42,7 +78,7 @@
         },
         "rhs": {
             "var": {
-                "name": "loop_breaker0"
+                "name": "loop_breaker21"
             },
             "labels": []
         }
@@ -60,7 +96,7 @@
         },
         "rhs": {
             "var": {
-                "name": "loop_breaker0"
+                "name": "loop_breaker19"
             },
             "labels": []
         }

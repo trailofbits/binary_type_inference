@@ -141,52 +141,7 @@
                 "address": "001014fb"
             }
         ],
-        "constraints": [
-            {
-                "lhs": {
-                    "var": {
-                        "name": "sub_001014fb"
-                    },
-                    "labels": [
-                        {
-                            "In": 1
-                        }
-                    ]
-                },
-                "rhs": {
-                    "var": {
-                        "name": "sub_001013db"
-                    },
-                    "labels": [
-                        {
-                            "In": 0
-                        }
-                    ]
-                }
-            },
-            {
-                "lhs": {
-                    "var": {
-                        "name": "sub_001014fb"
-                    },
-                    "labels": [
-                        {
-                            "In": 2
-                        }
-                    ]
-                },
-                "rhs": {
-                    "var": {
-                        "name": "sub_001013db"
-                    },
-                    "labels": [
-                        {
-                            "In": 1
-                        }
-                    ]
-                }
-            }
-        ]
+        "constraints": []
     },
     {
         "scc": [
