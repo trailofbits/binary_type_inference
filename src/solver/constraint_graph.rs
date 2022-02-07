@@ -622,8 +622,6 @@ impl FSA {
     /// Recursive constraints will end up expressed in terms of this new loop_breaker type variable.
     /// This function ensures that walk_constraints collects all elementary proofs.
     pub fn generate_recursive_type_variables(&mut self, vman: &mut VariableManager) {
-        let mut ctr: usize = 0;
-
         loop {
             let cond = petgraph::algo::tarjan_scc(&self.grph);
             let mut did_change = false;
@@ -633,13 +631,13 @@ impl FSA {
 
                     let entries = self.get_entries_to_scc(&scc);
                     assert!(!entries.is_empty());
+                    println!("{:?}", entries);
                     println!("Num entries: {}", entries.len());
                     let non_redundant_removes = self.select_entry_reprs(entries);
                     assert!(!non_redundant_removes.is_empty());
                     for idx in non_redundant_removes.into_iter() {
                         let tv = vman.fresh_loop_breaker();
                         self.replace_nodes_with_interesting_variable(idx, tv);
-                        ctr += 1;
                     }
                 }
             }
@@ -981,6 +979,7 @@ impl FSA {
         self.saturate();
         self.intersect_with_pop_push();
         self.remove_unreachable();
+        println!("{}", Dot::new(&self.grph));
         self.generate_recursive_type_variables(vman);
         self.remove_unreachable();
     }

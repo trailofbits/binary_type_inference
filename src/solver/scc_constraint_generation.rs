@@ -80,6 +80,7 @@ where
                 let basic_cons = cont.generate_constraints(&mut vman);
 
                 let mut fsa = FSA::new(&basic_cons, &self.rule_context)?;
+                println!("Working on {:?}", tid_filter);
                 fsa.simplify_graph(&mut vman);
                 let cons = fsa.walk_constraints();
 
