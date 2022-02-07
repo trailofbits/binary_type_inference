@@ -48,11 +48,11 @@ pub mod inference_job;
 mod tests {
     use std::{
         collections::{BTreeSet, HashMap},
-        f32::MIN_POSITIVE,
         iter::FromIterator,
         path::{Path, PathBuf},
     };
 
+    use crate::solver::type_lattice::NamedLatticeElement;
     use crate::{
         constraints::{ConstraintSet, SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
@@ -60,7 +60,7 @@ mod tests {
         solver::scc_constraint_generation::SCCConstraints,
     };
     use cwe_checker_lib::intermediate_representation::Tid;
-    use petgraph::graph::NodeIndex;
+    use petgraph::{dot::Dot, graph::NodeIndex};
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
 
@@ -184,8 +184,6 @@ mod tests {
 
         normalize_cons(&mut normalized);
 
-        assert_eq_if_available(&normalized, expected_values.constraint_gen.as_ref());
-
         let mut simplified = InferenceJob::scc_constraints_to_constraints(genned_cons);
 
         println!("simplified: {}", simplified);
@@ -198,8 +196,19 @@ mod tests {
 
         let labeled_graph = job.get_labeled_sketch_graph(&simplified);
 
+        let mapped_graph = labeled_graph.get_graph().map(
+            |idx, nd_elem| format!("{}:{}", idx.index(), nd_elem.get_name()),
+            |_e, fld_label| format!("{}", fld_label),
+        );
+
+        println!("{}", Dot::new(&mapped_graph));
+
+        assert_eq_if_available(&normalized, expected_values.constraint_gen.as_ref());
+
         let lowered = InferenceJob::lower_labeled_sketch_graph(&labeled_graph)
             .expect("Should be able to lower graph");
+
+        println!("{:#?}", &lowered);
         assert_eq_if_available(&lowered, expected_values.ctype_mapping.as_ref());
     }
 
@@ -325,6 +334,19 @@ mod tests {
             .set_lattice_json("new_moosl_lattice.json".to_owned())
             .set_interesting_tids_file("new_moosl_test_interesting_tids.json".to_owned())
             .set_expec_constraint_gen("new_moosl_scc_cons.json".to_owned());
+        run_test_case(bldr.build());
+    }
+
+    #[test]
+
+    fn mooosl_keyhash() {
+        let mut bldr = TestCaseBuilder::new();
+        bldr.set_binary_path("new_moosl_bin".to_owned())
+            .set_ir_json_path("new_moosl.json".to_owned())
+            .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
+            .set_lattice_json("new_moosl_lattice.json".to_owned())
+            .set_interesting_tids_file("key_hash_tid.json".to_owned())
+            .set_expec_constraint_gen("key_hash_expec_new_moosl.json".to_owned());
         run_test_case(bldr.build());
     }
 }

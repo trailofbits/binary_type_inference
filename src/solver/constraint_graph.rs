@@ -978,15 +978,10 @@ impl FSA {
     /// Looping type variables are removed and represented with a fresh interesting type variable.
     /// Finally, unreachable nodes that can neither be reached from the start or end are removed.
     pub fn simplify_graph(&mut self, vman: &mut VariableManager) {
-        println!("{}", Dot::new(self.get_graph()));
         self.saturate();
-        println!("{}", Dot::new(self.get_graph()));
         self.intersect_with_pop_push();
-        println!("{}", Dot::new(self.get_graph()));
         self.remove_unreachable();
-        println!("{}", Dot::new(self.get_graph()));
         self.generate_recursive_type_variables(vman);
-        println!("{}", Dot::new(self.get_graph()));
         self.remove_unreachable();
     }
 

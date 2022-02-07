@@ -79,12 +79,6 @@ where
 
                 let basic_cons = cont.generate_constraints(&mut vman);
 
-                if tid_filter.contains(&Tid::create(
-                    "sub_001014fb".to_owned(),
-                    "001014fb".to_owned(),
-                )) {
-                    println!("{}", basic_cons);
-                }
                 let mut fsa = FSA::new(&basic_cons, &self.rule_context)?;
                 fsa.simplify_graph(&mut vman);
                 let cons = fsa.walk_constraints();
