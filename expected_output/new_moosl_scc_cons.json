@@ -213,7 +213,110 @@
                 "address": "00101728"
             }
         ],
-        "constraints": []
+        "constraints": [
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        },
+                        "Load",
+                        {
+                            "Field": {
+                                "offset": 40,
+                                "size": 64
+                            }
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "loop_breaker516"
+                    },
+                    "labels": [
+                        "Store",
+                        {
+                            "Field": {
+                                "offset": 0,
+                                "size": 64
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "loop_breaker517"
+                    },
+                    "labels": [
+                        "Load",
+                        {
+                            "Field": {
+                                "offset": 40,
+                                "size": 64
+                            }
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "loop_breaker517"
+                    },
+                    "labels": []
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        },
+                        "Load",
+                        {
+                            "Field": {
+                                "offset": 40,
+                                "size": 64
+                            }
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "loop_breaker517"
+                    },
+                    "labels": []
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_00101728"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                }
+            }
+        ]
     },
     {
         "scc": [
