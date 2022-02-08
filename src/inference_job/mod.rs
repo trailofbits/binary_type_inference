@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
     iter::FromIterator,
+    path::PathBuf,
 };
 
 use anyhow::Context;
@@ -21,7 +22,7 @@ use crate::{
     analysis::{callgraph, fixup_returns},
     constraint_generation::NodeContext,
     constraints::{ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable},
-    lowering::CType,
+    lowering::{immutably_push, CType},
     node_context::{
         points_to::PointsToContext,
         register_map::{self, RegisterContext},
@@ -361,9 +362,12 @@ impl InferenceJob {
 
     pub fn infer_ctypes(
         &mut self,
+        // debug_dir: &PathBuf,
     ) -> anyhow::Result<(SketchGraph<CustomLatticeElement>, HashMap<NodeIndex, CType>)> {
         self.recover_additional_shared_returns();
         let mut cons = Self::scc_constraints_to_constraints(self.get_simplified_constraints()?);
+        //immutably_push(debug_dir, "constraints.ctxt");
+
         cons.insert_all(&self.additional_constraints);
         let labeled_graph = self.get_labeled_sketch_graph(&cons);
         let lowered = Self::lower_labeled_sketch_graph(&labeled_graph)?;
