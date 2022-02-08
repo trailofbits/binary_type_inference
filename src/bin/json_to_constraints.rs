@@ -90,7 +90,7 @@ fn main() -> anyhow::Result<()> {
         .arg(
             Arg::with_name("debug_out_dir")
                 .long("debug_out_dir")
-                .required(true)
+                .required(false)
                 .takes_value(true),
         )
         .get_matches();
