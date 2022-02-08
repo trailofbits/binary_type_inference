@@ -529,7 +529,7 @@ fn generate_facts_files<U: NamedLatticeElement>(
     Ok(())
 }
 
-fn immutably_push<P>(pb: &PathBuf, new_path: P) -> PathBuf
+pub fn immutably_push<P>(pb: &PathBuf, new_path: P) -> PathBuf
 where
     P: AsRef<Path>,
 {

@@ -6,6 +6,7 @@ use binary_type_inference::{
     },
     ctypes::{self},
     inference_job::{InferenceJob, JobDefinition, JsonDef, ProtobufDef},
+    lowering::immutably_push,
     node_context,
     pb_constraints::{self},
     solver::{
@@ -31,6 +32,7 @@ use std::{
     convert::TryFrom,
     fmt::format,
     io::{Read, Write},
+    path::{Path, PathBuf},
 };
 use std::{collections::HashSet, convert::TryInto};
 use tempdir::TempDir;
@@ -85,6 +87,12 @@ fn main() -> anyhow::Result<()> {
                 .required(true)
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("debug_out_dir")
+                .long("debug_out_dir")
+                .required(true)
+                .takes_value(true),
+        )
         .get_matches();
 
     let input_bin = matches.value_of("input_bin").unwrap();
@@ -115,7 +123,13 @@ fn main() -> anyhow::Result<()> {
         |_e, fld_label| format!("{}", fld_label),
     );
 
-    println!("{}", Dot::new(&mapped_graph));
+    if let Some(debug_graph_file) = matches.value_of("debug_out_dir") {
+        let mut pbuf = PathBuf::new();
+        pbuf.push(debug_graph_file);
+
+        let mut fl = std::fs::File::create(immutably_push(&pbuf, "debug_graph.dot"))?;
+        write!(&mut fl, "{}", Dot::new(&mapped_graph))?;
+    }
 
     let mut out_file = std::fs::File::create(out_file)?;
     if !matches.is_present("human_readable_output") {
