@@ -20,7 +20,7 @@ use petgraph::{
     visit::{EdgeRef, IntoEdgeReferences, Reversed, Walker},
 };
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env::VarError;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -618,9 +618,26 @@ impl FSA {
             .collect()
     }
 
+    fn dtv_from_finite_state(fs: &FiniteState) -> Option<DerivedTypeVar> {
+        match fs {
+            FiniteState::Tv(tv) => Some(match &tv.base_var.dt_var {
+                VHat::Interesting(iv) => {
+                    DerivedTypeVar::create_with_path(iv.tv.clone(), tv.access_path.clone())
+                }
+                VHat::Uninteresting(ltv) => {
+                    DerivedTypeVar::create_with_path(ltv.clone(), tv.access_path.clone())
+                }
+            }),
+            FiniteState::Start => None,
+            FiniteState::End => None,
+        }
+    }
+
     /// Removes SCC by selecting a representative node that receives a new interesting type variable.
     /// Recursive constraints will end up expressed in terms of this new loop_breaker type variable.
     /// This function ensures that walk_constraints collects all elementary proofs.
+    ///
+    /// TODO(ian): prevent creating multiple loop breakers for the same DTV, this requires removing both the old and new node when we remove  anode
     pub fn generate_recursive_type_variables(&mut self, vman: &mut VariableManager) {
         loop {
             let cond = petgraph::algo::tarjan_scc(&self.grph);
@@ -637,13 +654,32 @@ impl FSA {
                     assert!(!non_redundant_removes.is_empty());
                     for idx in non_redundant_removes.into_iter() {
                         let tv = vman.fresh_loop_breaker();
-                        self.replace_nodes_with_interesting_variable(idx, tv);
+                        let fs = self
+                            .grph
+                            .node_weight(idx)
+                            .expect("should be valid index")
+                            .clone();
+                        self.replace_if_exists(self.mp.get(&fs).cloned(), tv.clone());
+                        self.replace_if_exists(self.mp.get(&fs.not()).cloned(), tv.clone());
+                        self.replace_if_exists(self.cant_pop_nodes.get(&fs).cloned(), tv.clone());
+                        self.replace_if_exists(
+                            self.cant_pop_nodes.get(&fs.not()).cloned(),
+                            tv.clone(),
+                        );
                     }
                 }
             }
 
             if !did_change {
                 break;
+            }
+        }
+    }
+
+    fn replace_if_exists(&mut self, mp: Option<NodeIndex>, with_tv: TypeVariable) {
+        if let Some(idx) = mp {
+            if self.grph.contains_node(idx) {
+                self.replace_nodes_with_interesting_variable(idx, with_tv);
             }
         }
     }
