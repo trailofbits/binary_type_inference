@@ -639,10 +639,15 @@ impl FSA {
     ///
     /// TODO(ian): prevent creating multiple loop breakers for the same DTV, this requires removing both the old and new node when we remove  anode
     pub fn generate_recursive_type_variables(&mut self, vman: &mut VariableManager) {
+        let mut removed = HashSet::new();
         loop {
             let cond = petgraph::algo::tarjan_scc(&self.grph);
             let mut did_change = false;
             for scc in cond.into_iter() {
+                if scc.iter().any(|x| removed.contains(x)) {
+                    continue;
+                }
+
                 if scc.len() != 1 {
                     did_change = true;
 
@@ -654,18 +659,13 @@ impl FSA {
                     assert!(!non_redundant_removes.is_empty());
                     for idx in non_redundant_removes.into_iter() {
                         let tv = vman.fresh_loop_breaker();
-                        let fs = self
-                            .grph
-                            .node_weight(idx)
-                            .expect("should be valid index")
-                            .clone();
-                        self.replace_if_exists(self.mp.get(&fs).cloned(), tv.clone());
-                        self.replace_if_exists(self.mp.get(&fs.not()).cloned(), tv.clone());
-                        self.replace_if_exists(self.cant_pop_nodes.get(&fs).cloned(), tv.clone());
-                        self.replace_if_exists(
-                            self.cant_pop_nodes.get(&fs.not()).cloned(),
-                            tv.clone(),
-                        );
+
+                        let eq = self.get_equiv_node_idxs(idx);
+                        eq.iter()
+                            .for_each(|i| self.replace_if_exists(*i, tv.clone()));
+                        eq.into_iter().for_each(|x| {
+                            removed.insert(x);
+                        });
                     }
                 }
             }
@@ -676,11 +676,24 @@ impl FSA {
         }
     }
 
-    fn replace_if_exists(&mut self, mp: Option<NodeIndex>, with_tv: TypeVariable) {
-        if let Some(idx) = mp {
-            if self.grph.contains_node(idx) {
-                self.replace_nodes_with_interesting_variable(idx, with_tv);
-            }
+    fn get_equiv_node_idxs(&self, idx: NodeIndex) -> Vec<NodeIndex> {
+        let fs = self
+            .grph
+            .node_weight(idx)
+            .expect("should be valid index")
+            .clone();
+        let v: Vec<Option<NodeIndex>> = vec![
+            self.mp.get(&fs.not()).cloned(),
+            self.mp.get(&fs).cloned(),
+            self.cant_pop_nodes.get(&fs.not()).cloned(),
+            self.cant_pop_nodes.get(&fs).cloned(),
+        ];
+        v.into_iter().filter_map(|x| x).collect()
+    }
+
+    fn replace_if_exists(&mut self, idx: NodeIndex, with_tv: TypeVariable) {
+        if self.grph.contains_node(idx) {
+            self.replace_nodes_with_interesting_variable(idx, with_tv);
         }
     }
 
