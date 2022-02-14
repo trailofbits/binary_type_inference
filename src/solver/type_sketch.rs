@@ -530,13 +530,14 @@ mod test {
         // should reduce to one type
         let (rem, test_set) = parse_constraint_set(
             "
-        a.load.σ64@40 <= a
-        c <= a
-        c <= b.store.σ64@40
+            loop_breaker517.load.σ64@40 <= loop_breaker517
+            sub_001014fb.out.load.σ64@40 <= loop_breaker517.store.σ64@0
+            sub_001014fb.out.load.σ64@40 <= loop_breaker517
+            sub_00101728.in_0 <= sub_001014fb.in_0
         ",
         )
         .expect("Should parse constraints");
-
+        println!("{}", rem);
         assert!(rem.len() == 0);
 
         let grph = SketchGraph::<()>::new(&test_set);

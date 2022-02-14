@@ -52,7 +52,10 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use crate::{constraints::DerivedTypeVar, solver::type_lattice::NamedLatticeElement};
+    use crate::{
+        constraints::DerivedTypeVar,
+        solver::{constraint_graph::FSA, type_lattice::NamedLatticeElement},
+    };
     use crate::{
         constraints::{ConstraintSet, SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},

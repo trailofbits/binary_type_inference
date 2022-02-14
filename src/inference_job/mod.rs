@@ -21,7 +21,7 @@ use tempdir::TempDir;
 use crate::{
     analysis::{callgraph, fixup_returns},
     constraint_generation::NodeContext,
-    constraints::{ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable},
+    constraints::{ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable, VariableManager},
     lowering::{immutably_push, CType},
     node_context::{
         points_to::PointsToContext,
@@ -71,6 +71,7 @@ pub struct InferenceJob {
     weakest_integral_type: TypeVariable,
     additional_constraints: ConstraintSet,
     interesting_tids: HashSet<Tid>,
+    vman: VariableManager,
 }
 
 pub trait InferenceParsing<T> {
@@ -281,7 +282,7 @@ impl InferenceJob {
     }
 
     pub fn recover_additional_shared_returns<'a>(&mut self) {
-        let grph = self.get_graph();
+        let grph = Self::graph_from_project(&self.proj);
         let reg_context = register_map::run_analysis(&self.proj, &grph);
         let reaching_defs_start_of_block = reg_context
             .iter()
@@ -297,14 +298,7 @@ impl InferenceJob {
         rets.apply_psuedo_returns();
     }
 
-    pub fn get_simplified_constraints(
-        &self,
-    ) -> anyhow::Result<Vec<scc_constraint_generation::SCCConstraints>> {
-        let grph = self.get_graph();
-        let node_ctxt = self.get_node_context(&grph)?;
-
-        let cg = callgraph::Context::new(&self.proj).get_graph();
-
+    pub fn get_rule_context(&self) -> RuleContext {
         let mut only_interestings = BTreeSet::new();
 
         self.interesting_tids.iter().for_each(|x| {
@@ -319,13 +313,30 @@ impl InferenceJob {
             interesting_and_lattice.insert(x.clone());
         });
 
-        let rule_context = RuleContext::new(interesting_and_lattice);
+        RuleContext::new(interesting_and_lattice)
+    }
+
+    pub fn get_vman(&mut self) -> &mut VariableManager {
+        &mut self.vman
+    }
+
+    pub fn get_simplified_constraints(
+        &mut self,
+    ) -> anyhow::Result<Vec<scc_constraint_generation::SCCConstraints>> {
+        let grph = Self::graph_from_project(&self.proj);
+        let node_ctxt = self.get_node_context(&grph)?;
+
+        let cg = callgraph::Context::new(&self.proj).get_graph();
+
+        let rule_context = self.get_rule_context();
+
         scc_constraint_generation::Context::new(
             cg,
             &grph,
             node_ctxt,
             &self.proj.program.term.extern_symbols,
             rule_context,
+            &mut self.vman,
         )
         .get_simplified_constraints()
     }
@@ -395,6 +406,7 @@ impl InferenceJob {
             additional_constraints,
             interesting_tids,
             weakest_integral_type,
+            vman: VariableManager::new(),
         })
     }
 }
