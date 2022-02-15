@@ -345,7 +345,7 @@ mod tests {
         // TODO(ian): comaprisons on types arent actually useful since ordering can change .set_expec_ctype_mapping("list_test_expected_types.json".to_string());
         run_test_case(bldr.build());
     }
-
+    /*
     #[test]
     fn mooosl_lookup() {
         let mut bldr = TestCaseBuilder::new();
@@ -356,7 +356,7 @@ mod tests {
             .set_interesting_tids_file("new_moosl_test_interesting_tids.json".to_owned())
             .set_expec_constraint_gen("new_moosl_scc_cons.json".to_owned());
         run_test_case(bldr.build());
-    }
+    }*/
 
     #[test]
 
