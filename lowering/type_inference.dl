@@ -5,7 +5,7 @@
 .type Bits <: unsigned
 .type Field = [size: Bits, offset: Bytes]
 .type Argument = [idx: ParamIdx]
-
+.type Constant  <: number
 
 
 .decl node(node_id: NodeId)
@@ -27,6 +27,9 @@
 .decl can_store(src_node: NodeId, dst_node: NodeId)
 .input can_store
 
+.decl can_add(src_node: NodeId, dst_node: NodeId, const: Constant)
+.input can_add
+
 // size in bits offset in bytes
 .decl has_field(src_node: NodeId, dst_node: NodeId, size: Bits, offset: Bytes)
 .input has_field
@@ -45,6 +48,7 @@
 edge(src_node, dst_node) :- 
     can_load(src_node, dst_node);
     can_store(src_node, dst_node);
+    can_add(src_node, dst_node, constant);
     has_field(src_node, dst_node, _, _);
     in_param(src_node, dst_node, _);
     out_param(src_node, dst_node).
@@ -81,14 +85,22 @@ Function(node) :-
 .decl AllOutgoingAreOutsOrIns(node: NodeId)
 AllOutgoingAreOutsOrIns(src_node) :- 
     (out_param(src_node, _); in_param(src_node, _, _)),
+    !can_add(src_node, _, _),
     !can_load(src_node, _),
     !can_store(src_node, _),
     !has_field(src_node, _, _, _).
 
 .decl AllOutgoingFields(src: NodeId)
 AllOutgoingFields(src_id) :- has_field(src_id, _, _, _),
-    !in_param(src_id, _, _), !out_param(src_id, _), !can_store(src_id, _), !can_load(src_id, _).
+    !in_param(src_id, _, _), !out_param(src_id, _), !can_store(src_id, _), !can_load(src_id, _), !can_add(src_id, _, _).
 
+
+
+//.decl FieldIsShifted(fld: Field, src_id: NodeId, dst_type: NodeId, cons: Constant)
+//FieldIsShifted([size, offset], src_node, dst_node, shift) :- 
+
+
+// Has Field exists to allow additions to shift fields if possible
 .decl HasField(fld: Field, src_id: NodeId, dst_type: NodeId)
 HasField([size, offset], src_node, dst_node) :- has_field(src_node, dst_node, size, offset).
 
@@ -135,7 +147,23 @@ AllChildrenTyped(node) :- !HasUntypedOutgoingEdge(node), node(node).
 Type(node) :- AllChildrenTyped(node), ComplexType(node).
 .output Type(headers=true)
 
+.decl OnlyAdds(src_node: NodeId)
+OnlyAdds(src_node) :- 
+    !out_param(src_node, _), !in_param(src_node, _, _),
+    can_add(src_node, _, _),
+    !can_load(src_node, _),
+    !can_store(src_node, _),
+    !has_field(src_node, _, _, _).
+
+.decl OnlyEdgesFromTo(node: NodeId, tgt: NodeId)
+OnlyEdgesFromTo(node, tgt) :- edge(node, tgt), !edge(node, other), node(other), tgt != other.
+
+
+.decl AddToPtr(node: NodeId, tgt: NodeId)
+AddToPtr(node, tgt) :- OnlyEdgesFromTo(node, tgt), OnlyAdds(node), OnlyOutgoingStoresAndLoads(node), (can_load(node, tgt) ; can_store(node, tgt)).
+
 .decl NodesCanBeAliased(node: NodeId, tgt: NodeId)
+NodesCanBeAliased(node, tgt) :- AddToPtr(node, tgt).
 NodesCanBeAliased(node, tgt) :- !MultiFieldStructure(node), CompatibleStructure(node), HasField(_, node, tgt).
 NodesCanBeAliased(node, tgt) :- NodesCanBeAliased(tgt, node).
 NodesCanBeAliased(node, tgt) :- NodesCanBeAliased(node, mid), NodesCanBeAliased(mid, tgt).
