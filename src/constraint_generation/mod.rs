@@ -916,6 +916,7 @@ where
                     let incoming_edges = Self::edges_to_edge_iter(
                         self.graph.edges_directed(nd_ind, EdgeDirection::Incoming),
                     );
+
                     info!("Collecting extern constraints for {} {}", sub.tid, blk.tid);
                     let add_cons =
                         self.collect_extern_ret_constraints(incoming_edges, nd_cont, vman);

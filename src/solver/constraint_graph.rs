@@ -1031,6 +1031,7 @@ impl FSA {
         println!("{}", Dot::new(&self.grph));
         self.generate_recursive_type_variables(vman);
         self.remove_unreachable();
+        println!("{}", Dot::new(&self.grph));
     }
 
     /// Removes unproductive transitions in the FSA. ie. transitions of the form pop y push x where x/=y

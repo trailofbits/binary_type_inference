@@ -250,21 +250,24 @@
             {
                 "lhs": {
                     "var": {
-                        "name": "loop_breaker517"
+                        "name": "loop_breaker516"
                     },
                     "labels": [
                         "Load",
                         {
                             "Field": {
-                                "offset": 40,
+                                "offset": 0,
                                 "size": 64
                             }
+                        },
+                        {
+                            "Add": 40
                         }
                     ]
                 },
                 "rhs": {
                     "var": {
-                        "name": "loop_breaker517"
+                        "name": "loop_breaker516"
                     },
                     "labels": []
                 }
@@ -289,7 +292,7 @@
                 },
                 "rhs": {
                     "var": {
-                        "name": "loop_breaker517"
+                        "name": "loop_breaker516"
                     },
                     "labels": []
                 }

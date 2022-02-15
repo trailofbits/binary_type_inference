@@ -8,7 +8,7 @@
         },
         "rhs": {
             "var": {
-                "name": "loop_breaker21"
+                "name": "loop_breaker20"
             },
             "labels": []
         }
@@ -16,7 +16,7 @@
     {
         "lhs": {
             "var": {
-                "name": "loop_breaker21"
+                "name": "loop_breaker20"
             },
             "labels": [
                 "Load",
@@ -30,7 +30,7 @@
         },
         "rhs": {
             "var": {
-                "name": "loop_breaker19"
+                "name": "loop_breaker21"
             },
             "labels": []
         }
@@ -38,7 +38,7 @@
     {
         "lhs": {
             "var": {
-                "name": "loop_breaker21"
+                "name": "loop_breaker20"
             },
             "labels": [
                 "Load",
@@ -66,19 +66,25 @@
             "var": {
                 "name": "loop_breaker21"
             },
-            "labels": [
-                "Load",
-                {
-                    "Field": {
-                        "offset": 0,
-                        "size": 32
-                    }
-                }
-            ]
+            "labels": []
         },
         "rhs": {
             "var": {
+                "name": "loop_breaker19"
+            },
+            "labels": []
+        }
+    },
+    {
+        "lhs": {
+            "var": {
                 "name": "loop_breaker21"
+            },
+            "labels": []
+        },
+        "rhs": {
+            "var": {
+                "name": "loop_breaker20"
             },
             "labels": []
         }
