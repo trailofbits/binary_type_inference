@@ -5,7 +5,7 @@
 .type Bits <: unsigned
 .type Field = [size: Bits, offset: Bytes]
 .type Argument = [idx: ParamIdx]
-.type Constant  <: number
+.type Constant  <: unsigned
 
 
 .decl node(node_id: NodeId)
@@ -95,15 +95,23 @@ AllOutgoingFields(src_id) :- has_field(src_id, _, _, _),
     !in_param(src_id, _, _), !out_param(src_id, _), !can_store(src_id, _), !can_load(src_id, _), !can_add(src_id, _, _).
 
 
+.decl AllIncomingAddCons(tgt: NodeId, cons: Constant)
+AllIncomingAddCons(tgt, cons) :- OnlyAdds(tgt), !(some_cons != cons), can_add(_, tgt, some_cons), can_add(_, tgt, cons).
 
-//.decl FieldIsShifted(fld: Field, src_id: NodeId, dst_type: NodeId, cons: Constant)
-//FieldIsShifted([size, offset], src_node, dst_node, shift) :- 
+.decl AllPtrsShiftedByCons(tgt: NodeId, cons: Constant)
+AllPtrsShiftedByCons(tgt, cons) :- !(edge(src, tgt), !AllIncomingAddCons(src, cons)), can_add(_, src, cons), node(tgt).
+
+.decl AllPrevNodesAddToPtrCons(tgt : NodeId, cons: Constant)
+AllPrevNodesAddToPtrCons(tgt, cons) :- !(edge(src, tgt), !OnlyOutgoingStoresAndLoads(src)), OnlyOutgoingStoresAndLoads(src), can_add(_, src, cons), AllOutgoingFields(tgt).
+
+.decl FieldIsShifted(fld: Field, src_id: NodeId, dst_type: NodeId, cons: Constant)
+FieldIsShifted([size, offset], src_node, dst_node, shift) :- AllPrevNodesAddToPtrCons(src_node,shift), has_field(src_node, dst_node, size, offset).
 
 
 // Has Field exists to allow additions to shift fields if possible
 .decl HasField(fld: Field, src_id: NodeId, dst_type: NodeId)
-HasField([size, offset], src_node, dst_node) :- has_field(src_node, dst_node, size, offset).
-
+HasField([size, offset], src_node, dst_node) :- has_field(src_node, dst_node, size, offset), !FieldIsShifted(_, src_node, dst_node, _).
+HasField([size, offset+ shift], src_node, dst_node) :- FieldIsShifted([size, offset], src_node, dst_node, shift).
 
 .decl IncompatibleFields(f1: Field, f2: Field, src_node: NodeId)
 IncompatibleFields([f1_sz, f1_offset], [f2_sz, f2_offset], src_node) :-
