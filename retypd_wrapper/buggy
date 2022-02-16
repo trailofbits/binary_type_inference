@@ -1,3 +1,0 @@
-x <= a
-x.store <= y
-y <= b
