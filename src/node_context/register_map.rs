@@ -165,10 +165,6 @@ mod test {
                 cwe_checker_lib::analysis::graph::Node::BlkStart(_, _) => false,
                 cwe_checker_lib::analysis::graph::Node::BlkEnd(_, _) => false,
                 cwe_checker_lib::analysis::graph::Node::CallReturn { call, return_ } => {
-                    println!(
-                        "{} {} {} {}",
-                        call.0.tid, call.1.tid, return_.0.tid, return_.1.tid
-                    );
                     call.1.tid.address == "001012ed" && return_.1.tid.address == "0010128f"
                 }
                 cwe_checker_lib::analysis::graph::Node::CallSource { .. } => false,

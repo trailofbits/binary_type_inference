@@ -52,15 +52,11 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use crate::{
-        constraints::DerivedTypeVar,
-        solver::{constraint_graph::FSA, type_lattice::NamedLatticeElement},
-    };
+    use crate::{constraints::DerivedTypeVar, solver::type_lattice::NamedLatticeElement};
     use crate::{
         constraints::{ConstraintSet, SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
         lowering::CType,
-        solver::scc_constraint_generation::SCCConstraints,
     };
     use cwe_checker_lib::intermediate_representation::Tid;
     use petgraph::{dot::Dot, graph::NodeIndex};
@@ -156,6 +152,31 @@ mod tests {
         expected.map(|exected_avail| assert_eq!(actual, exected_avail));
     }
 
+    fn test_equivalence(expected: Option<&Vec<DeserSCCCons>>, actual: &Vec<DeserSCCCons>) {
+        expected.map(|expected_v| {
+            let mp = actual
+                .iter()
+                .map(|scc| (scc.scc.clone(), scc.constraints.clone()))
+                .collect::<HashMap<_, _>>();
+
+            for grp in expected_v.iter() {
+                assert!(
+                    mp.contains_key(&grp.scc),
+                    "The generated constraints do not contain the scc {:#?}",
+                    grp.scc
+                );
+
+                let scc_cons = mp.get(&grp.scc).unwrap();
+
+                assert_eq!(
+                    &grp.constraints, scc_cons,
+                    "Left actual constraints did not equal right for scc: {:#?}",
+                    grp.scc
+                )
+            }
+        });
+    }
+
     fn run_test_case(tc: TestCase) {
         init();
         let mut job = InferenceJob::parse::<JsonDef>(&tc.job_def).unwrap();
@@ -187,9 +208,10 @@ mod tests {
 
         normalize_cons(&mut normalized);
 
+        test_equivalence(expected_values.constraint_gen.as_ref(), &normalized);
+
         let mut simplified = InferenceJob::scc_constraints_to_constraints(genned_cons);
 
-        println!("simplified: {}", simplified);
         assert_eq_if_available(
             &simplified,
             expected_values.constraint_simplification.as_ref(),
@@ -205,13 +227,13 @@ mod tests {
         );
 
         println!("{}", Dot::new(&mapped_graph));
-
-        assert_eq_if_available(&normalized, expected_values.constraint_gen.as_ref());
+        for (dtv, idx) in labeled_graph.get_dtv_to_group().iter() {
+            println!("Dtv: {} Group: {}", dtv, idx.index());
+        }
 
         let lowered = InferenceJob::lower_labeled_sketch_graph(&labeled_graph)
             .expect("Should be able to lower graph");
 
-        println!("{:#?}", &lowered);
         let tid_map = job
             .get_interesting_tids()
             .iter()
@@ -227,8 +249,6 @@ mod tests {
                 }
             })
             .collect::<HashMap<_, _>>();
-
-        println!("{:#?}", tid_map);
 
         assert_eq_if_available(&lowered, expected_values.ctype_mapping.as_ref());
     }
@@ -357,6 +377,29 @@ mod tests {
             .set_expec_constraint_gen("new_moosl_scc_cons.json".to_owned());
         run_test_case(bldr.build());
     }*/
+
+    #[test]
+    fn test_mooosl_delete_constraint_gen() {
+        let mut bldr = TestCaseBuilder::new();
+        bldr.set_binary_path("new_moosl_bin".to_owned())
+            .set_ir_json_path("new_moosl.json".to_owned())
+            .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
+            .set_lattice_json("new_moosl_lattice.json".to_owned())
+            .set_interesting_tids_file("new_moosl_test_interesting_tids.json".to_owned())
+            .set_expec_constraint_gen("delete_scc_check.json".to_owned());
+        run_test_case(bldr.build());
+    }
+
+    #[test]
+    fn test_mooosl_full_constraint_gen() {
+        let mut bldr = TestCaseBuilder::new();
+        bldr.set_binary_path("new_moosl_bin".to_owned())
+            .set_ir_json_path("new_moosl.json".to_owned())
+            .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
+            .set_lattice_json("new_moosl_lattice.json".to_owned())
+            .set_interesting_tids_file("full_mooosl_tid_list.json".to_owned());
+        run_test_case(bldr.build());
+    }
 
     #[test]
 

@@ -653,8 +653,6 @@ impl FSA {
 
                     let entries = self.get_entries_to_scc(&scc);
                     assert!(!entries.is_empty());
-                    println!("{:?}", entries);
-                    println!("Num entries: {}", entries.len());
                     let non_redundant_removes = self.select_entry_reprs(entries);
                     assert!(!non_redundant_removes.is_empty());
                     for idx in non_redundant_removes.into_iter() {
@@ -1028,10 +1026,8 @@ impl FSA {
         self.saturate();
         self.intersect_with_pop_push();
         self.remove_unreachable();
-        println!("{}", Dot::new(&self.grph));
         self.generate_recursive_type_variables(vman);
         self.remove_unreachable();
-        println!("{}", Dot::new(&self.grph));
     }
 
     /// Removes unproductive transitions in the FSA. ie. transitions of the form pop y push x where x/=y
@@ -2092,8 +2088,6 @@ mod tests {
         let mut fsa_res = FSA::new(&constraints, &context).unwrap();
         fsa_res.saturate();
         fsa_res.intersect_with_pop_push();
-
-        eprintln!("{}", Dot::new(fsa_res.get_graph()));
     }
 
     #[test]
@@ -2207,8 +2201,6 @@ mod tests {
         ",
         )
         .unwrap();
-        println!("test");
-        println!("{}", cs_set);
 
         assert!(remaining.len() == 0);
 
@@ -2223,10 +2215,6 @@ mod tests {
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
         fsa_res.simplify_graph(&mut vman);
-
-        println!("{}", Dot::new(fsa_res.get_graph()));
-
-        println!("{}", fsa_res.walk_constraints());
     }
 
     #[test]
@@ -2238,8 +2226,6 @@ mod tests {
         ",
         )
         .unwrap();
-        println!("test");
-        println!("{}", cs_set);
 
         assert!(remaining.len() == 0);
 
@@ -2254,7 +2240,6 @@ mod tests {
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
         fsa_res.simplify_graph(&mut vman);
-        println!("{}", Dot::new(fsa_res.get_graph()));
         let cons = fsa_res.walk_constraints();
 
         let mut expeccons = BTreeSet::new();

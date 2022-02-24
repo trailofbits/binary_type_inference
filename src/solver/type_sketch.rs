@@ -298,6 +298,10 @@ impl<T> SketchGraph<T> {
         }
     }
 
+    pub fn get_dtv_to_group(&self) -> &HashMap<DerivedTypeVar, NodeIndex> {
+        &self.dtv_to_group
+    }
+
     /// Creates a quotiented sketch graph from a constraint set.
     pub fn new(s: &ConstraintSet) -> SketchGraph<()> {
         let mut nd = NodeDefinedGraph::new();
@@ -537,14 +541,36 @@ mod test {
         ",
         )
         .expect("Should parse constraints");
-        println!("{}", rem);
+        assert!(rem.len() == 0);
+
+        let _grph = SketchGraph::<()>::new(&test_set);
+    }
+
+    #[test]
+    fn test_double_pointer() {
+        // should reduce to one type
+        let (rem, test_set) = parse_constraint_set(
+            "
+            curr_target.load.σ64@0.+8 <= curr_target
+            target.load.σ64@8 <= curr_target.store.σ64@0
+        ",
+        )
+        .expect("Should parse constraints");
         assert!(rem.len() == 0);
 
         let grph = SketchGraph::<()>::new(&test_set);
 
         println!(
             "{}",
-            Dot::new(&grph.quotient_graph.map(|_, _| "", |_e, e2| e2))
+            Dot::new(
+                &grph
+                    .quotient_graph
+                    .map(|nd_id, _nd_weight| nd_id.index().to_string(), |_e, e2| e2)
+            )
         );
+
+        for (dtv, idx) in grph.dtv_to_group.iter() {
+            println!("Dtv: {} Group: {}", dtv, idx.index());
+        }
     }
 }

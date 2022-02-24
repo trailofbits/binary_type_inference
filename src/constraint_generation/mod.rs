@@ -547,19 +547,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
-        if df.tid.address == "0010150b" {
-            println!("Found the define!!! {:#?}", df);
-        }
-
         let cs_set = match &df.term {
             Def::Load { var, address } => self.apply_load(&df.tid, var, address, vman),
             Def::Store { address, value } => self.apply_store(&df.tid, value, address, vman),
             Def::Assign { var, value } => self.apply_assign(&df.tid, var, value, vman),
         };
-
-        if df.tid.address == "0010150b" {
-            println!("{}", cs_set);
-        }
 
         cs_set
     }

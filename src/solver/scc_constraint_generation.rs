@@ -7,7 +7,7 @@ use cwe_checker_lib::{
     analysis::graph::Graph,
     intermediate_representation::{ExternSymbol, Tid},
 };
-use petgraph::graph::NodeIndex;
+use petgraph::{dot::Dot, graph::NodeIndex};
 
 use super::constraint_graph::{RuleContext, FSA};
 use crate::{
@@ -81,14 +81,19 @@ where
 
                 let basic_cons = cont.generate_constraints(self.vman);
 
-                println!("Basic cons: {}", basic_cons);
-
                 let mut fsa = FSA::new(&basic_cons, &self.rule_context)?;
-                println!("Working on {:?}", tid_filter);
-                fsa.simplify_graph(self.vman);
-                let cons = fsa.walk_constraints();
 
-                println!("Simple cons: {}", &cons);
+                fsa.simplify_graph(self.vman);
+
+                /* if tid_filter.contains(&Tid::create(
+                    "sub_00101728".to_owned(),
+                    "00101728".to_owned(),
+                )) {
+                    println!("bcons: \n {}", basic_cons);
+                    println!("{}", Dot::new(fsa.get_graph()));
+                }*/
+
+                let cons = fsa.walk_constraints();
 
                 Ok(SCCConstraints {
                     scc: Vec::from_iter(tid_filter.into_iter()),

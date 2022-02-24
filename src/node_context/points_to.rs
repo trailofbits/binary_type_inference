@@ -12,7 +12,7 @@ use cwe_checker_lib::analysis::pointer_inference;
 use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Project, Variable};
 
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
-use log::{info, warn};
+use log::warn;
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
@@ -287,8 +287,6 @@ mod test {
             }),
             ByteSize::new(8),
         );
-
-        println!("{:#?}", access);
     }
 
     #[test]
@@ -340,8 +338,6 @@ mod test {
         let mut found = false;
         // fast forward the state to the target address
         for def in blk.term.defs.iter() {
-            println!("{}", def.tid.address);
-            println!("{:#?}", def.term);
             if !found {
                 found = def.tid.address == "00101544";
             }
@@ -361,16 +357,5 @@ mod test {
             }),
             ByteSize::new(8),
         );
-
-        println!(
-            "{:#?}",
-            target_points_to
-                .pointer_state
-                .state
-                .memory
-                .get_all_object_ids()
-        );
-
-        println!("{:#?}", access);
     }
 }
