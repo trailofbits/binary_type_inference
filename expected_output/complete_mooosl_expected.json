@@ -1,0 +1,20 @@
+[
+    {
+        "scc": [
+            {
+                "id": "sub_001013db",
+                "address": "001013db"
+            }
+        ],
+        "constraints": []
+    },
+    {
+        "scc": [
+            {
+                "id": "sub_001014fb",
+                "address": "001014fb"
+            }
+        ],
+        "constraints": []
+    }
+]
