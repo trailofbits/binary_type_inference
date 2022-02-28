@@ -619,6 +619,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     /// make each formal the subtype of the addressing info for this parameter within the current state
     fn handle_entry_formals(&self, sub: &Term<Sub>, vman: &mut VariableManager) -> ConstraintSet {
+        info!(
+            "Proc: {} has formals: {}",
+            sub.tid,
+            sub.term.formal_args.len()
+        );
         self.make_constraints(
             sub,
             &sub.term.formal_args,

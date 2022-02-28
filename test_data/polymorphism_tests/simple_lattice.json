@@ -1,0 +1,23 @@
+{
+    "less_than_relations_between_handles": [
+        [
+            "char",
+            "T"
+        ],
+        [
+            "int",
+            "T"
+        ],
+        [
+            "bottom",
+            "char"
+        ],
+        [
+            "bottom",
+            "int"
+        ]
+    ],
+    "weakest_integral_type": "int",
+    "top_handle": "T",
+    "bottom_handle": "bottom"
+}

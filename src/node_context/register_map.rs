@@ -5,7 +5,7 @@ use std::ops::Deref;
 use cwe_checker_lib::abstract_domain::DomainMap;
 use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
-use cwe_checker_lib::intermediate_representation::{Project, Variable};
+use cwe_checker_lib::intermediate_representation::{Project, Term, Variable};
 use petgraph::graph::NodeIndex;
 use petgraph::EdgeDirection::Incoming;
 
@@ -55,6 +55,7 @@ impl RegisterContext {
             Definition::ActualRet(tid, _i) => {
                 constraint_generation::tid_indexed_by_variable(tid, defined_variable)
             }
+            &Definition::EntryFresh(i) => TypeVariable::new(format!("entry_fresh_definition{}", i)),
         }
     }
 
@@ -83,11 +84,22 @@ impl RegisterMapping for RegisterContext {
     }
 }
 
+fn generate_fresh_definition(proj: &Project, curr_id: &mut usize) -> BTreeMap<Variable, TermSet> {
+    let mut bottom_btree = BTreeMap::new();
+    for reg in proj.register_list.iter() {
+        let mut st = TermSet::new();
+        st.insert(Definition::EntryFresh(*curr_id));
+        bottom_btree.insert(reg.clone(), st);
+        *curr_id += 1;
+    }
+
+    bottom_btree
+}
+
 /// Runs reaching definitions on the project and produces a mapping from node index to the Register Context.
 /// The register context can be queried to determine the representing type variable for an accessed register
 pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, RegisterContext> {
     let cont = Context::new(proj, graph, &proj.program.term.extern_symbols);
-    let bottom_btree = BTreeMap::new();
     let mut computation = forward_interprocedural_fixpoint::create_computation(cont, None);
 
     let entry_sub_to_entry_node_map =
@@ -97,6 +109,7 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
         .node_indices()
         .filter(|nd_idx| graph.edges_directed(*nd_idx, Incoming).count() == 0);
 
+    let mut curr_id = 0;
     for start_node_index in entry_sub_to_entry_node_map
         .into_iter()
         .map(|(_sub_tid, ndidx)| ndidx)
@@ -105,7 +118,7 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
         computation.set_node_value(
             start_node_index,
             cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue::Value(
-                DomainMap::from(bottom_btree.clone()),
+                DomainMap::from(generate_fresh_definition(proj, &mut curr_id)),
             ),
         );
     }

@@ -1,0 +1,6266 @@
+{
+  "program": {
+    "tid": {
+      "id": "prog_00000000",
+      "address": "00000000"
+    },
+    "term": {
+      "subs": [
+        {
+          "tid": {
+            "id": "sub_00000000",
+            "address": "00000000"
+          },
+          "term": {
+            "name": "id",
+            "blocks": [
+              {
+                "tid": {
+                  "id": "blk_00000000",
+                  "address": "00000000"
+                },
+                "term": {
+                  "defs": [
+                    {
+                      "tid": {
+                        "id": "instr_00000000_0",
+                        "address": "00000000"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RAX",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "COPY",
+                          "input0": {
+                            "name": "RDI",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_00000003_0",
+                        "address": "00000003"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RIP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "LOAD",
+                          "input0": {
+                            "value": "000001b1",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_00000003_1",
+                        "address": "00000003"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RSP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "INT_ADD",
+                          "input0": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "value": "00000008",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "jmps": [
+                    {
+                      "tid": {
+                        "id": "instr_00000003_2",
+                        "address": "00000003"
+                      },
+                      "term": {
+                        "mnemonic": "RETURN",
+                        "goto": {
+                          "Indirect": {
+                            "name": "RIP",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "formals": [
+              {
+                "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
+                  "name": "RAX",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "OUTPUT"
+              }
+            ],
+            "locals": []
+          }
+        },
+        {
+          "tid": {
+            "id": "sub_00000004",
+            "address": "00000004"
+          },
+          "term": {
+            "name": "alias_id",
+            "blocks": [
+              {
+                "tid": {
+                  "id": "blk_00000004",
+                  "address": "00000004"
+                },
+                "term": {
+                  "defs": [
+                    {
+                      "tid": {
+                        "id": "instr_00000004_0",
+                        "address": "00000004"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RDI",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "COPY",
+                          "input0": {
+                            "name": "RDI",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_00000007_0",
+                        "address": "00000007"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RSP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "INT_SUB",
+                          "input0": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "value": "00000008",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_00000007_1",
+                        "address": "00000007"
+                      },
+                      "term": {
+                        "rhs": {
+                          "mnemonic": "STORE",
+                          "input0": {
+                            "value": "000001b1",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input2": {
+                            "value": "0000000c",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "jmps": [
+                    {
+                      "tid": {
+                        "id": "instr_00000007_2",
+                        "address": "00000007"
+                      },
+                      "term": {
+                        "mnemonic": "CALL",
+                        "call": {
+                          "target": {
+                            "Direct": {
+                              "id": "sub_00000000",
+                              "address": "00000000"
+                            }
+                          },
+                          "return": {
+                            "Direct": {
+                              "id": "blk_0000000c",
+                              "address": "0000000c"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "tid": {
+                  "id": "blk_0000000c",
+                  "address": "0000000c"
+                },
+                "term": {
+                  "defs": [
+                    {
+                      "tid": {
+                        "id": "instr_0000000c_0",
+                        "address": "0000000c"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RAX",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "COPY",
+                          "input0": {
+                            "name": "RAX",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_0000000f_0",
+                        "address": "0000000f"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RIP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "LOAD",
+                          "input0": {
+                            "value": "000001b1",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_0000000f_1",
+                        "address": "0000000f"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RSP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "INT_ADD",
+                          "input0": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "value": "00000008",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "jmps": [
+                    {
+                      "tid": {
+                        "id": "instr_0000000f_2",
+                        "address": "0000000f"
+                      },
+                      "term": {
+                        "mnemonic": "RETURN",
+                        "goto": {
+                          "Indirect": {
+                            "name": "RIP",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "formals": [
+              {
+                "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
+                  "name": "RAX",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "OUTPUT"
+              }
+            ],
+            "locals": []
+          }
+        },
+        {
+          "tid": {
+            "id": "sub_00000010",
+            "address": "00000010"
+          },
+          "term": {
+            "name": "caller1",
+            "blocks": [
+              {
+                "tid": {
+                  "id": "blk_00000010",
+                  "address": "00000010"
+                },
+                "term": {
+                  "defs": [
+                    {
+                      "tid": {
+                        "id": "instr_00000010_0",
+                        "address": "00000010"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RDI",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "COPY",
+                          "input0": {
+                            "name": "RDI",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_00000013_0",
+                        "address": "00000013"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RSP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "INT_SUB",
+                          "input0": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "value": "00000008",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_00000013_1",
+                        "address": "00000013"
+                      },
+                      "term": {
+                        "rhs": {
+                          "mnemonic": "STORE",
+                          "input0": {
+                            "value": "000001b1",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input2": {
+                            "value": "00000018",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "jmps": [
+                    {
+                      "tid": {
+                        "id": "instr_00000013_2",
+                        "address": "00000013"
+                      },
+                      "term": {
+                        "mnemonic": "CALL",
+                        "call": {
+                          "target": {
+                            "Direct": {
+                              "id": "sub_00000004",
+                              "address": "00000004"
+                            }
+                          },
+                          "return": {
+                            "Direct": {
+                              "id": "blk_00000018",
+                              "address": "00000018"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "tid": {
+                  "id": "blk_00000018",
+                  "address": "00000018"
+                },
+                "term": {
+                  "defs": [
+                    {
+                      "tid": {
+                        "id": "instr_00000018_0",
+                        "address": "00000018"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RAX",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "COPY",
+                          "input0": {
+                            "name": "RAX",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_0000001b_0",
+                        "address": "0000001b"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RIP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "LOAD",
+                          "input0": {
+                            "value": "000001b1",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_0000001b_1",
+                        "address": "0000001b"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RSP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "INT_ADD",
+                          "input0": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "value": "00000008",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "jmps": [
+                    {
+                      "tid": {
+                        "id": "instr_0000001b_2",
+                        "address": "0000001b"
+                      },
+                      "term": {
+                        "mnemonic": "RETURN",
+                        "goto": {
+                          "Indirect": {
+                            "name": "RIP",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "formals": [
+              {
+                "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
+                  "name": "RAX",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "OUTPUT"
+              }
+            ],
+            "locals": []
+          }
+        },
+        {
+          "tid": {
+            "id": "sub_0000001c",
+            "address": "0000001c"
+          },
+          "term": {
+            "name": "caller2",
+            "blocks": [
+              {
+                "tid": {
+                  "id": "blk_0000001c",
+                  "address": "0000001c"
+                },
+                "term": {
+                  "defs": [
+                    {
+                      "tid": {
+                        "id": "instr_0000001c_0",
+                        "address": "0000001c"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RDI",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "COPY",
+                          "input0": {
+                            "name": "RDI",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_0000001f_0",
+                        "address": "0000001f"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RSP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "INT_SUB",
+                          "input0": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "value": "00000008",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_0000001f_1",
+                        "address": "0000001f"
+                      },
+                      "term": {
+                        "rhs": {
+                          "mnemonic": "STORE",
+                          "input0": {
+                            "value": "000001b1",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input2": {
+                            "value": "00000024",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "jmps": [
+                    {
+                      "tid": {
+                        "id": "instr_0000001f_2",
+                        "address": "0000001f"
+                      },
+                      "term": {
+                        "mnemonic": "CALL",
+                        "call": {
+                          "target": {
+                            "Direct": {
+                              "id": "sub_00000004",
+                              "address": "00000004"
+                            }
+                          },
+                          "return": {
+                            "Direct": {
+                              "id": "blk_00000024",
+                              "address": "00000024"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "tid": {
+                  "id": "blk_00000024",
+                  "address": "00000024"
+                },
+                "term": {
+                  "defs": [
+                    {
+                      "tid": {
+                        "id": "instr_00000024_0",
+                        "address": "00000024"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RAX",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "COPY",
+                          "input0": {
+                            "name": "RAX",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_00000027_0",
+                        "address": "00000027"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RIP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "LOAD",
+                          "input0": {
+                            "value": "000001b1",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "tid": {
+                        "id": "instr_00000027_1",
+                        "address": "00000027"
+                      },
+                      "term": {
+                        "lhs": {
+                          "name": "RSP",
+                          "size": 8,
+                          "is_virtual": false
+                        },
+                        "rhs": {
+                          "mnemonic": "INT_ADD",
+                          "input0": {
+                            "name": "RSP",
+                            "size": 8,
+                            "is_virtual": false
+                          },
+                          "input1": {
+                            "value": "00000008",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "jmps": [
+                    {
+                      "tid": {
+                        "id": "instr_00000027_2",
+                        "address": "00000027"
+                      },
+                      "term": {
+                        "mnemonic": "RETURN",
+                        "goto": {
+                          "Indirect": {
+                            "name": "RIP",
+                            "size": 8,
+                            "is_virtual": false
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "formals": [
+              {
+                "var": {
+                  "name": "RDI",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "INPUT"
+              },
+              {
+                "var": {
+                  "name": "RAX",
+                  "size": 8,
+                  "is_virtual": false
+                },
+                "intent": "OUTPUT"
+              }
+            ],
+            "locals": []
+          }
+        }
+      ],
+      "extern_symbols": [],
+      "entry_points": [
+        {
+          "id": "sub_00000004",
+          "address": "00000004"
+        },
+        {
+          "id": "sub_00000010",
+          "address": "00000010"
+        },
+        {
+          "id": "sub_0000001c",
+          "address": "0000001c"
+        },
+        {
+          "id": "sub_00000000",
+          "address": "00000000"
+        }
+      ],
+      "image_base": "00000000"
+    }
+  },
+  "stack_pointer_register": {
+    "name": "RSP",
+    "size": 8,
+    "is_virtual": false
+  },
+  "register_properties": [
+    {
+      "register": "RAX",
+      "base_register": "RAX",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "RCX",
+      "base_register": "RCX",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "RDX",
+      "base_register": "RDX",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "RBX",
+      "base_register": "RBX",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "RSP",
+      "base_register": "RSP",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "RBP",
+      "base_register": "RBP",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "RSI",
+      "base_register": "RSI",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "RDI",
+      "base_register": "RDI",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "EAX",
+      "base_register": "RAX",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "ECX",
+      "base_register": "RCX",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "EDX",
+      "base_register": "RDX",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "EBX",
+      "base_register": "RBX",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "ESP",
+      "base_register": "RSP",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "EBP",
+      "base_register": "RBP",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "ESI",
+      "base_register": "RSI",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "EDI",
+      "base_register": "RDI",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "AX",
+      "base_register": "RAX",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "CX",
+      "base_register": "RCX",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "DX",
+      "base_register": "RDX",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "BX",
+      "base_register": "RBX",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "SP",
+      "base_register": "RSP",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "BP",
+      "base_register": "RBP",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "SI",
+      "base_register": "RSI",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "DI",
+      "base_register": "RDI",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "AL",
+      "base_register": "RAX",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "AH",
+      "base_register": "RAX",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "CL",
+      "base_register": "RCX",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "CH",
+      "base_register": "RCX",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "DL",
+      "base_register": "RDX",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "DH",
+      "base_register": "RDX",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "BL",
+      "base_register": "RBX",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "BH",
+      "base_register": "RBX",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "SPL",
+      "base_register": "RSP",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "BPL",
+      "base_register": "RBP",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "SIL",
+      "base_register": "RSI",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "DIL",
+      "base_register": "RDI",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "R8",
+      "base_register": "R8",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "R9",
+      "base_register": "R9",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "R10",
+      "base_register": "R10",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "R11",
+      "base_register": "R11",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "R12",
+      "base_register": "R12",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "R13",
+      "base_register": "R13",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "R14",
+      "base_register": "R14",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "R15",
+      "base_register": "R15",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "R8D",
+      "base_register": "R8",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "R9D",
+      "base_register": "R9",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "R10D",
+      "base_register": "R10",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "R11D",
+      "base_register": "R11",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "R12D",
+      "base_register": "R12",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "R13D",
+      "base_register": "R13",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "R14D",
+      "base_register": "R14",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "R15D",
+      "base_register": "R15",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "R8W",
+      "base_register": "R8",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "R9W",
+      "base_register": "R9",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "R10W",
+      "base_register": "R10",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "R11W",
+      "base_register": "R11",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "R12W",
+      "base_register": "R12",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "R13W",
+      "base_register": "R13",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "R14W",
+      "base_register": "R14",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "R15W",
+      "base_register": "R15",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "R8B",
+      "base_register": "R8",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "R9B",
+      "base_register": "R9",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "R10B",
+      "base_register": "R10",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "R11B",
+      "base_register": "R11",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "R12B",
+      "base_register": "R12",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "R13B",
+      "base_register": "R13",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "R14B",
+      "base_register": "R14",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "R15B",
+      "base_register": "R15",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "ES",
+      "base_register": "ES",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "CS",
+      "base_register": "CS",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "SS",
+      "base_register": "SS",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "DS",
+      "base_register": "DS",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "FS",
+      "base_register": "FS",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "GS",
+      "base_register": "GS",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "FS_OFFSET",
+      "base_register": "FS_OFFSET",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "GS_OFFSET",
+      "base_register": "GS_OFFSET",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CF",
+      "base_register": "CF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "F1",
+      "base_register": "F1",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "PF",
+      "base_register": "PF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "F3",
+      "base_register": "F3",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "AF",
+      "base_register": "AF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "F5",
+      "base_register": "F5",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "ZF",
+      "base_register": "ZF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "SF",
+      "base_register": "SF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "TF",
+      "base_register": "TF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "IF",
+      "base_register": "IF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "DF",
+      "base_register": "DF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "OF",
+      "base_register": "OF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "IOPL",
+      "base_register": "IOPL",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "NT",
+      "base_register": "NT",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "F15",
+      "base_register": "F15",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "RF",
+      "base_register": "RF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "VM",
+      "base_register": "VM",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "AC",
+      "base_register": "AC",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "VIF",
+      "base_register": "VIF",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "VIP",
+      "base_register": "VIP",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "ID",
+      "base_register": "ID",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "rflags",
+      "base_register": "rflags",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "RIP",
+      "base_register": "RIP",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "eflags",
+      "base_register": "rflags",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "EIP",
+      "base_register": "RIP",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "flags",
+      "base_register": "rflags",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "IP",
+      "base_register": "RIP",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "DR0",
+      "base_register": "DR0",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR1",
+      "base_register": "DR1",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR2",
+      "base_register": "DR2",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR3",
+      "base_register": "DR3",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR4",
+      "base_register": "DR4",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR5",
+      "base_register": "DR5",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR6",
+      "base_register": "DR6",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR7",
+      "base_register": "DR7",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR8",
+      "base_register": "DR8",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR9",
+      "base_register": "DR9",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR10",
+      "base_register": "DR10",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR11",
+      "base_register": "DR11",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR12",
+      "base_register": "DR12",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR13",
+      "base_register": "DR13",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR14",
+      "base_register": "DR14",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "DR15",
+      "base_register": "DR15",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR0",
+      "base_register": "CR0",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR1",
+      "base_register": "CR1",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR2",
+      "base_register": "CR2",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR3",
+      "base_register": "CR3",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR4",
+      "base_register": "CR4",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR5",
+      "base_register": "CR5",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR6",
+      "base_register": "CR6",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR7",
+      "base_register": "CR7",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR8",
+      "base_register": "CR8",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR9",
+      "base_register": "CR9",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR10",
+      "base_register": "CR10",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR11",
+      "base_register": "CR11",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR12",
+      "base_register": "CR12",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR13",
+      "base_register": "CR13",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR14",
+      "base_register": "CR14",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "CR15",
+      "base_register": "CR15",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XCR0",
+      "base_register": "XCR0",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "BNDCFGS",
+      "base_register": "BNDCFGS",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "BNDCFGU",
+      "base_register": "BNDCFGU",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "BNDSTATUS",
+      "base_register": "BNDSTATUS",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "BND0",
+      "base_register": "BND0",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "BND1",
+      "base_register": "BND1",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "BND2",
+      "base_register": "BND2",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "BND3",
+      "base_register": "BND3",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "BND0_LB",
+      "base_register": "BND0",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "BND0_UB",
+      "base_register": "BND0",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "BND1_LB",
+      "base_register": "BND1",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "BND1_UB",
+      "base_register": "BND1",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "BND2_LB",
+      "base_register": "BND2",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "BND2_UB",
+      "base_register": "BND2",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "BND3_LB",
+      "base_register": "BND3",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "BND3_UB",
+      "base_register": "BND3",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "SSP",
+      "base_register": "SSP",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "IA32_PL2_SSP",
+      "base_register": "IA32_PL2_SSP",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "IA32_PL1_SSP",
+      "base_register": "IA32_PL1_SSP",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "IA32_PL0_SSP",
+      "base_register": "IA32_PL0_SSP",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "ST0",
+      "base_register": "ST0",
+      "lsb": 0,
+      "size": 10
+    },
+    {
+      "register": "ST1",
+      "base_register": "ST1",
+      "lsb": 0,
+      "size": 10
+    },
+    {
+      "register": "ST2",
+      "base_register": "ST2",
+      "lsb": 0,
+      "size": 10
+    },
+    {
+      "register": "ST3",
+      "base_register": "ST3",
+      "lsb": 0,
+      "size": 10
+    },
+    {
+      "register": "ST4",
+      "base_register": "ST4",
+      "lsb": 0,
+      "size": 10
+    },
+    {
+      "register": "ST5",
+      "base_register": "ST5",
+      "lsb": 0,
+      "size": 10
+    },
+    {
+      "register": "ST6",
+      "base_register": "ST6",
+      "lsb": 0,
+      "size": 10
+    },
+    {
+      "register": "ST7",
+      "base_register": "ST7",
+      "lsb": 0,
+      "size": 10
+    },
+    {
+      "register": "C0",
+      "base_register": "C0",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "C1",
+      "base_register": "C1",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "C2",
+      "base_register": "C2",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "C3",
+      "base_register": "C3",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "MXCSR",
+      "base_register": "MXCSR",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "FPUControlWord",
+      "base_register": "FPUControlWord",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "FPUStatusWord",
+      "base_register": "FPUStatusWord",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "FPUTagWord",
+      "base_register": "FPUTagWord",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "FPULastInstructionOpcode",
+      "base_register": "FPULastInstructionOpcode",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "FPUDataPointer",
+      "base_register": "FPUDataPointer",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "FPUInstructionPointer",
+      "base_register": "FPUInstructionPointer",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "FPUPointerSelector",
+      "base_register": "FPUPointerSelector",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "FPUDataSelector",
+      "base_register": "FPUDataSelector",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "MM0",
+      "base_register": "ST0",
+      "lsb": 2,
+      "size": 8
+    },
+    {
+      "register": "MM1",
+      "base_register": "ST1",
+      "lsb": 2,
+      "size": 8
+    },
+    {
+      "register": "MM2",
+      "base_register": "ST2",
+      "lsb": 2,
+      "size": 8
+    },
+    {
+      "register": "MM3",
+      "base_register": "ST3",
+      "lsb": 2,
+      "size": 8
+    },
+    {
+      "register": "MM4",
+      "base_register": "ST4",
+      "lsb": 2,
+      "size": 8
+    },
+    {
+      "register": "MM5",
+      "base_register": "ST5",
+      "lsb": 2,
+      "size": 8
+    },
+    {
+      "register": "MM6",
+      "base_register": "ST6",
+      "lsb": 2,
+      "size": 8
+    },
+    {
+      "register": "MM7",
+      "base_register": "ST7",
+      "lsb": 2,
+      "size": 8
+    },
+    {
+      "register": "MM0_Da",
+      "base_register": "ST0",
+      "lsb": 2,
+      "size": 4
+    },
+    {
+      "register": "MM0_Db",
+      "base_register": "ST0",
+      "lsb": 6,
+      "size": 4
+    },
+    {
+      "register": "MM1_Da",
+      "base_register": "ST1",
+      "lsb": 2,
+      "size": 4
+    },
+    {
+      "register": "MM1_Db",
+      "base_register": "ST1",
+      "lsb": 6,
+      "size": 4
+    },
+    {
+      "register": "MM2_Da",
+      "base_register": "ST2",
+      "lsb": 2,
+      "size": 4
+    },
+    {
+      "register": "MM2_Db",
+      "base_register": "ST2",
+      "lsb": 6,
+      "size": 4
+    },
+    {
+      "register": "MM3_Da",
+      "base_register": "ST3",
+      "lsb": 2,
+      "size": 4
+    },
+    {
+      "register": "MM3_Db",
+      "base_register": "ST3",
+      "lsb": 6,
+      "size": 4
+    },
+    {
+      "register": "MM4_Da",
+      "base_register": "ST4",
+      "lsb": 2,
+      "size": 4
+    },
+    {
+      "register": "MM4_Db",
+      "base_register": "ST4",
+      "lsb": 6,
+      "size": 4
+    },
+    {
+      "register": "MM5_Da",
+      "base_register": "ST5",
+      "lsb": 2,
+      "size": 4
+    },
+    {
+      "register": "MM5_Db",
+      "base_register": "ST5",
+      "lsb": 6,
+      "size": 4
+    },
+    {
+      "register": "MM6_Da",
+      "base_register": "ST6",
+      "lsb": 2,
+      "size": 4
+    },
+    {
+      "register": "MM6_Db",
+      "base_register": "ST6",
+      "lsb": 6,
+      "size": 4
+    },
+    {
+      "register": "MM7_Da",
+      "base_register": "ST7",
+      "lsb": 2,
+      "size": 4
+    },
+    {
+      "register": "MM7_Db",
+      "base_register": "ST7",
+      "lsb": 6,
+      "size": 4
+    },
+    {
+      "register": "MM0_Wa",
+      "base_register": "ST0",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "MM0_Wb",
+      "base_register": "ST0",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "MM0_Wc",
+      "base_register": "ST0",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "MM0_Wd",
+      "base_register": "ST0",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "MM1_Wa",
+      "base_register": "ST1",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "MM1_Wb",
+      "base_register": "ST1",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "MM1_Wc",
+      "base_register": "ST1",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "MM1_Wd",
+      "base_register": "ST1",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "MM2_Wa",
+      "base_register": "ST2",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "MM2_Wb",
+      "base_register": "ST2",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "MM2_Wc",
+      "base_register": "ST2",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "MM2_Wd",
+      "base_register": "ST2",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "MM3_Wa",
+      "base_register": "ST3",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "MM3_Wb",
+      "base_register": "ST3",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "MM3_Wc",
+      "base_register": "ST3",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "MM3_Wd",
+      "base_register": "ST3",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "MM4_Wa",
+      "base_register": "ST4",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "MM4_Wb",
+      "base_register": "ST4",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "MM4_Wc",
+      "base_register": "ST4",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "MM4_Wd",
+      "base_register": "ST4",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "MM5_Wa",
+      "base_register": "ST5",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "MM5_Wb",
+      "base_register": "ST5",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "MM5_Wc",
+      "base_register": "ST5",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "MM5_Wd",
+      "base_register": "ST5",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "MM6_Wa",
+      "base_register": "ST6",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "MM6_Wb",
+      "base_register": "ST6",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "MM6_Wc",
+      "base_register": "ST6",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "MM6_Wd",
+      "base_register": "ST6",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "MM7_Wa",
+      "base_register": "ST7",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "MM7_Wb",
+      "base_register": "ST7",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "MM7_Wc",
+      "base_register": "ST7",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "MM7_Wd",
+      "base_register": "ST7",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "MM0_Ba",
+      "base_register": "ST0",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "MM0_Bb",
+      "base_register": "ST0",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "MM0_Bc",
+      "base_register": "ST0",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "MM0_Bd",
+      "base_register": "ST0",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "MM0_Be",
+      "base_register": "ST0",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "MM0_Bf",
+      "base_register": "ST0",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "MM0_Bg",
+      "base_register": "ST0",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "MM0_Bh",
+      "base_register": "ST0",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "MM1_Ba",
+      "base_register": "ST1",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "MM1_Bb",
+      "base_register": "ST1",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "MM1_Bc",
+      "base_register": "ST1",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "MM1_Bd",
+      "base_register": "ST1",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "MM1_Be",
+      "base_register": "ST1",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "MM1_Bf",
+      "base_register": "ST1",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "MM1_Bg",
+      "base_register": "ST1",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "MM1_Bh",
+      "base_register": "ST1",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "MM2_Ba",
+      "base_register": "ST2",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "MM2_Bb",
+      "base_register": "ST2",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "MM2_Bc",
+      "base_register": "ST2",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "MM2_Bd",
+      "base_register": "ST2",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "MM2_Be",
+      "base_register": "ST2",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "MM2_Bf",
+      "base_register": "ST2",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "MM2_Bg",
+      "base_register": "ST2",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "MM2_Bh",
+      "base_register": "ST2",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "MM3_Ba",
+      "base_register": "ST3",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "MM3_Bb",
+      "base_register": "ST3",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "MM3_Bc",
+      "base_register": "ST3",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "MM3_Bd",
+      "base_register": "ST3",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "MM3_Be",
+      "base_register": "ST3",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "MM3_Bf",
+      "base_register": "ST3",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "MM3_Bg",
+      "base_register": "ST3",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "MM3_Bh",
+      "base_register": "ST3",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "MM4_Ba",
+      "base_register": "ST4",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "MM4_Bb",
+      "base_register": "ST4",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "MM4_Bc",
+      "base_register": "ST4",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "MM4_Bd",
+      "base_register": "ST4",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "MM4_Be",
+      "base_register": "ST4",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "MM4_Bf",
+      "base_register": "ST4",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "MM4_Bg",
+      "base_register": "ST4",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "MM4_Bh",
+      "base_register": "ST4",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "MM5_Ba",
+      "base_register": "ST5",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "MM5_Bb",
+      "base_register": "ST5",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "MM5_Bc",
+      "base_register": "ST5",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "MM5_Bd",
+      "base_register": "ST5",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "MM5_Be",
+      "base_register": "ST5",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "MM5_Bf",
+      "base_register": "ST5",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "MM5_Bg",
+      "base_register": "ST5",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "MM5_Bh",
+      "base_register": "ST5",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "MM6_Ba",
+      "base_register": "ST6",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "MM6_Bb",
+      "base_register": "ST6",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "MM6_Bc",
+      "base_register": "ST6",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "MM6_Bd",
+      "base_register": "ST6",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "MM6_Be",
+      "base_register": "ST6",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "MM6_Bf",
+      "base_register": "ST6",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "MM6_Bg",
+      "base_register": "ST6",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "MM6_Bh",
+      "base_register": "ST6",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "MM7_Ba",
+      "base_register": "ST7",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "MM7_Bb",
+      "base_register": "ST7",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "MM7_Bc",
+      "base_register": "ST7",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "MM7_Bd",
+      "base_register": "ST7",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "MM7_Be",
+      "base_register": "ST7",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "MM7_Bf",
+      "base_register": "ST7",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "MM7_Bg",
+      "base_register": "ST7",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "MM7_Bh",
+      "base_register": "ST7",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM0",
+      "base_register": "YMM0",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM0_H",
+      "base_register": "YMM0",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM1",
+      "base_register": "YMM1",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM1_H",
+      "base_register": "YMM1",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM2",
+      "base_register": "YMM2",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM2_H",
+      "base_register": "YMM2",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM3",
+      "base_register": "YMM3",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM3_H",
+      "base_register": "YMM3",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM4",
+      "base_register": "YMM4",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM4_H",
+      "base_register": "YMM4",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM5",
+      "base_register": "YMM5",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM5_H",
+      "base_register": "YMM5",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM6",
+      "base_register": "YMM6",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM6_H",
+      "base_register": "YMM6",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM7",
+      "base_register": "YMM7",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM7_H",
+      "base_register": "YMM7",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM8",
+      "base_register": "YMM8",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM8_H",
+      "base_register": "YMM8",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM9",
+      "base_register": "YMM9",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM9_H",
+      "base_register": "YMM9",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM10",
+      "base_register": "YMM10",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM10_H",
+      "base_register": "YMM10",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM11",
+      "base_register": "YMM11",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM11_H",
+      "base_register": "YMM11",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM12",
+      "base_register": "YMM12",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM12_H",
+      "base_register": "YMM12",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM13",
+      "base_register": "YMM13",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM13_H",
+      "base_register": "YMM13",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM14",
+      "base_register": "YMM14",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM14_H",
+      "base_register": "YMM14",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM15",
+      "base_register": "YMM15",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "YMM15_H",
+      "base_register": "YMM15",
+      "lsb": 16,
+      "size": 16
+    },
+    {
+      "register": "XMM0_Qa",
+      "base_register": "YMM0",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM0_Qb",
+      "base_register": "YMM0",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM1_Qa",
+      "base_register": "YMM1",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM1_Qb",
+      "base_register": "YMM1",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM2_Qa",
+      "base_register": "YMM2",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM2_Qb",
+      "base_register": "YMM2",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM3_Qa",
+      "base_register": "YMM3",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM3_Qb",
+      "base_register": "YMM3",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM4_Qa",
+      "base_register": "YMM4",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM4_Qb",
+      "base_register": "YMM4",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM5_Qa",
+      "base_register": "YMM5",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM5_Qb",
+      "base_register": "YMM5",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM6_Qa",
+      "base_register": "YMM6",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM6_Qb",
+      "base_register": "YMM6",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM7_Qa",
+      "base_register": "YMM7",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM7_Qb",
+      "base_register": "YMM7",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM8_Qa",
+      "base_register": "YMM8",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM8_Qb",
+      "base_register": "YMM8",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM9_Qa",
+      "base_register": "YMM9",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM9_Qb",
+      "base_register": "YMM9",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM10_Qa",
+      "base_register": "YMM10",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM10_Qb",
+      "base_register": "YMM10",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM11_Qa",
+      "base_register": "YMM11",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM11_Qb",
+      "base_register": "YMM11",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM12_Qa",
+      "base_register": "YMM12",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM12_Qb",
+      "base_register": "YMM12",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM13_Qa",
+      "base_register": "YMM13",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM13_Qb",
+      "base_register": "YMM13",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM14_Qa",
+      "base_register": "YMM14",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM14_Qb",
+      "base_register": "YMM14",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM15_Qa",
+      "base_register": "YMM15",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "XMM15_Qb",
+      "base_register": "YMM15",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "XMM0_Da",
+      "base_register": "YMM0",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM0_Db",
+      "base_register": "YMM0",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM0_Dc",
+      "base_register": "YMM0",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM0_Dd",
+      "base_register": "YMM0",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM1_Da",
+      "base_register": "YMM1",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM1_Db",
+      "base_register": "YMM1",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM1_Dc",
+      "base_register": "YMM1",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM1_Dd",
+      "base_register": "YMM1",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM2_Da",
+      "base_register": "YMM2",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM2_Db",
+      "base_register": "YMM2",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM2_Dc",
+      "base_register": "YMM2",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM2_Dd",
+      "base_register": "YMM2",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM3_Da",
+      "base_register": "YMM3",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM3_Db",
+      "base_register": "YMM3",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM3_Dc",
+      "base_register": "YMM3",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM3_Dd",
+      "base_register": "YMM3",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM4_Da",
+      "base_register": "YMM4",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM4_Db",
+      "base_register": "YMM4",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM4_Dc",
+      "base_register": "YMM4",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM4_Dd",
+      "base_register": "YMM4",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM5_Da",
+      "base_register": "YMM5",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM5_Db",
+      "base_register": "YMM5",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM5_Dc",
+      "base_register": "YMM5",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM5_Dd",
+      "base_register": "YMM5",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM6_Da",
+      "base_register": "YMM6",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM6_Db",
+      "base_register": "YMM6",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM6_Dc",
+      "base_register": "YMM6",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM6_Dd",
+      "base_register": "YMM6",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM7_Da",
+      "base_register": "YMM7",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM7_Db",
+      "base_register": "YMM7",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM7_Dc",
+      "base_register": "YMM7",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM7_Dd",
+      "base_register": "YMM7",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM8_Da",
+      "base_register": "YMM8",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM8_Db",
+      "base_register": "YMM8",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM8_Dc",
+      "base_register": "YMM8",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM8_Dd",
+      "base_register": "YMM8",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM9_Da",
+      "base_register": "YMM9",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM9_Db",
+      "base_register": "YMM9",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM9_Dc",
+      "base_register": "YMM9",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM9_Dd",
+      "base_register": "YMM9",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM10_Da",
+      "base_register": "YMM10",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM10_Db",
+      "base_register": "YMM10",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM10_Dc",
+      "base_register": "YMM10",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM10_Dd",
+      "base_register": "YMM10",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM11_Da",
+      "base_register": "YMM11",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM11_Db",
+      "base_register": "YMM11",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM11_Dc",
+      "base_register": "YMM11",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM11_Dd",
+      "base_register": "YMM11",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM12_Da",
+      "base_register": "YMM12",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM12_Db",
+      "base_register": "YMM12",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM12_Dc",
+      "base_register": "YMM12",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM12_Dd",
+      "base_register": "YMM12",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM13_Da",
+      "base_register": "YMM13",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM13_Db",
+      "base_register": "YMM13",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM13_Dc",
+      "base_register": "YMM13",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM13_Dd",
+      "base_register": "YMM13",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM14_Da",
+      "base_register": "YMM14",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM14_Db",
+      "base_register": "YMM14",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM14_Dc",
+      "base_register": "YMM14",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM14_Dd",
+      "base_register": "YMM14",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM15_Da",
+      "base_register": "YMM15",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "XMM15_Db",
+      "base_register": "YMM15",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "XMM15_Dc",
+      "base_register": "YMM15",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "XMM15_Dd",
+      "base_register": "YMM15",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "XMM0_Wa",
+      "base_register": "YMM0",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM0_Wb",
+      "base_register": "YMM0",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM0_Wc",
+      "base_register": "YMM0",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM0_Wd",
+      "base_register": "YMM0",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM0_We",
+      "base_register": "YMM0",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM0_Wf",
+      "base_register": "YMM0",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM0_Wg",
+      "base_register": "YMM0",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM0_Wh",
+      "base_register": "YMM0",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM1_Wa",
+      "base_register": "YMM1",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM1_Wb",
+      "base_register": "YMM1",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM1_Wc",
+      "base_register": "YMM1",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM1_Wd",
+      "base_register": "YMM1",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM1_We",
+      "base_register": "YMM1",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM1_Wf",
+      "base_register": "YMM1",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM1_Wg",
+      "base_register": "YMM1",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM1_Wh",
+      "base_register": "YMM1",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM2_Wa",
+      "base_register": "YMM2",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM2_Wb",
+      "base_register": "YMM2",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM2_Wc",
+      "base_register": "YMM2",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM2_Wd",
+      "base_register": "YMM2",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM2_We",
+      "base_register": "YMM2",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM2_Wf",
+      "base_register": "YMM2",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM2_Wg",
+      "base_register": "YMM2",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM2_Wh",
+      "base_register": "YMM2",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM3_Wa",
+      "base_register": "YMM3",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM3_Wb",
+      "base_register": "YMM3",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM3_Wc",
+      "base_register": "YMM3",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM3_Wd",
+      "base_register": "YMM3",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM3_We",
+      "base_register": "YMM3",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM3_Wf",
+      "base_register": "YMM3",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM3_Wg",
+      "base_register": "YMM3",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM3_Wh",
+      "base_register": "YMM3",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM4_Wa",
+      "base_register": "YMM4",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM4_Wb",
+      "base_register": "YMM4",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM4_Wc",
+      "base_register": "YMM4",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM4_Wd",
+      "base_register": "YMM4",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM4_We",
+      "base_register": "YMM4",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM4_Wf",
+      "base_register": "YMM4",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM4_Wg",
+      "base_register": "YMM4",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM4_Wh",
+      "base_register": "YMM4",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM5_Wa",
+      "base_register": "YMM5",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM5_Wb",
+      "base_register": "YMM5",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM5_Wc",
+      "base_register": "YMM5",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM5_Wd",
+      "base_register": "YMM5",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM5_We",
+      "base_register": "YMM5",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM5_Wf",
+      "base_register": "YMM5",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM5_Wg",
+      "base_register": "YMM5",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM5_Wh",
+      "base_register": "YMM5",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM6_Wa",
+      "base_register": "YMM6",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM6_Wb",
+      "base_register": "YMM6",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM6_Wc",
+      "base_register": "YMM6",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM6_Wd",
+      "base_register": "YMM6",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM6_We",
+      "base_register": "YMM6",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM6_Wf",
+      "base_register": "YMM6",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM6_Wg",
+      "base_register": "YMM6",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM6_Wh",
+      "base_register": "YMM6",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM7_Wa",
+      "base_register": "YMM7",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM7_Wb",
+      "base_register": "YMM7",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM7_Wc",
+      "base_register": "YMM7",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM7_Wd",
+      "base_register": "YMM7",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM7_We",
+      "base_register": "YMM7",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM7_Wf",
+      "base_register": "YMM7",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM7_Wg",
+      "base_register": "YMM7",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM7_Wh",
+      "base_register": "YMM7",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM8_Wa",
+      "base_register": "YMM8",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM8_Wb",
+      "base_register": "YMM8",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM8_Wc",
+      "base_register": "YMM8",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM8_Wd",
+      "base_register": "YMM8",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM8_We",
+      "base_register": "YMM8",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM8_Wf",
+      "base_register": "YMM8",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM8_Wg",
+      "base_register": "YMM8",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM8_Wh",
+      "base_register": "YMM8",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM9_Wa",
+      "base_register": "YMM9",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM9_Wb",
+      "base_register": "YMM9",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM9_Wc",
+      "base_register": "YMM9",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM9_Wd",
+      "base_register": "YMM9",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM9_We",
+      "base_register": "YMM9",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM9_Wf",
+      "base_register": "YMM9",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM9_Wg",
+      "base_register": "YMM9",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM9_Wh",
+      "base_register": "YMM9",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM10_Wa",
+      "base_register": "YMM10",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM10_Wb",
+      "base_register": "YMM10",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM10_Wc",
+      "base_register": "YMM10",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM10_Wd",
+      "base_register": "YMM10",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM10_We",
+      "base_register": "YMM10",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM10_Wf",
+      "base_register": "YMM10",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM10_Wg",
+      "base_register": "YMM10",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM10_Wh",
+      "base_register": "YMM10",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM11_Wa",
+      "base_register": "YMM11",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM11_Wb",
+      "base_register": "YMM11",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM11_Wc",
+      "base_register": "YMM11",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM11_Wd",
+      "base_register": "YMM11",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM11_We",
+      "base_register": "YMM11",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM11_Wf",
+      "base_register": "YMM11",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM11_Wg",
+      "base_register": "YMM11",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM11_Wh",
+      "base_register": "YMM11",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM12_Wa",
+      "base_register": "YMM12",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM12_Wb",
+      "base_register": "YMM12",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM12_Wc",
+      "base_register": "YMM12",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM12_Wd",
+      "base_register": "YMM12",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM12_We",
+      "base_register": "YMM12",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM12_Wf",
+      "base_register": "YMM12",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM12_Wg",
+      "base_register": "YMM12",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM12_Wh",
+      "base_register": "YMM12",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM13_Wa",
+      "base_register": "YMM13",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM13_Wb",
+      "base_register": "YMM13",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM13_Wc",
+      "base_register": "YMM13",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM13_Wd",
+      "base_register": "YMM13",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM13_We",
+      "base_register": "YMM13",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM13_Wf",
+      "base_register": "YMM13",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM13_Wg",
+      "base_register": "YMM13",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM13_Wh",
+      "base_register": "YMM13",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM14_Wa",
+      "base_register": "YMM14",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM14_Wb",
+      "base_register": "YMM14",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM14_Wc",
+      "base_register": "YMM14",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM14_Wd",
+      "base_register": "YMM14",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM14_We",
+      "base_register": "YMM14",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM14_Wf",
+      "base_register": "YMM14",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM14_Wg",
+      "base_register": "YMM14",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM14_Wh",
+      "base_register": "YMM14",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM15_Wa",
+      "base_register": "YMM15",
+      "lsb": 0,
+      "size": 2
+    },
+    {
+      "register": "XMM15_Wb",
+      "base_register": "YMM15",
+      "lsb": 2,
+      "size": 2
+    },
+    {
+      "register": "XMM15_Wc",
+      "base_register": "YMM15",
+      "lsb": 4,
+      "size": 2
+    },
+    {
+      "register": "XMM15_Wd",
+      "base_register": "YMM15",
+      "lsb": 6,
+      "size": 2
+    },
+    {
+      "register": "XMM15_We",
+      "base_register": "YMM15",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "XMM15_Wf",
+      "base_register": "YMM15",
+      "lsb": 10,
+      "size": 2
+    },
+    {
+      "register": "XMM15_Wg",
+      "base_register": "YMM15",
+      "lsb": 12,
+      "size": 2
+    },
+    {
+      "register": "XMM15_Wh",
+      "base_register": "YMM15",
+      "lsb": 14,
+      "size": 2
+    },
+    {
+      "register": "XMM0_Ba",
+      "base_register": "YMM0",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bb",
+      "base_register": "YMM0",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bc",
+      "base_register": "YMM0",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bd",
+      "base_register": "YMM0",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Be",
+      "base_register": "YMM0",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bf",
+      "base_register": "YMM0",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bg",
+      "base_register": "YMM0",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bh",
+      "base_register": "YMM0",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bi",
+      "base_register": "YMM0",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bj",
+      "base_register": "YMM0",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bk",
+      "base_register": "YMM0",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bl",
+      "base_register": "YMM0",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bm",
+      "base_register": "YMM0",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bn",
+      "base_register": "YMM0",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bo",
+      "base_register": "YMM0",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM0_Bp",
+      "base_register": "YMM0",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Ba",
+      "base_register": "YMM1",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bb",
+      "base_register": "YMM1",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bc",
+      "base_register": "YMM1",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bd",
+      "base_register": "YMM1",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Be",
+      "base_register": "YMM1",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bf",
+      "base_register": "YMM1",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bg",
+      "base_register": "YMM1",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bh",
+      "base_register": "YMM1",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bi",
+      "base_register": "YMM1",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bj",
+      "base_register": "YMM1",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bk",
+      "base_register": "YMM1",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bl",
+      "base_register": "YMM1",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bm",
+      "base_register": "YMM1",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bn",
+      "base_register": "YMM1",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bo",
+      "base_register": "YMM1",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM1_Bp",
+      "base_register": "YMM1",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Ba",
+      "base_register": "YMM2",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bb",
+      "base_register": "YMM2",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bc",
+      "base_register": "YMM2",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bd",
+      "base_register": "YMM2",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Be",
+      "base_register": "YMM2",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bf",
+      "base_register": "YMM2",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bg",
+      "base_register": "YMM2",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bh",
+      "base_register": "YMM2",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bi",
+      "base_register": "YMM2",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bj",
+      "base_register": "YMM2",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bk",
+      "base_register": "YMM2",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bl",
+      "base_register": "YMM2",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bm",
+      "base_register": "YMM2",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bn",
+      "base_register": "YMM2",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bo",
+      "base_register": "YMM2",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM2_Bp",
+      "base_register": "YMM2",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Ba",
+      "base_register": "YMM3",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bb",
+      "base_register": "YMM3",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bc",
+      "base_register": "YMM3",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bd",
+      "base_register": "YMM3",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Be",
+      "base_register": "YMM3",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bf",
+      "base_register": "YMM3",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bg",
+      "base_register": "YMM3",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bh",
+      "base_register": "YMM3",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bi",
+      "base_register": "YMM3",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bj",
+      "base_register": "YMM3",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bk",
+      "base_register": "YMM3",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bl",
+      "base_register": "YMM3",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bm",
+      "base_register": "YMM3",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bn",
+      "base_register": "YMM3",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bo",
+      "base_register": "YMM3",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM3_Bp",
+      "base_register": "YMM3",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Ba",
+      "base_register": "YMM4",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bb",
+      "base_register": "YMM4",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bc",
+      "base_register": "YMM4",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bd",
+      "base_register": "YMM4",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Be",
+      "base_register": "YMM4",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bf",
+      "base_register": "YMM4",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bg",
+      "base_register": "YMM4",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bh",
+      "base_register": "YMM4",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bi",
+      "base_register": "YMM4",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bj",
+      "base_register": "YMM4",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bk",
+      "base_register": "YMM4",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bl",
+      "base_register": "YMM4",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bm",
+      "base_register": "YMM4",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bn",
+      "base_register": "YMM4",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bo",
+      "base_register": "YMM4",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM4_Bp",
+      "base_register": "YMM4",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Ba",
+      "base_register": "YMM5",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bb",
+      "base_register": "YMM5",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bc",
+      "base_register": "YMM5",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bd",
+      "base_register": "YMM5",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Be",
+      "base_register": "YMM5",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bf",
+      "base_register": "YMM5",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bg",
+      "base_register": "YMM5",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bh",
+      "base_register": "YMM5",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bi",
+      "base_register": "YMM5",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bj",
+      "base_register": "YMM5",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bk",
+      "base_register": "YMM5",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bl",
+      "base_register": "YMM5",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bm",
+      "base_register": "YMM5",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bn",
+      "base_register": "YMM5",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bo",
+      "base_register": "YMM5",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM5_Bp",
+      "base_register": "YMM5",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Ba",
+      "base_register": "YMM6",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bb",
+      "base_register": "YMM6",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bc",
+      "base_register": "YMM6",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bd",
+      "base_register": "YMM6",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Be",
+      "base_register": "YMM6",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bf",
+      "base_register": "YMM6",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bg",
+      "base_register": "YMM6",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bh",
+      "base_register": "YMM6",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bi",
+      "base_register": "YMM6",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bj",
+      "base_register": "YMM6",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bk",
+      "base_register": "YMM6",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bl",
+      "base_register": "YMM6",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bm",
+      "base_register": "YMM6",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bn",
+      "base_register": "YMM6",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bo",
+      "base_register": "YMM6",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM6_Bp",
+      "base_register": "YMM6",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Ba",
+      "base_register": "YMM7",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bb",
+      "base_register": "YMM7",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bc",
+      "base_register": "YMM7",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bd",
+      "base_register": "YMM7",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Be",
+      "base_register": "YMM7",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bf",
+      "base_register": "YMM7",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bg",
+      "base_register": "YMM7",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bh",
+      "base_register": "YMM7",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bi",
+      "base_register": "YMM7",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bj",
+      "base_register": "YMM7",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bk",
+      "base_register": "YMM7",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bl",
+      "base_register": "YMM7",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bm",
+      "base_register": "YMM7",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bn",
+      "base_register": "YMM7",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bo",
+      "base_register": "YMM7",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM7_Bp",
+      "base_register": "YMM7",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Ba",
+      "base_register": "YMM8",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bb",
+      "base_register": "YMM8",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bc",
+      "base_register": "YMM8",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bd",
+      "base_register": "YMM8",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Be",
+      "base_register": "YMM8",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bf",
+      "base_register": "YMM8",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bg",
+      "base_register": "YMM8",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bh",
+      "base_register": "YMM8",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bi",
+      "base_register": "YMM8",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bj",
+      "base_register": "YMM8",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bk",
+      "base_register": "YMM8",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bl",
+      "base_register": "YMM8",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bm",
+      "base_register": "YMM8",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bn",
+      "base_register": "YMM8",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bo",
+      "base_register": "YMM8",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM8_Bp",
+      "base_register": "YMM8",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Ba",
+      "base_register": "YMM9",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bb",
+      "base_register": "YMM9",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bc",
+      "base_register": "YMM9",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bd",
+      "base_register": "YMM9",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Be",
+      "base_register": "YMM9",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bf",
+      "base_register": "YMM9",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bg",
+      "base_register": "YMM9",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bh",
+      "base_register": "YMM9",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bi",
+      "base_register": "YMM9",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bj",
+      "base_register": "YMM9",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bk",
+      "base_register": "YMM9",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bl",
+      "base_register": "YMM9",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bm",
+      "base_register": "YMM9",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bn",
+      "base_register": "YMM9",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bo",
+      "base_register": "YMM9",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM9_Bp",
+      "base_register": "YMM9",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Ba",
+      "base_register": "YMM10",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bb",
+      "base_register": "YMM10",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bc",
+      "base_register": "YMM10",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bd",
+      "base_register": "YMM10",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Be",
+      "base_register": "YMM10",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bf",
+      "base_register": "YMM10",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bg",
+      "base_register": "YMM10",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bh",
+      "base_register": "YMM10",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bi",
+      "base_register": "YMM10",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bj",
+      "base_register": "YMM10",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bk",
+      "base_register": "YMM10",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bl",
+      "base_register": "YMM10",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bm",
+      "base_register": "YMM10",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bn",
+      "base_register": "YMM10",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bo",
+      "base_register": "YMM10",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM10_Bp",
+      "base_register": "YMM10",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Ba",
+      "base_register": "YMM11",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bb",
+      "base_register": "YMM11",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bc",
+      "base_register": "YMM11",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bd",
+      "base_register": "YMM11",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Be",
+      "base_register": "YMM11",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bf",
+      "base_register": "YMM11",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bg",
+      "base_register": "YMM11",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bh",
+      "base_register": "YMM11",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bi",
+      "base_register": "YMM11",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bj",
+      "base_register": "YMM11",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bk",
+      "base_register": "YMM11",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bl",
+      "base_register": "YMM11",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bm",
+      "base_register": "YMM11",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bn",
+      "base_register": "YMM11",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bo",
+      "base_register": "YMM11",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM11_Bp",
+      "base_register": "YMM11",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Ba",
+      "base_register": "YMM12",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bb",
+      "base_register": "YMM12",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bc",
+      "base_register": "YMM12",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bd",
+      "base_register": "YMM12",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Be",
+      "base_register": "YMM12",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bf",
+      "base_register": "YMM12",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bg",
+      "base_register": "YMM12",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bh",
+      "base_register": "YMM12",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bi",
+      "base_register": "YMM12",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bj",
+      "base_register": "YMM12",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bk",
+      "base_register": "YMM12",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bl",
+      "base_register": "YMM12",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bm",
+      "base_register": "YMM12",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bn",
+      "base_register": "YMM12",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bo",
+      "base_register": "YMM12",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM12_Bp",
+      "base_register": "YMM12",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Ba",
+      "base_register": "YMM13",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bb",
+      "base_register": "YMM13",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bc",
+      "base_register": "YMM13",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bd",
+      "base_register": "YMM13",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Be",
+      "base_register": "YMM13",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bf",
+      "base_register": "YMM13",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bg",
+      "base_register": "YMM13",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bh",
+      "base_register": "YMM13",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bi",
+      "base_register": "YMM13",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bj",
+      "base_register": "YMM13",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bk",
+      "base_register": "YMM13",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bl",
+      "base_register": "YMM13",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bm",
+      "base_register": "YMM13",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bn",
+      "base_register": "YMM13",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bo",
+      "base_register": "YMM13",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM13_Bp",
+      "base_register": "YMM13",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Ba",
+      "base_register": "YMM14",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bb",
+      "base_register": "YMM14",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bc",
+      "base_register": "YMM14",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bd",
+      "base_register": "YMM14",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Be",
+      "base_register": "YMM14",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bf",
+      "base_register": "YMM14",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bg",
+      "base_register": "YMM14",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bh",
+      "base_register": "YMM14",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bi",
+      "base_register": "YMM14",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bj",
+      "base_register": "YMM14",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bk",
+      "base_register": "YMM14",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bl",
+      "base_register": "YMM14",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bm",
+      "base_register": "YMM14",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bn",
+      "base_register": "YMM14",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bo",
+      "base_register": "YMM14",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM14_Bp",
+      "base_register": "YMM14",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Ba",
+      "base_register": "YMM15",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bb",
+      "base_register": "YMM15",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bc",
+      "base_register": "YMM15",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bd",
+      "base_register": "YMM15",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Be",
+      "base_register": "YMM15",
+      "lsb": 4,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bf",
+      "base_register": "YMM15",
+      "lsb": 5,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bg",
+      "base_register": "YMM15",
+      "lsb": 6,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bh",
+      "base_register": "YMM15",
+      "lsb": 7,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bi",
+      "base_register": "YMM15",
+      "lsb": 8,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bj",
+      "base_register": "YMM15",
+      "lsb": 9,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bk",
+      "base_register": "YMM15",
+      "lsb": 10,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bl",
+      "base_register": "YMM15",
+      "lsb": 11,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bm",
+      "base_register": "YMM15",
+      "lsb": 12,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bn",
+      "base_register": "YMM15",
+      "lsb": 13,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bo",
+      "base_register": "YMM15",
+      "lsb": 14,
+      "size": 1
+    },
+    {
+      "register": "XMM15_Bp",
+      "base_register": "YMM15",
+      "lsb": 15,
+      "size": 1
+    },
+    {
+      "register": "YMM0",
+      "base_register": "YMM0",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM1",
+      "base_register": "YMM1",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM2",
+      "base_register": "YMM2",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM3",
+      "base_register": "YMM3",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM4",
+      "base_register": "YMM4",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM5",
+      "base_register": "YMM5",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM6",
+      "base_register": "YMM6",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM7",
+      "base_register": "YMM7",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM8",
+      "base_register": "YMM8",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM9",
+      "base_register": "YMM9",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM10",
+      "base_register": "YMM10",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM11",
+      "base_register": "YMM11",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM12",
+      "base_register": "YMM12",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM13",
+      "base_register": "YMM13",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM14",
+      "base_register": "YMM14",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "YMM15",
+      "base_register": "YMM15",
+      "lsb": 0,
+      "size": 32
+    },
+    {
+      "register": "xmmTmp1",
+      "base_register": "xmmTmp1",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "xmmTmp2",
+      "base_register": "xmmTmp2",
+      "lsb": 0,
+      "size": 16
+    },
+    {
+      "register": "xmmTmp1_Qa",
+      "base_register": "xmmTmp1",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "xmmTmp1_Qb",
+      "base_register": "xmmTmp1",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "xmmTmp2_Qa",
+      "base_register": "xmmTmp2",
+      "lsb": 0,
+      "size": 8
+    },
+    {
+      "register": "xmmTmp2_Qb",
+      "base_register": "xmmTmp2",
+      "lsb": 8,
+      "size": 8
+    },
+    {
+      "register": "xmmTmp1_Da",
+      "base_register": "xmmTmp1",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "xmmTmp1_Db",
+      "base_register": "xmmTmp1",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "xmmTmp1_Dc",
+      "base_register": "xmmTmp1",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "xmmTmp1_Dd",
+      "base_register": "xmmTmp1",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "xmmTmp2_Da",
+      "base_register": "xmmTmp2",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "xmmTmp2_Db",
+      "base_register": "xmmTmp2",
+      "lsb": 4,
+      "size": 4
+    },
+    {
+      "register": "xmmTmp2_Dc",
+      "base_register": "xmmTmp2",
+      "lsb": 8,
+      "size": 4
+    },
+    {
+      "register": "xmmTmp2_Dd",
+      "base_register": "xmmTmp2",
+      "lsb": 12,
+      "size": 4
+    },
+    {
+      "register": "contextreg",
+      "base_register": "contextreg",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "IDTR_Limit",
+      "base_register": "IDTR",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "IDTR",
+      "base_register": "IDTR",
+      "lsb": 0,
+      "size": 12
+    },
+    {
+      "register": "IDTR_Address",
+      "base_register": "IDTR",
+      "lsb": 4,
+      "size": 8
+    },
+    {
+      "register": "GDTR_Limit",
+      "base_register": "GDTR",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "GDTR",
+      "base_register": "GDTR",
+      "lsb": 0,
+      "size": 12
+    },
+    {
+      "register": "GDTR_Address",
+      "base_register": "GDTR",
+      "lsb": 4,
+      "size": 8
+    },
+    {
+      "register": "LDTR_Limit",
+      "base_register": "LDTR",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "LDTR",
+      "base_register": "LDTR",
+      "lsb": 0,
+      "size": 14
+    },
+    {
+      "register": "LDTR_Address",
+      "base_register": "LDTR",
+      "lsb": 4,
+      "size": 8
+    },
+    {
+      "register": "LDTR_Attributes",
+      "base_register": "LDTR",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "TR_Limit",
+      "base_register": "TR",
+      "lsb": 0,
+      "size": 4
+    },
+    {
+      "register": "TR",
+      "base_register": "TR",
+      "lsb": 0,
+      "size": 14
+    },
+    {
+      "register": "TR_Address",
+      "base_register": "TR",
+      "lsb": 4,
+      "size": 8
+    },
+    {
+      "register": "TR_Attributes",
+      "base_register": "TR",
+      "lsb": 8,
+      "size": 2
+    },
+    {
+      "register": "longMode",
+      "base_register": "contextreg",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "reserved",
+      "base_register": "contextreg",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "addrsize",
+      "base_register": "contextreg",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "bit64",
+      "base_register": "contextreg",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "opsize",
+      "base_register": "contextreg",
+      "lsb": 3,
+      "size": 1
+    },
+    {
+      "register": "segover",
+      "base_register": "contextreg",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "highseg",
+      "base_register": "contextreg",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "protectedMode",
+      "base_register": "contextreg",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "repneprefx",
+      "base_register": "contextreg",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "mandover",
+      "base_register": "contextreg",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "repprefx",
+      "base_register": "contextreg",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "prefix_66",
+      "base_register": "contextreg",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "rexWprefix",
+      "base_register": "contextreg",
+      "lsb": 2,
+      "size": 1
+    },
+    {
+      "register": "rexRprefix",
+      "base_register": "contextreg",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "rexXprefix",
+      "base_register": "contextreg",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "rexBprefix",
+      "base_register": "contextreg",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "rexprefix",
+      "base_register": "contextreg",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "vexMode",
+      "base_register": "contextreg",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "vexL",
+      "base_register": "contextreg",
+      "lsb": 1,
+      "size": 1
+    },
+    {
+      "register": "suffix3D",
+      "base_register": "contextreg",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "vexVVVV",
+      "base_register": "contextreg",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "vexMMMMM",
+      "base_register": "contextreg",
+      "lsb": 0,
+      "size": 1
+    },
+    {
+      "register": "instrPhase",
+      "base_register": "contextreg",
+      "lsb": 0,
+      "size": 1
+    }
+  ],
+  "cpu_architecture": "x86_64",
+  "register_calling_convention": [
+    {
+      "calling_convention": "MSABI",
+      "integer_parameter_register": [
+        "RCX",
+        "RDX",
+        "R8",
+        "R9"
+      ],
+      "float_parameter_register": [
+        "XMM0_Qa",
+        "XMM1_Qa",
+        "XMM2_Qa",
+        "XMM3_Qa"
+      ],
+      "return_register": [
+        "XMM0_Qa",
+        "RAX"
+      ],
+      "unaffected_register": [
+        "RBX",
+        "RBP",
+        "RDI",
+        "RSI",
+        "RSP",
+        "R12",
+        "R13",
+        "R14",
+        "R15",
+        "DF"
+      ],
+      "killed_by_call_register": [
+        "RAX",
+        "XMM0"
+      ]
+    },
+    {
+      "calling_convention": "syscall",
+      "integer_parameter_register": [
+        "RDI",
+        "RSI",
+        "RDX",
+        "R10",
+        "R8",
+        "R9"
+      ],
+      "float_parameter_register": [],
+      "return_register": [
+        "RAX"
+      ],
+      "unaffected_register": [
+        "RBX",
+        "RDX",
+        "RBP",
+        "RDI",
+        "RSI",
+        "RSP",
+        "R8",
+        "R9",
+        "R10",
+        "R12",
+        "R13",
+        "R14",
+        "R15",
+        "DF"
+      ],
+      "killed_by_call_register": [
+        "RCX",
+        "R11"
+      ]
+    },
+    {
+      "calling_convention": "__stdcall",
+      "integer_parameter_register": [
+        "RDI",
+        "RSI",
+        "RDX",
+        "RCX",
+        "R8",
+        "R9"
+      ],
+      "float_parameter_register": [
+        "XMM0_Qa",
+        "XMM1_Qa",
+        "XMM2_Qa",
+        "XMM3_Qa",
+        "XMM4_Qa",
+        "XMM5_Qa",
+        "XMM6_Qa",
+        "XMM7_Qa"
+      ],
+      "return_register": [
+        "XMM0_Qa",
+        "RAX"
+      ],
+      "unaffected_register": [
+        "RBX",
+        "RSP",
+        "RBP",
+        "R12",
+        "R13",
+        "R14",
+        "R15"
+      ],
+      "killed_by_call_register": [
+        "RAX",
+        "RDX",
+        "XMM0"
+      ]
+    }
+  ],
+  "datatype_properties": {
+    "char_size": 1,
+    "double_size": 8,
+    "float_size": 4,
+    "integer_size": 4,
+    "long_double_size": 16,
+    "long_long_size": 8,
+    "long_size": 8,
+    "pointer_size": 8,
+    "short_size": 2
+  }
+}

@@ -37,6 +37,7 @@ impl<'a> Context<'a> {
 
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub enum Definition {
+    EntryFresh(usize),
     Normal(Tid),
     // Definitions created to
     ActualRet(Tid, usize),

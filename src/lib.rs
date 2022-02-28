@@ -403,6 +403,24 @@ mod tests {
     }
 
     #[test]
+    fn test_polymorphism_disallow_vertical_unification() {
+        let mut bldr = TestCaseBuilder::new();
+        bldr.set_binary_path("polymorphism_tests/test_prevent_unification.o".to_owned())
+            .set_ir_json_path("polymorphism_tests/test_prevent_unfication_ir.json".to_owned())
+            .set_additional_constraints(
+                "polymorphism_tests/prevent_unification_additional_constraints.json".to_owned(),
+            )
+            .set_lattice_json("polymorphism_tests/simple_lattice.json".to_owned())
+            .set_interesting_tids_file(
+                "polymorphism_tests/unification_interesting_tids.json".to_owned(),
+            )
+            .set_expec_constraint_gen(
+                "polymorphism_tests/unification_expected_sccs.json".to_owned(),
+            );
+        run_test_case(bldr.build());
+    }
+
+    #[test]
 
     fn mooosl_keyhash() {
         let mut bldr = TestCaseBuilder::new();
