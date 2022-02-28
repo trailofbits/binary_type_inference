@@ -1,0 +1,196 @@
+[
+    {
+        "scc": [
+            {
+                "id": "sub_00000010",
+                "address": "00000010"
+            }
+        ],
+        "constraints": [
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_00000004"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00000010"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_00000010"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00000004"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    {
+        "scc": [
+            {
+                "id": "sub_00000000",
+                "address": "00000000"
+            }
+        ],
+        "constraints": [
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_00000000"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00000000"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    {
+        "scc": [
+            {
+                "id": "sub_00000004",
+                "address": "00000004"
+            }
+        ],
+        "constraints": [
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_00000000"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00000004"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_00000004"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00000000"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    {
+        "scc": [
+            {
+                "id": "sub_0000001c",
+                "address": "0000001c"
+            }
+        ],
+        "constraints": [
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_00000004"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_0000001c"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_0000001c"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00000004"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+]

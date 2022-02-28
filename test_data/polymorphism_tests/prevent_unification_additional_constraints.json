@@ -1,0 +1,46 @@
+[
+    {
+        "lhs": {
+            "var": {
+                "name": "sub_00000010"
+            },
+            "labels": [
+                "Load",
+                {
+                    "Field": {
+                        "offset": 0,
+                        "size": 8
+                    }
+                }
+            ]
+        },
+        "rhs": {
+            "var": {
+                "name": "char"
+            },
+            "labels": []
+        }
+    },
+    {
+        "lhs": {
+            "var": {
+                "name": "sub_0000001c"
+            },
+            "labels": [
+                "Load",
+                {
+                    "Field": {
+                        "offset": 0,
+                        "size": 8
+                    }
+                }
+            ]
+        },
+        "rhs": {
+            "var": {
+                "name": "int"
+            },
+            "labels": []
+        }
+    }
+]

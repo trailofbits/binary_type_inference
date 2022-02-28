@@ -85,13 +85,13 @@ where
 
                 fsa.simplify_graph(self.vman);
 
-                /* if tid_filter.contains(&Tid::create(
-                    "sub_00101728".to_owned(),
-                    "00101728".to_owned(),
+                if tid_filter.contains(&Tid::create(
+                    "sub_0000001c".to_owned(),
+                    "0000001c".to_owned(),
                 )) {
                     println!("bcons: \n {}", basic_cons);
                     println!("{}", Dot::new(fsa.get_graph()));
-                }*/
+                }
 
                 let cons = fsa.walk_constraints();
 

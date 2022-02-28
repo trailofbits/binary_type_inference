@@ -392,12 +392,16 @@ impl InferenceJob {
     pub fn parse<T: InferenceParsing<SubtypeConstraint> + InferenceParsing<Tid>>(
         def: &JobDefinition,
     ) -> anyhow::Result<InferenceJob> {
-        let bin = Self::parse_binary(&def.binary_path)?;
-        let proj = Self::parse_project(&def.ir_json_path, &bin)?;
-        let (lat, weakest_integral_type) = Self::parse_lattice_json(&def.lattice_json)?;
+        let bin = Self::parse_binary(&def.binary_path).with_context(|| "Trying to parse binary")?;
+        let proj = Self::parse_project(&def.ir_json_path, &bin)
+            .with_context(|| "Trying to parse project")?;
+        let (lat, weakest_integral_type) = Self::parse_lattice_json(&def.lattice_json)
+            .with_context(|| "Trying to parse lattice")?;
         let additional_constraints =
-            Self::parse_additional_constraints::<T>(&def.additional_constraints_file)?;
-        let interesting_tids = Self::parse_tid_set::<T>(&def.interesting_tids)?;
+            Self::parse_additional_constraints::<T>(&def.additional_constraints_file)
+                .with_context(|| "Trying to parse additional constraints")?;
+        let interesting_tids = Self::parse_tid_set::<T>(&def.interesting_tids)
+            .with_context(|| "Trying to parse interesting tids")?;
 
         Ok(InferenceJob {
             binary_bytes: bin,
