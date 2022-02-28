@@ -5,6 +5,9 @@
                 "name": "sub_00000010"
             },
             "labels": [
+                {
+                    "In": 0
+                },
                 "Load",
                 {
                     "Field": {
@@ -27,11 +30,14 @@
                 "name": "sub_0000001c"
             },
             "labels": [
+                {
+                    "In": 0
+                },
                 "Load",
                 {
                     "Field": {
                         "offset": 0,
-                        "size": 8
+                        "size": 64
                     }
                 }
             ]

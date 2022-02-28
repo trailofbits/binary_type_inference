@@ -52,14 +52,26 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use crate::{constraints::DerivedTypeVar, solver::type_lattice::NamedLatticeElement};
+    use petgraph::visit::EdgeRef;
+
     use crate::{
-        constraints::{ConstraintSet, SubtypeConstraint, TyConstraint},
+        constraints::{ConstraintSet, Field, FieldLabel, SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
         lowering::CType,
     };
+    use crate::{
+        constraints::{DerivedTypeVar, TypeVariable},
+        solver::{
+            type_lattice::{CustomLatticeElement, NamedLatticeElement},
+            type_sketch::SketchGraph,
+        },
+    };
     use cwe_checker_lib::intermediate_representation::Tid;
-    use petgraph::{dot::Dot, graph::NodeIndex};
+    use petgraph::{
+        dot::Dot,
+        graph::NodeIndex,
+        visit::{IntoEdgesDirected, IntoNeighbors},
+    };
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
 
@@ -71,6 +83,7 @@ mod tests {
         constraint_gen: Option<String>,
         constraint_simplification: Option<String>,
         ctype_mapping: Option<String>,
+        sketch_properties: Vec<Box<dyn Fn(&SketchGraph<CustomLatticeElement>)>>,
     }
 
     fn parse_constraint_set_test(fname: &str) -> anyhow::Result<ConstraintSet> {
@@ -114,6 +127,7 @@ mod tests {
         constraint_gen: Option<Vec<DeserSCCCons>>,
         constraint_simplification: Option<ConstraintSet>,
         ctype_mapping: Option<HashMap<NodeIndex, CType>>,
+        sketch_properties: Vec<Box<dyn Fn(&SketchGraph<CustomLatticeElement>)>>,
     }
 
     impl TryFrom<ExpectedOutputFiles> for ExpectedOutputs {
@@ -136,6 +150,7 @@ mod tests {
                 constraint_gen: expected_gen,
                 constraint_simplification: constrain_simpl_expec,
                 ctype_mapping,
+                sketch_properties: value.sketch_properties,
             })
         }
     }
@@ -221,6 +236,10 @@ mod tests {
 
         let labeled_graph = job.get_labeled_sketch_graph(&simplified);
 
+        for prop in expected_values.sketch_properties.iter() {
+            prop(&labeled_graph);
+        }
+
         let mapped_graph = labeled_graph.get_graph().map(
             |idx, nd_elem| format!("{}:{}", idx.index(), nd_elem.get_name()),
             |_e, fld_label| format!("{}", fld_label),
@@ -263,6 +282,7 @@ mod tests {
         expec_constraint_gen: Option<String>,
         expec_constraint_simplification: Option<String>,
         expec_ctype_mapping: Option<String>,
+        sketch_properties: Vec<Box<dyn Fn(&SketchGraph<CustomLatticeElement>)>>,
     }
 
     impl TestCaseBuilder {
@@ -291,6 +311,14 @@ mod tests {
 
         fn set_ir_json_path(&mut self, v: String) -> &mut Self {
             self.ir_json_path = Some(v);
+            self
+        }
+
+        fn add_sketch_property(
+            &mut self,
+            t: Box<dyn Fn(&SketchGraph<CustomLatticeElement>)>,
+        ) -> &mut Self {
+            self.sketch_properties.push(t);
             self
         }
 
@@ -348,6 +376,7 @@ mod tests {
                         .expec_constraint_simplification
                         .map(|x| Self::expected_data_dir(x)),
                     ctype_mapping: self.expec_ctype_mapping.map(|x| Self::expected_data_dir(x)),
+                    sketch_properties: self.sketch_properties,
                 },
             }
         }
@@ -416,7 +445,46 @@ mod tests {
             )
             .set_expec_constraint_gen(
                 "polymorphism_tests/unification_expected_sccs.json".to_owned(),
-            );
+            )
+            .add_sketch_property(Box::new(|grph| {
+                // check that caller1 only has a char pointer
+                let idx = grph
+                    .get_node_index_for_variable(&DerivedTypeVar::new(TypeVariable::new(
+                        "sub_00000010".to_owned(),
+                    )))
+                    .expect("Should have node for caller1");
+
+                let neighbors = &grph
+                    .get_graph()
+                    .edges_directed(idx, petgraph::Direction::Outgoing)
+                    .collect::<Vec<_>>();
+                assert_eq!(neighbors.len(), 2);
+                assert_eq!(neighbors[0].target(), neighbors[1].target());
+                assert_eq!(neighbors[0].weight(), &FieldLabel::In(0));
+                assert_eq!(neighbors[1].weight(), &FieldLabel::Out(0));
+
+                let load_edge = &grph
+                    .get_graph()
+                    .edges_directed(neighbors[0].target(), petgraph::Direction::Outgoing)
+                    .collect::<Vec<_>>();
+
+                assert_eq!(load_edge.len(), 1);
+                assert_eq!(load_edge[0].weight(), &FieldLabel::Load);
+
+                let field_edges = &grph
+                    .get_graph()
+                    .edges_directed(load_edge[0].target(), petgraph::Direction::Outgoing)
+                    .collect::<Vec<_>>();
+
+                assert_eq!(field_edges.len(), 1);
+                assert_eq!(
+                    field_edges[0].weight(),
+                    &FieldLabel::Field(Field { offset: 0, size: 8 })
+                );
+                assert_eq!(grph.get_graph()[field_edges[0].target()].get_name(), "char");
+
+                // check that caller2 only has an int pointer
+            }));
         run_test_case(bldr.build());
     }
 
