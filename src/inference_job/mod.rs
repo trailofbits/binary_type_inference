@@ -14,7 +14,7 @@ use cwe_checker_lib::{
     intermediate_representation::{ExternSymbol, Project, Tid},
     utils::binary::RuntimeMemoryImage,
 };
-use petgraph::{dot::Dot, graph::NodeIndex};
+use petgraph::graph::NodeIndex;
 use serde::de::DeserializeOwned;
 use tempdir::TempDir;
 
@@ -22,17 +22,17 @@ use crate::{
     analysis::{callgraph, fixup_returns},
     constraint_generation::NodeContext,
     constraints::{ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable, VariableManager},
-    lowering::{immutably_push, CType},
+    lowering::CType,
     node_context::{
         points_to::PointsToContext,
         register_map::{self, RegisterContext},
         subproc_loc::ProcedureContext,
     },
     solver::{
-        constraint_graph::{RuleContext, FSA},
+        constraint_graph::RuleContext,
         scc_constraint_generation::{self, SCCConstraints},
         type_lattice::{CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition},
-        type_sketch::{LabelingContext, SketchGraph},
+        type_sketch::SketchGraph,
     },
 };
 use crate::{ctypes, pb_constraints};
