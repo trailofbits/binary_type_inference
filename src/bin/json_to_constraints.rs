@@ -12,7 +12,7 @@ use binary_type_inference::{
     solver::{
         constraint_graph::{RuleContext, FSA},
         type_lattice::{LatticeDefinition, NamedLatticeElement},
-        type_sketch::{LabelingContext, SketchGraph},
+        type_sketch::SketchGraph,
     },
     util,
 };

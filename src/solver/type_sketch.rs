@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::marker::PhantomData;
 use std::rc::Rc;
 use std::{collections::HashMap, hash::Hash};
@@ -9,12 +9,13 @@ use alga::general::{
 use anyhow::Context;
 use cwe_checker_lib::analysis::graph;
 use cwe_checker_lib::intermediate_representation::Tid;
+use env_logger::Target;
 use itertools::Itertools;
 use log::info;
 use petgraph::graph::IndexType;
 use petgraph::stable_graph::{StableDiGraph, StableGraph};
 use petgraph::unionfind::UnionFind;
-use petgraph::visit::{Dfs, EdgeRef, IntoNodeReferences};
+use petgraph::visit::{Dfs, EdgeRef, IntoEdgeReferences, IntoEdgesDirected, IntoNodeReferences};
 use petgraph::visit::{IntoNodeIdentifiers, Walker};
 use petgraph::{algo, EdgeType};
 use petgraph::{
@@ -342,11 +343,13 @@ where
 
     pub fn build(self) -> anyhow::Result<HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>> {
         let condensed = petgraph::algo::condensation(self.cg, false);
-        let sorted: Vec<NodeIndex> = petgraph::algo::toposort(&condensed, None)
+        let mut sorted: Vec<NodeIndex> = petgraph::algo::toposort(&condensed, None)
             .map_err(|_| anyhow::anyhow!("cycle error"))
             .with_context(|| {
                 "Constructing topological sort of codensed sccs for sketch building"
             })?;
+
+        sorted.reverse();
 
         for idx in sorted {
             let associated_tids = condensed[idx];
@@ -413,15 +416,52 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         }
     }
 
+    fn get_key_and_weight_for_index(&self, idx: NodeIndex) -> (DerivedTypeVar, T) {
+        let dtv = self
+            .group_to_dtvs
+            .get(&idx)
+            .expect("every node should have a gorup")
+            .iter()
+            .next()
+            .expect("groups should be non empty");
+
+        (
+            dtv.clone(),
+            self.quotient_graph
+                .node_weight(idx)
+                .expect("every node should have a weight")
+                .clone(),
+        )
+    }
+
     pub fn copy_reachable_subgraph_into(
         &self,
         from: &DerivedTypeVar,
         into: &mut MappingGraph<T, DerivedTypeVar, FieldLabel>,
     ) {
         if let Some(represented) = self.dtv_to_group.get(from) {
-            Dfs::new(&self.quotient_graph, *represented)
+            let reachable_idxs: BTreeSet<_> = Dfs::new(&self.quotient_graph, *represented)
                 .iter(&self.quotient_graph)
-                .for_each(|reached_idx| self.add_idx_to(reached_idx, into));
+                .collect();
+
+            reachable_idxs
+                .iter()
+                .for_each(|reached_idx| self.add_idx_to(*reached_idx, into));
+
+            // add edges where both ends are in the subgraph
+            for edge in self.quotient_graph.edge_references() {
+                if reachable_idxs.contains(&edge.target())
+                    && reachable_idxs.contains(&edge.source())
+                {
+                    let (key1, w1) = self.get_key_and_weight_for_index(edge.source());
+                    let source = into.add_node(key1, w1);
+
+                    let (key2, w2) = self.get_key_and_weight_for_index(edge.target());
+                    let target = into.add_node(key2, w2);
+
+                    into.add_edge(source, target, edge.weight().clone());
+                }
+            }
         }
     }
 }
