@@ -1,9 +1,10 @@
 use std::{hash::Hash, iter::FromIterator};
 
 use indexmap::IndexSet;
-use petgraph::{
-    visit::{EdgeRef, IntoEdgesDirected, NodeCount},
-};
+use petgraph::visit::{EdgeRef, IntoEdgesDirected, NodeCount};
+
+pub mod mapping_graph;
+
 /// All simple paths that tracks edge paths instead of node paths
 pub fn all_simple_paths<TargetColl, G>(
     graph: G,
