@@ -207,9 +207,9 @@ mod test {
         analysis::reaching_definitions::Definition,
         constraint_generation::{NodeContextMapping, PointsToMapping, RegisterMapping},
         constraints::VariableManager,
-        inference_job::InferenceJob,
     };
 
+    /*
     use super::run_analysis;
 
     fn test_data_dir<P: AsRef<Path>>(pth: P) -> String {
@@ -357,5 +357,5 @@ mod test {
             }),
             ByteSize::new(8),
         );
-    }
+    }*/
 }

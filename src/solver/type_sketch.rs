@@ -31,6 +31,7 @@ use crate::constraints::{
 use crate::graph_algos::mapping_graph::{self, MappingGraph};
 
 use super::constraint_graph::TypeVarNode;
+use super::scc_constraint_generation::SCCConstraints;
 use super::type_lattice::{CustomLatticeElement, NamedLattice, NamedLatticeElement};
 
 // an equivalence between eq nodes implies an equivalence between edge
@@ -41,7 +42,7 @@ struct EdgeImplication {
 }
 
 /// Labels for the sketch graph that mantain both an upper bound and lower bound on merged type
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct LatticeBounds<T: Clone + Lattice> {
     upper_bound: T,
     lower_bound: T,
@@ -100,6 +101,30 @@ impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> SketckGraphBuilder<'a, U, T
 where
     T: 'a,
 {
+    pub fn new(
+        cg: CallGraph,
+        scc_constraints: Vec<SCCConstraints>,
+        lattice: &'a T,
+        type_lattice_elements: HashSet<TypeVariable>,
+    ) -> SketckGraphBuilder<'a, U, T> {
+        let scc_signatures = scc_constraints
+            .into_iter()
+            .map(|cons| {
+                let repr = Rc::new(cons.constraints);
+                cons.scc.into_iter().map(move |t| (t.clone(), repr.clone()))
+            })
+            .flatten()
+            .collect::<HashMap<_, _>>();
+
+        SketckGraphBuilder {
+            scc_signatures,
+            scc_repr: HashMap::new(),
+            cg,
+            lattice,
+            type_lattice_elements,
+        }
+    }
+
     /// The identity operation described for Lattice bounds
     fn identity_element(&self) -> LatticeBounds<U> {
         let bot = self.lattice.bot();
@@ -132,14 +157,18 @@ where
         is_internal_variable: &BTreeSet<TypeVariable>,
         nd_graph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
     ) -> anyhow::Result<()> {
-        if is_internal_variable.contains(var.get_base_variable()) {
-            self.insert_dtv(&mut nd_graph, var.clone());
+        if is_internal_variable.contains(var.get_base_variable())
+            || self.type_lattice_elements.contains(var.get_base_variable())
+        {
+            self.insert_dtv(nd_graph, var.clone());
         } else {
+            println!("Working on {:?}", is_internal_variable);
             let ext = self
                 .scc_repr
                 .get(var.get_base_variable())
                 .ok_or(anyhow::anyhow!(
-                    "An external variable must have a representation already built"
+                    "An external variable must have a representation already built {}",
+                    var.get_base_variable().to_string()
                 ))?;
 
             ext.copy_reachable_subgraph_into(var, nd_graph);
@@ -161,8 +190,8 @@ where
 
         for constraint in cs_set.iter() {
             if let TyConstraint::SubTy(sty) = constraint {
-                self.add_variable(&sty.lhs, &is_internal_variable, nd_graph);
-                self.add_variable(&sty.rhs, &is_internal_variable, nd_graph);
+                self.add_variable(&sty.lhs, &is_internal_variable, nd_graph)?;
+                self.add_variable(&sty.rhs, &is_internal_variable, nd_graph)?;
             }
         }
 
@@ -228,22 +257,26 @@ where
             });
     }
 
-    fn build_and_label_scc_sketch(&mut self, to_reprs: Vec<Tid>) {
+    fn build_and_label_scc_sketch(&mut self, to_reprs: &Vec<Tid>) -> anyhow::Result<()> {
         let sig = self
             .scc_signatures
             .get(&to_reprs[0])
             .expect("scc should have a sig");
 
-        let nd_graph: MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel> =
+        let mut nd_graph: MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel> =
             MappingGraph::new();
 
-        self.add_nodes_and_initial_edges(&to_reprs, sig, &mut nd_graph);
+        self.add_nodes_and_initial_edges(&to_reprs, sig, &mut nd_graph)?;
         let qgroups = Self::generate_quotient_groups(&nd_graph, sig);
-        nd_graph.quoetient_graph(&qgroups);
 
-        self.label_by(&mut nd_graph, sig);
+        info!("Quotient group for scc: {:#?}, {:#?}", to_reprs, qgroups);
 
-        let orig_sk_graph = SketchGraph::from(nd_graph);
+        let mut quoted_graph = nd_graph.quoetient_graph(&qgroups);
+        assert!(quoted_graph.get_graph().node_count() == qgroups.len());
+
+        self.label_by(&mut quoted_graph, sig);
+
+        let orig_sk_graph = SketchGraph::from(quoted_graph);
 
         let sk_graph = Rc::new(orig_sk_graph);
 
@@ -251,6 +284,8 @@ where
             self.scc_repr
                 .insert(constraint_generation::tid_to_tvar(repr), sk_graph.clone());
         }
+
+        Ok(())
     }
 
     fn constraint_quotients(
@@ -305,6 +340,8 @@ where
         cons: &ConstraintSet,
     ) -> Vec<BTreeSet<NodeIndex>> {
         let mut cons = Self::constraint_quotients(grph, cons);
+        info!("Constraint quotients {:#?}", cons.clone().into_labeling());
+        info!("Node mapping {:#?}", grph.get_node_mapping());
         let mut edge_implications = Self::get_edge_set(grph);
 
         while {
@@ -341,8 +378,10 @@ where
             .collect()
     }
 
-    pub fn build(self) -> anyhow::Result<HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>> {
-        let condensed = petgraph::algo::condensation(self.cg, false);
+    pub fn build(
+        mut self,
+    ) -> anyhow::Result<HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>> {
+        let condensed = petgraph::algo::condensation(self.cg.clone(), false);
         let mut sorted: Vec<NodeIndex> = petgraph::algo::toposort(&condensed, None)
             .map_err(|_| anyhow::anyhow!("cycle error"))
             .with_context(|| {
@@ -352,11 +391,11 @@ where
         sorted.reverse();
 
         for idx in sorted {
-            let associated_tids = condensed[idx];
+            let associated_tids = &condensed[idx];
             // condensation shouldnt produce a node that doesnt represent any of the original nodes
             assert!(!associated_tids.is_empty());
 
-            self.build_and_label_scc_sketch(associated_tids);
+            self.build_and_label_scc_sketch(associated_tids)?;
         }
 
         Ok(self.scc_repr)
@@ -364,6 +403,7 @@ where
 }
 
 /// A constraint graph quotiented over a symmetric subtyping relation.
+#[derive(Debug)]
 pub struct SketchGraph<T> {
     quotient_graph: StableGraph<T, FieldLabel>,
     dtv_to_group: HashMap<DerivedTypeVar, NodeIndex>,
@@ -468,11 +508,24 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
 
 #[cfg(test)]
 mod test {
-    use petgraph::dot::Dot;
+    use std::collections::HashSet;
 
-    use crate::constraints::parse_constraint_set;
+    use cwe_checker_lib::intermediate_representation::Tid;
+    use petgraph::{dot::Dot, graph::DiGraph, visit::EdgeRef};
 
-    use super::SketchGraph;
+    use crate::{
+        analysis::callgraph::CallGraph,
+        constraints::{
+            parse_constraint_set, parse_derived_type_variable, ConstraintSet, DerivedTypeVar,
+            FieldLabel, TypeVariable,
+        },
+        solver::{
+            scc_constraint_generation::SCCConstraints,
+            type_lattice::{LatticeDefinition, NamedLatticeElement},
+        },
+    };
+
+    use super::{SketchGraph, SketckGraphBuilder};
 
     #[test]
     fn test_simple_equivalence() {
@@ -489,6 +542,182 @@ mod test {
         assert!(rem.len() == 0);
 
         //let _grph = SketchGraph::<()>::new(&test_set);
+    }
+
+    /*
+
+    id:
+        mov rax, rdi
+        ret
+
+    alias_id:
+        mov rdi, rdi
+        call id
+        mov rax, rax
+        ret
+
+    caller1:
+        mov rdi, rdi
+        call alias_id
+        mov rax, rax
+        ret
+
+    caller2:
+        mov rdi, rdi
+        call alias_id
+        mov rax, rax
+        ret
+
+    */
+
+    fn parse_cons_set(s: &str) -> ConstraintSet {
+        let (rem, scc_id) = parse_constraint_set(s).expect("Should parse constraints");
+        assert!(rem.len() == 0);
+        scc_id
+    }
+
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    #[test]
+    fn test_polymorphism_dont_unify() {
+        init();
+        let ids_scc = parse_cons_set(
+            "
+        sub_id.in_0 <= sub_id.out
+        ",
+        );
+
+        let ids_tid = Tid::create("sub_id".to_owned(), "0x1000".to_owned());
+
+        let alias_scc = parse_cons_set(
+            "
+        sub_alias.in_0 <= sub_id.in_0
+        sub_id.out <= sub_alias.out
+        ",
+        );
+
+        let alias_tid = Tid::create("sub_alias".to_owned(), "0x2000".to_owned());
+
+        let caller1_scc = parse_cons_set(
+            "
+        sub_caller1.in_0 <= sub_alias.in_0
+        sub_alias.out <= sub_caller1.out
+        sub_caller1.in_0.load <= char
+        ",
+        );
+
+        let caller1_tid = Tid::create("sub_caller1".to_owned(), "0x3000".to_owned());
+
+        let caller2_scc = parse_cons_set(
+            "
+        sub_caller2.in_0 <= sub_alias.in_0
+        sub_alias.out <= sub_caller2.out
+        sub_caller2.in_0 <= int
+        ",
+        );
+
+        let caller2_tid = Tid::create("sub_caller2".to_owned(), "0x4000".to_owned());
+
+        let def = LatticeDefinition::new(
+            vec![
+                ("char".to_owned(), "top".to_owned()),
+                ("int".to_owned(), "top".to_owned()),
+                ("bottom".to_owned(), "char".to_owned()),
+                ("bottom".to_owned(), "int".to_owned()),
+            ],
+            "top".to_owned(),
+            "bottom".to_owned(),
+            "int".to_owned(),
+        );
+
+        let lat = def.generate_lattice();
+        let nd_set = lat
+            .get_nds()
+            .iter()
+            .map(|x| TypeVariable::new(x.0.clone()))
+            .collect::<HashSet<TypeVariable>>();
+
+        let mut cg: CallGraph = DiGraph::new();
+
+        let id_node = cg.add_node(ids_tid.clone());
+        let alias_node = cg.add_node(alias_tid.clone());
+        let c1_node = cg.add_node(caller1_tid.clone());
+        let c2_node = cg.add_node(caller2_tid.clone());
+
+        cg.add_edge(c1_node, alias_node, ());
+        cg.add_edge(c2_node, alias_node, ());
+        cg.add_edge(alias_node, id_node, ());
+
+        let skb = SketckGraphBuilder::new(
+            cg,
+            vec![
+                SCCConstraints {
+                    constraints: ids_scc,
+                    scc: vec![ids_tid.clone()],
+                },
+                SCCConstraints {
+                    constraints: alias_scc,
+                    scc: vec![alias_tid.clone()],
+                },
+                SCCConstraints {
+                    constraints: caller1_scc,
+                    scc: vec![caller1_tid.clone()],
+                },
+                SCCConstraints {
+                    constraints: caller2_scc,
+                    scc: vec![caller2_tid.clone()],
+                },
+            ],
+            &lat,
+            nd_set,
+        );
+
+        let sketches = skb.build().expect("Should succeed in building sketch");
+
+        let sg_c2 = sketches
+            .get(&TypeVariable::new("sub_caller2".to_owned()))
+            .unwrap();
+
+        let (_, sub_c2_in) = parse_derived_type_variable("sub_caller2.in_0").unwrap();
+        let idx = sg_c2.dtv_to_group.get(&sub_c2_in).unwrap();
+
+        let wght = sg_c2.quotient_graph.node_weight(*idx).unwrap();
+        assert_eq!(wght.upper_bound.get_name(), "int");
+        assert_eq!(
+            sg_c2
+                .quotient_graph
+                .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
+                .count(),
+            0
+        );
+
+        let sg_c1 = sketches
+            .get(&TypeVariable::new("sub_caller1".to_owned()))
+            .unwrap();
+
+        let (_, sub_c1_in) = parse_derived_type_variable("sub_caller1.in_0").unwrap();
+        let idx = sg_c1.dtv_to_group.get(&sub_c1_in).unwrap();
+
+        let wght = sg_c1.quotient_graph.node_weight(*idx).unwrap();
+        assert_eq!(wght.upper_bound.get_name(), "top");
+        assert_eq!(
+            sg_c1
+                .quotient_graph
+                .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
+                .count(),
+            1
+        );
+        let singl_edge = sg_c1
+            .quotient_graph
+            .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
+            .next()
+            .unwrap();
+
+        assert_eq!(singl_edge.weight(), &FieldLabel::Load);
+        let target = &sg_c1.quotient_graph[singl_edge.target()];
+        assert_eq!(target.upper_bound.get_name(), "char");
     }
 
     #[test]

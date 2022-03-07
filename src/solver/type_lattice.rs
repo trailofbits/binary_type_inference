@@ -75,6 +75,20 @@ pub struct LatticeDefinition {
 }
 
 impl LatticeDefinition {
+    pub fn new(
+        less_than_relations_between_handles: Vec<(String, String)>,
+        top_handle: String,
+        bottom_handle: String,
+        weakest_integral_type: String,
+    ) -> LatticeDefinition {
+        LatticeDefinition {
+            less_than_relations_between_handles,
+            top_handle,
+            bottom_handle,
+            weakest_integral_type,
+        }
+    }
+
     pub fn get_weakest_integral_type(&self) -> &str {
         &self.weakest_integral_type
     }
@@ -254,7 +268,7 @@ impl LatticeDefinition {
 /// Sets up a lattice as described by the user's definition
 /// This is an ineffecient representation, block decomposition of lattices would be more effecient.
 /// currently doesnt check any lattice laws, good luck
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CustomLatticeElement {
     top: String,
     bot: String,

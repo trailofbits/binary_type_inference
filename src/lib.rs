@@ -27,7 +27,7 @@ pub mod solver;
 pub mod graph_algos;
 
 /// Takes a sketch graph of types and lowers this type information to ctypes, using datalog defined heurisitics.
-pub mod lowering;
+//pub mod lowering;
 
 /// Protobuf ctypes
 pub mod ctypes {
@@ -41,11 +41,12 @@ pub mod pb_constraints {
 
 /// Parses a context of file inputs into an inference job which can be run to retrieve generated constraints,
 /// simplified constraints, and lowered types.
-pub mod inference_job;
+//pub mod inference_job;
 
 // Integration tests
 #[cfg(test)]
 mod tests {
+    /*
     use std::{
         collections::{BTreeSet, HashMap},
         iter::FromIterator,
@@ -500,4 +501,5 @@ mod tests {
             .set_expec_constraint_gen("key_hash_expec_new_moosl.json".to_owned());
         run_test_case(bldr.build());
     }
+    */
 }

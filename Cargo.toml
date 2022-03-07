@@ -6,8 +6,8 @@ edition = "2018"
 [lib]
 
 
-[[bin]]
-name = "json_to_constraints"
+#[[bin]]
+#name = "json_to_constraints"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
