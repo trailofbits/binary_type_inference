@@ -152,9 +152,8 @@ mod test {
 
     use crate::{
         analysis::reaching_definitions::Definition, constraint_generation::RegisterMapping,
-        inference_job::InferenceJob,
     };
-
+    /*
     use super::run_analysis;
 
     fn test_data_dir<P: AsRef<Path>>(pth: P) -> String {
@@ -199,4 +198,5 @@ mod test {
             0
         )));
     }
+    */
 }

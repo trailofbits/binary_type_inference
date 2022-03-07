@@ -13,6 +13,8 @@ use petgraph::{
 
 use petgraph::visit::EdgeRef;
 
+use crate::constraints::DerivedTypeVar;
+
 // TODO(ian): use this abstraction for the transducer
 /// A mapping graph allows the lookup of nodes by a hashable element. A node can also be queried for which hashable element it represents.
 /// ie. there is a bijection menatined between node indices and the mapping elements.
@@ -64,38 +66,45 @@ impl<
                 self.nodes.insert(key1, new_idx);
                 self.nodes.insert(key2, new_idx);
 
-                for old_edge in self.grph.edges(fst) {
-                    if old_edge.source() == fst {
+                for (src, dst, weight) in self
+                    .grph
+                    .edges(fst)
+                    .map(|e| (e.target(), e.source(), e.weight().clone()))
+                    .collect::<Vec<_>>()
+                {
+                    if src == fst {
                         // outgoing
-                        self.add_edge(new_idx, old_edge.target(), old_edge.weight().clone());
+                        self.add_edge(new_idx, dst, weight);
                     } else {
                         // incoming
-                        self.add_edge(old_edge.source(), new_idx, old_edge.weight().clone());
+                        self.add_edge(src, new_idx, weight);
                     }
                 }
 
-                for old_edge in self.grph.edges(snd) {
-                    if old_edge.source() == snd {
+                for (src, dst, weight) in self
+                    .grph
+                    .edges(snd)
+                    .map(|e| (e.target(), e.source(), e.weight().clone()))
+                    .collect::<Vec<_>>()
+                {
+                    if src == snd {
                         // outgoing
-                        self.add_edge(new_idx, old_edge.target(), old_edge.weight().clone());
+                        self.add_edge(new_idx, dst, weight);
                     } else {
                         // incoming
-                        self.add_edge(old_edge.source(), new_idx, old_edge.weight().clone());
+                        self.add_edge(src, new_idx, weight);
                     }
                 }
 
                 self.grph.remove_node(fst);
                 self.grph.remove_node(snd);
             }
-            (Some(fst), Some(snd)) => (),
+            (Some(_fst), Some(_snd)) => (),
         }
     }
 
     /// Note it is invalid to pass this function an empty group
-    pub fn quoetient_graph(
-        &self,
-        groups: &[BTreeSet<NodeIndex>],
-    ) -> MappingGraph<W, BTreeSet<NodeIndex>, E> {
+    pub fn quoetient_graph(&self, groups: &[BTreeSet<NodeIndex>]) -> MappingGraph<W, N, E> {
         let mut nd: MappingGraph<W, BTreeSet<NodeIndex>, E> = MappingGraph::new();
 
         let repr_mapping = groups
@@ -130,7 +139,21 @@ impl<
             nd.add_edge(*src_node, *dst_node, edge.weight().clone());
         }
 
-        nd
+        let new_mapping = self
+            .nodes
+            .iter()
+            .map(|(orig_label, y)| {
+                let new_idx = nd
+                    .get_node(&groups[*repr_mapping.get(y).unwrap()])
+                    .expect("All nodes should be added to the graph");
+                (orig_label.clone(), *new_idx)
+            })
+            .collect::<HashMap<_, _>>();
+
+        MappingGraph {
+            grph: nd.grph,
+            nodes: new_mapping,
+        }
     }
 }
 

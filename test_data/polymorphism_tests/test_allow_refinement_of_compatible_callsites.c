@@ -13,6 +13,9 @@ struct partially_accessed {
 // realize that the callsite caller1, caller2, fieldaccess1, fieldaccess2 are
 // all compatible meaning we can instantiate a single type.
 
+
+// so a more precise thing to think about here re 
+
 size_t __attribute__((noinline)) field_access1(struct partially_accessed* in) {
   return in->f1;
 }

@@ -1,4 +1,4 @@
-use binary_type_inference::{
+/*use binary_type_inference::{
     constraint_generation,
     constraints::{
         parse_constraint_set, ConstraintSet, DerivedTypeVar, SubtypeConstraint, TyConstraint,
@@ -160,3 +160,5 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+*/
+fn main() {}
