@@ -10,6 +10,7 @@ use alga::general::{
 use anyhow::Context;
 use cwe_checker_lib::analysis::graph;
 use cwe_checker_lib::intermediate_representation::Tid;
+use cwe_checker_lib::pcode::Label;
 use env_logger::Target;
 use itertools::Itertools;
 use log::info;
@@ -462,30 +463,15 @@ where
 }
 
 /// A constraint graph quotiented over a symmetric subtyping relation.
-#[derive(Debug, Clone)]
-pub struct SketchGraph<T> {
-    quotient_graph: StableGraph<T, FieldLabel>,
-    dtv_to_group: HashMap<DerivedTypeVar, NodeIndex>,
-    group_to_dtvs: HashMap<NodeIndex, BTreeSet<DerivedTypeVar>>,
+#[derive(Clone)]
+pub struct SketchGraph<U: std::cmp::PartialEq> {
+    quotient_graph: MappingGraph<U, DerivedTypeVar, FieldLabel>,
 }
 
-impl<U: Clone + Lattice> From<MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>>
-    for SketchGraph<LatticeBounds<U>>
-{
-    fn from(input: MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>) -> Self {
-        let g = input.get_graph().clone();
-        let mapping = input.get_node_mapping().clone();
-        let mut rev_mapping = HashMap::new();
-
-        for (k, v) in mapping.iter() {
-            let s = rev_mapping.entry(*v).or_insert_with(|| BTreeSet::new());
-            s.insert(k.clone());
-        }
-
+impl<U: std::cmp::PartialEq> From<MappingGraph<U, DerivedTypeVar, FieldLabel>> for SketchGraph<U> {
+    fn from(input: MappingGraph<U, DerivedTypeVar, FieldLabel>) -> Self {
         SketchGraph {
-            quotient_graph: g,
-            dtv_to_group: mapping,
-            group_to_dtvs: rev_mapping,
+            quotient_graph: input,
         }
     }
 }
@@ -497,15 +483,13 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         reached_idx: NodeIndex,
         into: &mut MappingGraph<T, DerivedTypeVar, FieldLabel>,
     ) {
-        let grp = self
-            .group_to_dtvs
-            .get(&reached_idx)
-            .expect("every node should have a group");
+        let grp = self.quotient_graph.get_group_for_node(reached_idx);
 
         let rand_fst = grp.iter().next().expect("groups should be non empty");
         let _index_in_new_graph = into.add_node(
             Self::tag_base_with_destination_tag(from_base, rand_fst.clone()),
             self.quotient_graph
+                .get_graph()
                 .node_weight(reached_idx)
                 .expect("index should have weight")
                 .clone(),
@@ -521,16 +505,16 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
 
     fn get_key_and_weight_for_index(&self, idx: NodeIndex) -> (DerivedTypeVar, T) {
         let dtv = self
-            .group_to_dtvs
-            .get(&idx)
-            .expect("every node should have a gorup")
-            .iter()
+            .quotient_graph
+            .get_group_for_node(idx)
+            .into_iter()
             .next()
             .expect("groups should be non empty");
 
         (
-            dtv.clone(),
+            dtv,
             self.quotient_graph
+                .get_graph()
                 .node_weight(idx)
                 .expect("every node should have a weight")
                 .clone(),
@@ -565,11 +549,12 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         );
         info!("Looking for repr {}", representing);
 
-        if let Some(representing) = self.dtv_to_group.get(&representing) {
+        if let Some(representing) = self.quotient_graph.get_node(&representing) {
             info!("Found repr");
-            let reachable_idxs: BTreeSet<_> = Dfs::new(&self.quotient_graph, *representing)
-                .iter(&self.quotient_graph)
-                .collect();
+            let reachable_idxs: BTreeSet<_> =
+                Dfs::new(self.quotient_graph.get_graph(), *representing)
+                    .iter(self.quotient_graph.get_graph())
+                    .collect();
             info!(
                 "Reaching set: {:#?}",
                 &reachable_idxs.iter().map(|x| x.index()).collect::<Vec<_>>()
@@ -580,7 +565,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
             });
 
             // add edges where both ends are in the subgraph
-            for edge in self.quotient_graph.edge_references() {
+            for edge in self.quotient_graph.get_graph().edge_references() {
                 if reachable_idxs.contains(&edge.target())
                     && reachable_idxs.contains(&edge.source())
                 {
@@ -778,13 +763,14 @@ mod test {
             .unwrap();
 
         let (_, sub_c2_in) = parse_derived_type_variable("sub_caller2.in_0").unwrap();
-        let idx = sg_c2.dtv_to_group.get(&sub_c2_in).unwrap();
+        let idx = sg_c2.quotient_graph.get_node(&sub_c2_in).unwrap();
 
-        let wght = sg_c2.quotient_graph.node_weight(*idx).unwrap();
+        let wght = sg_c2.quotient_graph.get_graph().node_weight(*idx).unwrap();
         assert_eq!(wght.upper_bound.get_name(), "int");
         assert_eq!(
             sg_c2
                 .quotient_graph
+                .get_graph()
                 .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
                 .count(),
             0
@@ -795,25 +781,27 @@ mod test {
             .unwrap();
 
         let (_, sub_c1_in) = parse_derived_type_variable("sub_caller1.in_0").unwrap();
-        let idx = sg_c1.dtv_to_group.get(&sub_c1_in).unwrap();
+        let idx = sg_c1.quotient_graph.get_node(&sub_c1_in).unwrap();
 
-        let wght = sg_c1.quotient_graph.node_weight(*idx).unwrap();
+        let wght = sg_c1.quotient_graph.get_graph().node_weight(*idx).unwrap();
         assert_eq!(wght.upper_bound.get_name(), "top");
         assert_eq!(
             sg_c1
                 .quotient_graph
+                .get_graph()
                 .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
                 .count(),
             1
         );
         let singl_edge = sg_c1
             .quotient_graph
+            .get_graph()
             .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
             .next()
             .unwrap();
 
         assert_eq!(singl_edge.weight(), &FieldLabel::Load);
-        let target = &sg_c1.quotient_graph[singl_edge.target()];
+        let target = &sg_c1.quotient_graph.get_graph()[singl_edge.target()];
         assert_eq!(target.upper_bound.get_name(), "char");
     }
 
@@ -892,10 +880,11 @@ mod test {
             .unwrap();
 
         let (_, sub_c_out) = parse_derived_type_variable("sub_caller.out").unwrap();
-        let idx = sg.dtv_to_group.get(&sub_c_out).unwrap();
+        let idx = sg.quotient_graph.get_node(&sub_c_out).unwrap();
 
         assert_eq!(
             sg.quotient_graph
+                .get_graph()
                 .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
                 .count(),
             2
@@ -903,14 +892,15 @@ mod test {
 
         for edg in sg
             .quotient_graph
+            .get_graph()
             .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
         {
             if let FieldLabel::Field(Field { offset: 0, size: 8 }) = edg.weight() {
-                let wt = &sg.quotient_graph[edg.target()];
+                let wt = &sg.quotient_graph.get_graph()[edg.target()];
                 assert_eq!(wt.upper_bound.get_name(), "char");
             } else {
                 assert_eq!(edg.weight(), &FieldLabel::Field(Field::new(1, 32)));
-                let wt = &sg.quotient_graph[edg.target()];
+                let wt = &sg.quotient_graph.get_graph()[edg.target()];
                 assert_eq!(wt.upper_bound.get_name(), "int");
             }
         }
