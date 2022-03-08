@@ -18,15 +18,16 @@ use crate::constraints::DerivedTypeVar;
 // TODO(ian): use this abstraction for the transducer
 /// A mapping graph allows the lookup of nodes by a hashable element. A node can also be queried for which hashable element it represents.
 /// ie. there is a bijection menatined between node indices and the mapping elements.
-pub struct MappingGraph<W: std::cmp::PartialEq, N: Clone + Hash + Eq, E: Hash + Eq> {
+pub struct MappingGraph<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> {
     grph: StableDiGraph<W, E>,
     nodes: HashMap<N, NodeIndex>,
+    reprs_to_graph_node: HashMap<NodeIndex, BTreeSet<N>>,
 }
 
 // we can only quotient the graph if the weight is mergeable
 impl<
         W: AbstractMagma<Additive> + std::cmp::PartialEq,
-        N: Clone + Hash + Eq,
+        N: Clone + Hash + Eq + Ord,
         E: Hash + Eq + Clone,
     > MappingGraph<W, N, E>
 {
@@ -37,9 +38,33 @@ impl<
             *x
         } else {
             let nd = self.grph.add_node(weight);
-            self.nodes.insert(key, nd);
+            self.nodes.insert(key.clone(), nd);
+            self.reprs_to_graph_node
+                .entry(nd)
+                .or_insert_with(|| BTreeSet::new())
+                .insert(key);
             nd
         }
+    }
+
+    fn update_all_children_of_idx_to(&mut self, old_idx: NodeIndex, new_idx: NodeIndex) {
+        let old_set = self
+            .reprs_to_graph_node
+            .entry(old_idx)
+            .or_insert_with(|| BTreeSet::new())
+            .clone();
+
+        let new_set = self
+            .reprs_to_graph_node
+            .entry(new_idx)
+            .or_insert_with(|| BTreeSet::new());
+
+        for v in old_set.iter() {
+            self.nodes.insert(v.clone(), new_idx);
+            new_set.insert(v.clone());
+        }
+
+        self.reprs_to_graph_node.remove(&old_idx);
     }
 
     pub fn merge_nodes(&mut self, key1: N, key2: N) {
@@ -49,10 +74,18 @@ impl<
         ) {
             (None, None) => (),
             (None, Some(x)) => {
-                self.nodes.insert(key1, x);
+                self.nodes.insert(key1.clone(), x);
+                self.reprs_to_graph_node
+                    .entry(x)
+                    .or_insert_with(|| BTreeSet::new())
+                    .insert(key1);
             }
             (Some(x), None) => {
-                self.nodes.insert(key2, x);
+                self.nodes.insert(key2.clone(), x);
+                self.reprs_to_graph_node
+                    .entry(x)
+                    .or_insert_with(|| BTreeSet::new())
+                    .insert(key2);
             }
             (Some(fst), Some(snd)) if fst != snd => {
                 let new_weight = self
@@ -63,8 +96,8 @@ impl<
 
                 let new_idx = self.grph.add_node(new_weight);
 
-                self.nodes.insert(key1, new_idx);
-                self.nodes.insert(key2, new_idx);
+                self.update_all_children_of_idx_to(fst, new_idx);
+                self.update_all_children_of_idx_to(snd, new_idx);
 
                 for (src, dst, weight) in self
                     .grph
@@ -150,18 +183,29 @@ impl<
             })
             .collect::<HashMap<_, _>>();
 
+        let mut new_rev_mapping: HashMap<NodeIndex, BTreeSet<N>> = HashMap::new();
+
+        new_mapping.iter().for_each(|(n, idx)| {
+            let b = new_rev_mapping
+                .entry(*idx)
+                .or_insert_with(|| BTreeSet::new());
+            b.insert(n.clone());
+        });
+
         MappingGraph {
             grph: nd.grph,
             nodes: new_mapping,
+            reprs_to_graph_node: new_rev_mapping,
         }
     }
 }
 
-impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq, E: Hash + Eq> MappingGraph<W, N, E> {
+impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> MappingGraph<W, N, E> {
     pub fn new() -> MappingGraph<W, N, E> {
         MappingGraph {
             grph: StableDiGraph::new(),
             nodes: HashMap::new(),
+            reprs_to_graph_node: HashMap::new(),
         }
     }
 

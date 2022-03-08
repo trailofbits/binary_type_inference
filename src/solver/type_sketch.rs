@@ -19,6 +19,7 @@ use petgraph::stable_graph::{StableDiGraph, StableGraph};
 use petgraph::unionfind::UnionFind;
 use petgraph::visit::{Dfs, EdgeRef, IntoEdgeReferences, IntoEdgesDirected, IntoNodeReferences};
 use petgraph::visit::{IntoNodeIdentifiers, Walker};
+use petgraph::EdgeDirection::Incoming;
 use petgraph::{algo, EdgeType};
 use petgraph::{
     graph::NodeIndex,
@@ -26,7 +27,7 @@ use petgraph::{
 };
 
 use crate::analysis::callgraph::CallGraph;
-use crate::constraint_generation;
+use crate::constraint_generation::{self, tid_to_tvar};
 use crate::constraints::{
     ConstraintSet, DerivedTypeVar, FieldLabel, TyConstraint, TypeVariable, Variance,
 };
@@ -95,6 +96,7 @@ struct SketckGraphBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     // Collects a shared sketchgraph representing the functions in the SCC
     scc_repr: HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>,
     cg: CallGraph,
+    tid_to_cg_idx: HashMap<Tid, NodeIndex>,
     lattice: &'a T,
     type_lattice_elements: HashSet<TypeVariable>,
 }
@@ -118,10 +120,16 @@ where
             .flatten()
             .collect::<HashMap<_, _>>();
 
+        let cg_callers = cg
+            .node_indices()
+            .map(|idx| (cg[idx].clone(), idx))
+            .collect();
+
         SketckGraphBuilder {
             scc_signatures,
             scc_repr: HashMap::new(),
             cg,
+            tid_to_cg_idx: cg_callers,
             lattice,
             type_lattice_elements,
         }
@@ -404,13 +412,57 @@ where
         Ok(())
     }
 
-    /*pub fn push_down_insertions(&mut self) -> anyhow::Result<()> {
+    fn get_built_sketch_from_scc(
+        &self,
+        associated_scc_tids: &Vec<Tid>,
+    ) -> SketchGraph<LatticeBounds<U>> {
+        assert!(!associated_scc_tids.is_empty());
+        let target_tvar = tid_to_tvar(associated_scc_tids.iter().next().unwrap());
+        let new_repr = self
+            .scc_repr
+            .get(&target_tvar)
+            .expect("all type var representations should be built")
+            .as_ref()
+            .clone();
+        new_repr
+    }
+
+    /*
+    fn get_representing_sketch() {}
+
+    fn get_intersected_representation_of(&self, tid: &Tid) {
+        let callers = self
+            .cg
+            .neighbors_directed(
+                *self
+                    .tid_to_cg_idx
+                    .get(tid)
+                    .expect("All callees should have a node in the cg"),
+                Incoming,
+            )
+            .map(|caller| self.cg[caller]);
+    }
+
+    fn replace_tid_type_with_callers_if_callers_more_specific(
+        &mut self,
+        associated_scc_tids: &Vec<Tid>,
+    ) {
+        let orig_repr = self.get_built_sketch_from_scc(associated_scc_tids);
+    }
+
+    pub fn push_down_intersections(&mut self) -> anyhow::Result<()> {
         let (condensed, mut sorted) = self.get_topo_order_for_cg()?;
+        for tgt_idx in sorted {
+            let target_tid = &condensed[tgt_idx];
+            self.replace_tid_type_with_callers_if_callers_more_specific(&condensed, target_tid);
+        }
+
+        Ok(())
     }*/
 }
 
 /// A constraint graph quotiented over a symmetric subtyping relation.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SketchGraph<T> {
     quotient_graph: StableGraph<T, FieldLabel>,
     dtv_to_group: HashMap<DerivedTypeVar, NodeIndex>,
