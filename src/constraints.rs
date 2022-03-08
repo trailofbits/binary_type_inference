@@ -35,9 +35,30 @@ where
     )
 }
 
+pub fn parse_identifier(input: &str) -> IResult<&str, &str> {
+    identifier_char(input)
+}
+
+pub fn parse_type_variable_with_cs_tag(input: &str) -> IResult<&str, TypeVariable> {
+    map_res::<_, _, _, _, ParseIntError, _, _>(
+        tuple((parse_identifier, tag(":"), digit1)),
+        |(id, _, ctr): (&str, &str, &str)| {
+            let tg: usize = ctr.parse()?;
+            Ok(TypeVariable::with_tag(id.to_owned(), tg))
+        },
+    )(input)
+}
+
+pub fn parse_type_variable_without_cs_tag(input: &str) -> IResult<&str, TypeVariable> {
+    map(identifier_char, |s: &str| TypeVariable::new(s.to_owned()))(input)
+}
+
 /// Parses a non-derived type variable. A type variable is just an identifier.
 pub fn parse_type_variable(input: &str) -> IResult<&str, TypeVariable> {
-    map(identifier_char, |s: &str| TypeVariable::new(s.to_owned()))(input)
+    alt((
+        parse_type_variable_with_cs_tag,
+        parse_type_variable_without_cs_tag,
+    ))(input)
 }
 
 fn parse_field_field(input: &str) -> IResult<&str, FieldLabel> {
@@ -130,24 +151,44 @@ pub fn parse_constraint_set(input: &str) -> IResult<&str, ConstraintSet> {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct TypeVariable {
     name: String,
+    cs_tag: Option<usize>,
 }
 
 impl TypeVariable {
+    pub fn with_tag(name: String, cs_tag: usize) -> TypeVariable {
+        TypeVariable {
+            name,
+            cs_tag: Some(cs_tag),
+        }
+    }
+
+    pub fn get_tag(&self) -> &Option<usize> {
+        &self.cs_tag
+    }
+
+    pub fn to_callee(&self) -> TypeVariable {
+        TypeVariable::new(self.name.clone())
+    }
+
     /// Create a new type variable with the given name
     pub fn new(name: String) -> TypeVariable {
         //TODO(ian): Maybe we should check the validity of the name here.
-        TypeVariable { name }
+        TypeVariable { name, cs_tag: None }
     }
 
     /// Gets the string of the identifier for this type variable.
-    pub fn get_name(&self) -> &str {
-        &self.name
+    pub fn get_name(&self) -> String {
+        if let Some(cs_tag) = self.cs_tag {
+            format!("{}:{}", self.name, cs_tag)
+        } else {
+            self.name.clone()
+        }
     }
 }
 
 impl Display for TypeVariable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.name)?;
+        f.write_str(&self.get_name())?;
         Ok(())
     }
 }
@@ -167,13 +208,13 @@ impl VariableManager {
     pub fn fresh(&mut self) -> TypeVariable {
         let next_name = format!("τ{}", self.curr_id.to_string());
         self.curr_id += 1;
-        TypeVariable { name: next_name }
+        TypeVariable::new(next_name)
     }
 
     pub fn fresh_loop_breaker(&mut self) -> TypeVariable {
         let next_name = format!("loop_breaker{}", self.curr_id.to_string());
         self.curr_id += 1;
-        TypeVariable { name: next_name }
+        TypeVariable::new(next_name)
     }
 }
 
