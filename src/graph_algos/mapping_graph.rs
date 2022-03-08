@@ -18,6 +18,7 @@ use crate::constraints::DerivedTypeVar;
 // TODO(ian): use this abstraction for the transducer
 /// A mapping graph allows the lookup of nodes by a hashable element. A node can also be queried for which hashable element it represents.
 /// ie. there is a bijection menatined between node indices and the mapping elements.
+#[derive(Clone)]
 pub struct MappingGraph<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> {
     grph: StableDiGraph<W, E>,
     nodes: HashMap<N, NodeIndex>,
@@ -207,6 +208,13 @@ impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> MappingGr
             nodes: HashMap::new(),
             reprs_to_graph_node: HashMap::new(),
         }
+    }
+
+    pub fn get_group_for_node(&self, idx: NodeIndex) -> BTreeSet<N> {
+        self.reprs_to_graph_node
+            .get(&idx)
+            .cloned()
+            .unwrap_or(BTreeSet::new())
     }
 
     pub fn get_graph(&self) -> &StableDiGraph<W, E> {
