@@ -428,9 +428,8 @@ where
         new_repr
     }
 
-    /*
     fn get_representing_sketch() {}
-
+    /*
     fn get_intersected_representation_of(&self, tid: &Tid) {
         let callers = self
             .cg
@@ -605,7 +604,7 @@ mod test {
         },
     };
 
-    use super::{SketchGraph, SketckGraphBuilder};
+    use super::SketckGraphBuilder;
 
     #[test]
     fn test_simple_equivalence() {
