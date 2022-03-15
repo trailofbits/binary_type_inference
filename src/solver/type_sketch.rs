@@ -1,11 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::rc::Rc;
 use std::{collections::HashMap, hash::Hash};
 
 use alga::general::{
-    AbstractMagma, Additive, AdditiveMagma, Identity, JoinSemilattice, Lattice, MeetSemilattice,
+    AbstractMagma, Additive, AdditiveMagma, Field, Identity, JoinSemilattice, Lattice,
+    MeetSemilattice,
 };
 use anyhow::Context;
 use cwe_checker_lib::analysis::graph;
@@ -18,9 +20,11 @@ use petgraph::dot::Dot;
 use petgraph::graph::IndexType;
 use petgraph::stable_graph::{StableDiGraph, StableGraph};
 use petgraph::unionfind::UnionFind;
-use petgraph::visit::{Dfs, EdgeRef, IntoEdgeReferences, IntoEdgesDirected, IntoNodeReferences};
+use petgraph::visit::{
+    Dfs, EdgeRef, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNodeReferences,
+};
 use petgraph::visit::{IntoNodeIdentifiers, Walker};
-use petgraph::EdgeDirection::Incoming;
+use petgraph::EdgeDirection::{self, Incoming};
 use petgraph::{algo, EdgeType};
 use petgraph::{
     graph::NodeIndex,
@@ -33,8 +37,10 @@ use crate::constraints::{
     ConstraintSet, DerivedTypeVar, FieldLabel, TyConstraint, TypeVariable, Variance,
 };
 use crate::graph_algos::mapping_graph::{self, MappingGraph};
+use crate::graph_algos::{explore_paths, find_node};
 
 use super::constraint_graph::TypeVarNode;
+use super::dfa_operations::{Alphabet, Indices, DFA};
 use super::scc_constraint_generation::SCCConstraints;
 use super::type_lattice::{CustomLatticeElement, NamedLattice, NamedLatticeElement};
 
@@ -461,7 +467,8 @@ where
     }*/
 }
 
-/// A constraint graph quotiented over a symmetric subtyping relation.
+/// A constraint graph quotiented over a symmetric subtyping relation. This is not guarenteed to be a DFA since it was not extracted as a reachable subgraph of the constraints.
+/// The constraing graph is used to generate sketches. And can stitch sketches back into itself.
 #[derive(Clone)]
 pub struct SketchGraph<U: std::cmp::PartialEq> {
     quotient_graph: MappingGraph<U, DerivedTypeVar, FieldLabel>,
@@ -472,6 +479,214 @@ impl<U: std::cmp::PartialEq> From<MappingGraph<U, DerivedTypeVar, FieldLabel>> f
         SketchGraph {
             quotient_graph: input,
         }
+    }
+}
+
+use crate::solver::dfa_operations::intersection;
+
+impl Alphabet for FieldLabel {}
+
+impl<T: std::cmp::PartialEq> DFA<FieldLabel> for Sketch<T> {
+    fn entry(&self) -> usize {
+        self.quotient_graph
+            .get_node(&self.representing)
+            .expect("subgraph should contain represented node")
+            .index()
+    }
+
+    fn accept_indices(&self) -> Indices {
+        self.quotient_graph
+            .get_graph()
+            .node_indices()
+            .map(|i| i.index())
+            .collect()
+    }
+
+    fn all_indices(&self) -> Indices {
+        self.quotient_graph
+            .get_graph()
+            .node_indices()
+            .map(|i| i.index())
+            .collect()
+    }
+
+    fn dfa_edges(&self) -> Vec<(usize, FieldLabel, usize)> {
+        self.quotient_graph
+            .get_graph()
+            .edge_references()
+            .map(|e| (e.source().index(), e.weight().clone(), e.target().index()))
+            .collect()
+    }
+}
+
+struct ReprMapping(BTreeMap<NodeIndex, (Option<NodeIndex>, Option<NodeIndex>)>);
+
+impl Deref for ReprMapping {
+    type Target = BTreeMap<NodeIndex, (Option<NodeIndex>, Option<NodeIndex>)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl ReprMapping {
+    fn get_representative_dtv_for<T: std::cmp::PartialEq>(
+        &self,
+        lhs: &Sketch<T>,
+        rhs: &Sketch<T>,
+        target: NodeIndex,
+    ) -> Option<DerivedTypeVar> {
+        self.0.get(&target).and_then(|(one, two)| {
+            let lrepr = one.and_then(|repridx| {
+                lhs.get_graph()
+                    .get_group_for_node(repridx)
+                    .into_iter()
+                    .next()
+            });
+            let rrepr = two.and_then(|repridx| {
+                rhs.get_graph()
+                    .get_group_for_node(repridx)
+                    .into_iter()
+                    .next()
+            });
+            lrepr.or(rrepr)
+        })
+    }
+}
+
+/// A reachable subgraph of a sketch graph, representing a given root derived type var.
+#[derive(Clone)]
+pub struct Sketch<U: std::cmp::PartialEq> {
+    quotient_graph: MappingGraph<U, DerivedTypeVar, FieldLabel>,
+    representing: DerivedTypeVar,
+    default_label: U,
+}
+
+impl<U: std::cmp::PartialEq> Sketch<U> {
+    fn get_graph(&self) -> &MappingGraph<U, DerivedTypeVar, FieldLabel> {
+        &self.quotient_graph
+    }
+}
+
+impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive>> Sketch<U> {
+    fn get_entry(&self) -> NodeIndex {
+        *self
+            .quotient_graph
+            .get_node(&self.representing)
+            .expect("Should have the node being represented")
+    }
+
+    /// Returns a graph of the dfa and the entry node index.
+    fn create_graph_from_dfa(
+        &self,
+        dfa: &impl DFA<FieldLabel>,
+    ) -> (NodeIndex, StableDiGraph<U, FieldLabel>) {
+        let mut grph = StableDiGraph::new();
+
+        let mut mp: HashMap<usize, NodeIndex> = HashMap::new();
+        for nd in dfa.all_indices() {
+            mp.insert(nd, grph.add_node(self.default_label.clone()));
+        }
+
+        dfa.dfa_edges().into_iter().for_each(|(st, w, end)| {
+            let st = mp.get(&st).expect("Starting node should be in allindices");
+            let end = mp.get(&end).expect("Ending node should be in allindices");
+            grph.add_edge(*st, *end, w);
+        });
+
+        (
+            *mp.get(&dfa.entry())
+                .expect("Entry should be in all_indices"),
+            grph,
+        )
+    }
+
+    fn find_representative_nodes_for_new_nodes(
+        &self,
+        entry_node: NodeIndex,
+        new_graph: &StableDiGraph<U, FieldLabel>,
+        other_sketch: &Sketch<U>,
+    ) -> ReprMapping {
+        let pths = explore_paths(&new_graph, entry_node);
+        ReprMapping(
+            pths.map(|(pth, tgt)| {
+                let pth_as_weights = pth
+                    .iter()
+                    .map(|e| new_graph.edge_weight(*e).expect("indices should be valid"))
+                    .collect::<Vec<_>>();
+                let lhs = find_node(
+                    self.quotient_graph.get_graph(),
+                    self.get_entry(),
+                    pth_as_weights.iter().map(|e| *e),
+                );
+                let rhs = find_node(
+                    other_sketch.quotient_graph.get_graph(),
+                    other_sketch.get_entry(),
+                    pth_as_weights.iter().map(|e| *e),
+                );
+                (tgt, (lhs, rhs))
+            })
+            .collect(),
+        )
+    }
+
+    fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
+        let new_dfa = intersection(self, other);
+        let (entry, grph) = self.create_graph_from_dfa(&new_dfa);
+
+        // maps a new node index to an optional representation in both original graphs
+
+        // find path to each node in grph lookup in both sketches intersect and annotate with set of nodes it is representing
+
+        let mapping_from_new_node_to_representatives_in_orig =
+            self.find_representative_nodes_for_new_nodes(entry, &grph, other);
+
+        let mut quot_graph: MappingGraph<U, DerivedTypeVar, FieldLabel> = MappingGraph::new();
+        for (base_node, (o1, o2)) in mapping_from_new_node_to_representatives_in_orig.iter() {
+            let mut self_dtvs = o1
+                .map(|o1| self.quotient_graph.get_group_for_node(o1))
+                .unwrap_or(BTreeSet::new());
+            let other_dtvs = o2
+                .map(|o2| other.quotient_graph.get_group_for_node(o2))
+                .unwrap_or(BTreeSet::new());
+
+            let self_label = o1
+                .and_then(|o1| self.quotient_graph.get_graph().node_weight(o1).cloned())
+                .unwrap_or(self.default_label.clone());
+
+            let other_label = o2
+                .and_then(|o2| self.quotient_graph.get_graph().node_weight(o2).cloned())
+                .unwrap_or(self.default_label.clone());
+
+            // Both nodes should recogonize the word in the case of an intersection
+            assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
+            self_dtvs.extend(other_dtvs);
+
+            let new_label = self_label.meet(&other_label);
+
+            let repr_node = self_dtvs
+                .iter()
+                .next()
+                .expect("Since dtvs arent empty we should always have a repr")
+                .clone();
+            let r = quot_graph.add_node(repr_node, new_label);
+            for e in grph.edges_directed(*base_node, EdgeDirection::Outgoing) {
+                let repr = mapping_from_new_node_to_representatives_in_orig
+                    .get_representative_dtv_for(&self, other, e.target())
+                    .expect(
+                        "Every node in the dfa should have a repr in at least one of the origs",
+                    );
+                let dst = quot_graph.add_node(repr, self.default_label.clone());
+                quot_graph.add_edge(r, dst, e.weight().clone());
+            }
+
+            //The part that isnt theoretically supported here is these merges... We need a single repr node for a dtv and everynode needs a dtv
+            // TODO(ian): prove that this is ok, implement something different
+
+            // other.quotient_graph.get_group_for_node(idx)
+        }
+
+        todo!()
     }
 }
 

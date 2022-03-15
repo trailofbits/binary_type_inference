@@ -12,7 +12,7 @@ use petgraph::{
 
 pub trait Alphabet: Hash + Eq + Ord + Clone {}
 
-type Indices = Vec<usize>;
+pub type Indices = Vec<usize>;
 
 /// So... to support DFAs with infinite alphabets we do some sketch stuff. If an edge does not exist for some alphabe symbol we assume it leads to a reject state.
 pub trait DFA<T>
@@ -369,6 +369,8 @@ impl UnionContext {
 }
 
 /// Unions the DFA by merging entry nodes
+/// TODO(ian): this doesnt actually work because it creates an NFA
+/// TODO(ian): do a product construction for the union instead
 pub fn union<T, U, A>(lhs: &T, rhs: &U) -> impl DFA<A>
 where
     A: Alphabet,
