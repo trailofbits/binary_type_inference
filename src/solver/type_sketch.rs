@@ -40,7 +40,7 @@ use crate::graph_algos::mapping_graph::{self, MappingGraph};
 use crate::graph_algos::{explore_paths, find_node};
 
 use super::constraint_graph::TypeVarNode;
-use super::dfa_operations::{Alphabet, Indices, DFA};
+use super::dfa_operations::{union, Alphabet, Indices, DFA};
 use super::scc_constraint_generation::SCCConstraints;
 use super::type_lattice::{CustomLatticeElement, NamedLattice, NamedLatticeElement};
 
@@ -91,6 +91,104 @@ where
             lower_bound: right.lower_bound.join(&self.lower_bound),
         }
     }
+}
+
+fn get_edge_set<C>(grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>) -> HashSet<EdgeImplication>
+where
+    C: std::cmp::PartialEq,
+{
+    grph.get_graph()
+        .edge_indices()
+        .cartesian_product(grph.get_graph().edge_indices().collect::<Vec<_>>())
+        .filter_map(|(e1, e2)| {
+            let w1 = grph.get_graph().edge_weight(e1).unwrap();
+            let w2 = grph.get_graph().edge_weight(e2).unwrap();
+            let (src1, dst1) = grph.get_graph().edge_endpoints(e1).unwrap();
+            let (src2, dst2) = grph.get_graph().edge_endpoints(e2).unwrap();
+
+            if w1 == w2 || w1 == &FieldLabel::Load && w2 == &FieldLabel::Store {
+                Some(EdgeImplication {
+                    eq: (src1, src2),
+                    edge: (dst1, dst2),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn constraint_quotients<C>(
+    grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
+    cons: &ConstraintSet,
+) -> UnionFind<usize>
+where
+    C: std::cmp::PartialEq,
+{
+    if cons.is_empty() {
+        return UnionFind::new(0);
+    }
+
+    let mut uf: UnionFind<usize> =
+        UnionFind::new(grph.get_graph().node_indices().max().unwrap().index() + 1);
+
+    for cons in cons.iter() {
+        if let TyConstraint::SubTy(sub_cons) = cons {
+            info!("{}", sub_cons);
+            let lt_node = grph.get_node(&sub_cons.lhs).unwrap();
+            let gt_node = grph.get_node(&sub_cons.rhs).unwrap();
+
+            uf.union(lt_node.index(), gt_node.index());
+        }
+    }
+
+    uf
+}
+
+fn generate_quotient_groups<C>(
+    grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
+    cons: &ConstraintSet,
+) -> Vec<BTreeSet<NodeIndex>>
+where
+    C: std::cmp::PartialEq,
+{
+    let mut cons = constraint_quotients(grph, cons);
+    info!("Constraint quotients {:#?}", cons.clone().into_labeling());
+    info!("Node mapping {:#?}", grph.get_node_mapping());
+    let mut edge_implications = get_edge_set(grph);
+
+    while {
+        let prev_labeling = cons.clone().into_labeling();
+
+        for implic in edge_implications.clone().into_iter() {
+            if cons.equiv(implic.eq.0.index(), implic.eq.1.index()) {
+                edge_implications.remove(&implic);
+                cons.union(implic.edge.0.index(), implic.edge.1.index());
+            }
+        }
+
+        cons.clone().into_labeling() != prev_labeling
+    } {}
+
+    for (nd_idx, grouplab) in cons.clone().into_labeling().into_iter().enumerate() {
+        let nd_idx: NodeIndex = NodeIndex::new(nd_idx);
+        let nd = grph.get_graph().node_weight(nd_idx).unwrap();
+        info!("Node {}: in group {}", nd_idx.index(), grouplab);
+    }
+
+    cons.into_labeling()
+        .into_iter()
+        .enumerate()
+        .map(|(ndidx, repr)| (NodeIndex::new(ndidx), repr))
+        .fold(
+            HashMap::<usize, BTreeSet<NodeIndex>>::new(),
+            |mut total, (nd_ind, repr_group)| {
+                total.entry(repr_group).or_default().insert(nd_ind);
+                total
+            },
+        )
+        .into_values()
+        .collect()
 }
 
 /// Creates a structured and labeled sketch graph
@@ -284,7 +382,7 @@ where
             MappingGraph::new();
 
         self.add_nodes_and_initial_edges(&to_reprs, sig, &mut nd_graph)?;
-        let qgroups = Self::generate_quotient_groups(&nd_graph, sig);
+        let qgroups = generate_quotient_groups(&nd_graph, sig);
 
         info!("Quotient group for scc: {:#?}, {:#?}", to_reprs, qgroups);
 
@@ -303,97 +401,6 @@ where
         }
 
         Ok(())
-    }
-
-    fn constraint_quotients(
-        grph: &MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
-        cons: &ConstraintSet,
-    ) -> UnionFind<usize> {
-        if cons.is_empty() {
-            return UnionFind::new(0);
-        }
-
-        let mut uf: UnionFind<usize> =
-            UnionFind::new(grph.get_graph().node_indices().max().unwrap().index() + 1);
-
-        for cons in cons.iter() {
-            if let TyConstraint::SubTy(sub_cons) = cons {
-                info!("{}", sub_cons);
-                let lt_node = grph.get_node(&sub_cons.lhs).unwrap();
-                let gt_node = grph.get_node(&sub_cons.rhs).unwrap();
-
-                uf.union(lt_node.index(), gt_node.index());
-            }
-        }
-
-        uf
-    }
-
-    fn get_edge_set(
-        grph: &MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
-    ) -> HashSet<EdgeImplication> {
-        grph.get_graph()
-            .edge_indices()
-            .cartesian_product(grph.get_graph().edge_indices().collect::<Vec<_>>())
-            .filter_map(|(e1, e2)| {
-                let w1 = grph.get_graph().edge_weight(e1).unwrap();
-                let w2 = grph.get_graph().edge_weight(e2).unwrap();
-                let (src1, dst1) = grph.get_graph().edge_endpoints(e1).unwrap();
-                let (src2, dst2) = grph.get_graph().edge_endpoints(e2).unwrap();
-
-                if w1 == w2 || w1 == &FieldLabel::Load && w2 == &FieldLabel::Store {
-                    Some(EdgeImplication {
-                        eq: (src1, src2),
-                        edge: (dst1, dst2),
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    fn generate_quotient_groups(
-        grph: &MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
-        cons: &ConstraintSet,
-    ) -> Vec<BTreeSet<NodeIndex>> {
-        let mut cons = Self::constraint_quotients(grph, cons);
-        info!("Constraint quotients {:#?}", cons.clone().into_labeling());
-        info!("Node mapping {:#?}", grph.get_node_mapping());
-        let mut edge_implications = Self::get_edge_set(grph);
-
-        while {
-            let prev_labeling = cons.clone().into_labeling();
-
-            for implic in edge_implications.clone().into_iter() {
-                if cons.equiv(implic.eq.0.index(), implic.eq.1.index()) {
-                    edge_implications.remove(&implic);
-                    cons.union(implic.edge.0.index(), implic.edge.1.index());
-                }
-            }
-
-            cons.clone().into_labeling() != prev_labeling
-        } {}
-
-        for (nd_idx, grouplab) in cons.clone().into_labeling().into_iter().enumerate() {
-            let nd_idx: NodeIndex = NodeIndex::new(nd_idx);
-            let nd = grph.get_graph().node_weight(nd_idx).unwrap();
-            info!("Node {}: in group {}", nd_idx.index(), grouplab);
-        }
-
-        cons.into_labeling()
-            .into_iter()
-            .enumerate()
-            .map(|(ndidx, repr)| (NodeIndex::new(ndidx), repr))
-            .fold(
-                HashMap::<usize, BTreeSet<NodeIndex>>::new(),
-                |mut total, (nd_ind, repr_group)| {
-                    total.entry(repr_group).or_default().insert(nd_ind);
-                    total
-                },
-            )
-            .into_values()
-            .collect()
     }
 
     fn get_topo_order_for_cg(&self) -> anyhow::Result<(Graph<Vec<Tid>, ()>, Vec<NodeIndex>)> {
@@ -630,9 +637,16 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive>> Sketch<
         )
     }
 
-    fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
-        let new_dfa = intersection(self, other);
-        let (entry, grph) = self.create_graph_from_dfa(&new_dfa);
+    fn binop_sketch(
+        &self,
+        other: &Sketch<U>,
+        lattice_op: &impl Fn(&U, &U) -> U,
+        resultant_grph: impl DFA<FieldLabel>,
+    ) -> Sketch<U> {
+        // Shouldnt operate over sketches representing different types
+        assert!(self.representing == other.representing);
+
+        let (entry, grph) = self.create_graph_from_dfa(&resultant_grph);
 
         // maps a new node index to an optional representation in both original graphs
 
@@ -662,14 +676,14 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive>> Sketch<
             assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
             self_dtvs.extend(other_dtvs);
 
-            let new_label = self_label.meet(&other_label);
+            let new_label = lattice_op(&self_label, &other_label);
 
             let repr_node = self_dtvs
                 .iter()
                 .next()
                 .expect("Since dtvs arent empty we should always have a repr")
                 .clone();
-            let r = quot_graph.add_node(repr_node, new_label);
+            let r = quot_graph.add_node(repr_node.clone(), new_label);
             for e in grph.edges_directed(*base_node, EdgeDirection::Outgoing) {
                 let repr = mapping_from_new_node_to_representatives_in_orig
                     .get_representative_dtv_for(&self, other, e.target())
@@ -682,11 +696,28 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive>> Sketch<
 
             //The part that isnt theoretically supported here is these merges... We need a single repr node for a dtv and everynode needs a dtv
             // TODO(ian): prove that this is ok, implement something different
-
-            // other.quotient_graph.get_group_for_node(idx)
+            for dtv in self_dtvs.into_iter() {
+                quot_graph.merge_nodes(repr_node.clone(), dtv);
+            }
         }
 
-        todo!()
+        // At this point we have a new graph but it's not guarenteed to be a DFA so the last thing to do is quotient it.
+        // We dont need to make anything equal via constraints that's already done, we just let edges sets do the work
+        let quot_groups = generate_quotient_groups::<U>(&quot_graph, &ConstraintSet::default());
+        quot_graph.quoetient_graph(&quot_groups);
+        Sketch {
+            quotient_graph: quot_graph,
+            representing: self.representing.clone(),
+            default_label: self.default_label.clone(),
+        }
+    }
+
+    fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
+        self.binop_sketch(other, &U::meet, intersection(self, other))
+    }
+
+    fn union(&self, other: &Sketch<U>) -> Sketch<U> {
+        self.binop_sketch(other, &U::join, union(self, other))
     }
 }
 
