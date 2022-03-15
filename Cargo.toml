@@ -34,6 +34,7 @@ csv = "1.1.6"
 prost = "0.9.0"
 tempdir = "0.3.7"
 byteorder = "1.4.3"
+im-rc = "15.0.0"
 
 [build-dependencies]
 prost-build = "0.9.0"
