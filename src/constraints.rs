@@ -427,6 +427,11 @@ impl DerivedTypeVar {
     pub fn add_field_label(&mut self, lab: FieldLabel) {
         self.labels.push(lab);
     }
+
+    /// Removes any callsite tags
+    pub fn to_callee(&self) -> DerivedTypeVar {
+        DerivedTypeVar::create_with_path(self.var.to_callee(), self.labels.clone())
+    }
 }
 
 impl TryFrom<pb_constraints::Field> for Field {

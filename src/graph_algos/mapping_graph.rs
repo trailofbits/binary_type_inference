@@ -8,7 +8,7 @@ use petgraph::{
     data::Build,
     graph::{EdgeIndex, NodeIndex},
     stable_graph::StableDiGraph,
-    visit::{IntoEdgeReferences, IntoEdges},
+    visit::{Dfs, IntoEdgeReferences, IntoEdges, Walker},
 };
 
 use petgraph::visit::EdgeRef;
@@ -17,12 +17,53 @@ use crate::constraints::DerivedTypeVar;
 
 // TODO(ian): use this abstraction for the transducer
 /// A mapping graph allows the lookup of nodes by a hashable element. A node can also be queried for which hashable element it represents.
-/// ie. there is a bijection menatined between node indices and the mapping elements.
+/// ie. there is an injective relationship between node indices and hashable elements.
 #[derive(Clone)]
-pub struct MappingGraph<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> {
+pub struct MappingGraph<W, N, E> {
     grph: StableDiGraph<W, E>,
     nodes: HashMap<N, NodeIndex>,
     reprs_to_graph_node: HashMap<NodeIndex, BTreeSet<N>>,
+}
+
+impl<W, N, E> MappingGraph<W, N, E>
+where
+    W: Clone,
+    E: Clone,
+    N: Clone + std::cmp::Eq + Hash,
+{
+    pub fn get_reachable_subgraph(&self, idx: NodeIndex) -> MappingGraph<W, N, E> {
+        let reachable_idxs: BTreeSet<_> = Dfs::new(&self.grph, idx).iter(&self.grph).collect();
+        let filtered_grph = self.grph.filter_map(
+            |idx, nd| {
+                if reachable_idxs.contains(&idx) {
+                    Some(nd.clone())
+                } else {
+                    None
+                }
+            },
+            |_e, w| Some(w.clone()),
+        );
+
+        let filtered_nodes = self
+            .nodes
+            .iter()
+            .filter(|(k, v)| reachable_idxs.contains(v))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        let filtered_reprs = self
+            .reprs_to_graph_node
+            .iter()
+            .filter(|(idx, _associated_nodes)| reachable_idxs.contains(idx))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        MappingGraph {
+            grph: filtered_grph,
+            nodes: filtered_nodes,
+            reprs_to_graph_node: filtered_reprs,
+        }
+    }
 }
 
 // we can only quotient the graph if the weight is mergeable
