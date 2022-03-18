@@ -391,7 +391,10 @@ where
 
         self.label_by(&mut quoted_graph, sig);
 
-        let orig_sk_graph = SketchGraph::from(quoted_graph);
+        let orig_sk_graph = SketchGraph {
+            quotient_graph: quoted_graph,
+            default_label: self.identity_element(),
+        };
 
         let sk_graph = Rc::new(orig_sk_graph);
 
@@ -479,13 +482,25 @@ where
 #[derive(Clone)]
 pub struct SketchGraph<U: std::cmp::PartialEq> {
     quotient_graph: MappingGraph<U, DerivedTypeVar, FieldLabel>,
+    default_label: U,
 }
 
-impl<U: std::cmp::PartialEq> From<MappingGraph<U, DerivedTypeVar, FieldLabel>> for SketchGraph<U> {
-    fn from(input: MappingGraph<U, DerivedTypeVar, FieldLabel>) -> Self {
-        SketchGraph {
-            quotient_graph: input,
-        }
+impl<U: Clone + std::cmp::PartialEq> SketchGraph<U> {
+    fn get_representing_sketchs_ignoring_callsite_tags(
+        &self,
+        dtv: DerivedTypeVar,
+    ) -> Vec<Sketch<U>> {
+        let target_calee = dtv.to_callee();
+        self.quotient_graph
+            .get_node_mapping()
+            .iter()
+            .filter(|(canidate, _idx)| canidate.to_callee() == target_calee)
+            .map(|(repr_dtv, idx)| Sketch {
+                quotient_graph: self.quotient_graph.get_reachable_subgraph(*idx),
+                representing: repr_dtv.clone(),
+                default_label: self.default_label.clone(),
+            })
+            .collect()
     }
 }
 
@@ -644,7 +659,8 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive>> Sketch<
         resultant_grph: impl DFA<FieldLabel>,
     ) -> Sketch<U> {
         // Shouldnt operate over sketches representing different types
-        assert!(self.representing == other.representing);
+        // We ignore callsite tags
+        assert!(self.representing.to_callee() == other.representing.to_callee());
 
         let (entry, grph) = self.create_graph_from_dfa(&resultant_grph);
 
