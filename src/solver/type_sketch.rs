@@ -165,12 +165,12 @@ fn constraint_quotients<C>(
 where
     C: std::cmp::PartialEq,
 {
-    if cons.is_empty() {
-        return UnionFind::new(0);
-    }
-
     let mut uf: UnionFind<usize> =
         UnionFind::new(grph.get_graph().node_indices().max().unwrap().index() + 1);
+
+    if cons.is_empty() {
+        return uf;
+    }
 
     for cons in cons.iter() {
         if let TyConstraint::SubTy(sub_cons) = cons {
@@ -466,6 +466,8 @@ where
             self.build_and_label_scc_sketch(associated_tids)?;
         }
 
+        self.bind_polymorphic_types()?;
+
         Ok(())
     }
 
@@ -484,20 +486,30 @@ where
         new_repr
     }
 
-    fn refine_formal_in(
+    // TODO(ian): this could be generalized to let us swap to different lattice reprs
+    fn refine_formal(
         &self,
         condensed: &Graph<Vec<Tid>, (), Directed>,
         target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
         target_dtv: DerivedTypeVar,
         target_idx: NodeIndex,
+        merge_operator: &impl Fn(
+            &Sketch<LatticeBounds<U>>,
+            &Sketch<LatticeBounds<U>>,
+        ) -> Sketch<LatticeBounds<U>>,
+        application_operator: &impl Fn(
+            &Sketch<LatticeBounds<U>>,
+            &Sketch<LatticeBounds<U>>,
+        ) -> Sketch<LatticeBounds<U>>,
     ) {
         let parent_nodes = condensed.neighbors_directed(target_idx, EdgeDirection::Incoming);
 
-        let orig_reprs =
-            target_scc_repr.get_representing_sketchs_ignoring_callsite_tags(target_dtv.clone());
+        let orig_reprs = target_scc_repr.get_representing_sketch(target_dtv.clone());
 
         // There should only be one representation of a formal in an SCC
-        assert!(orig_reprs.len() == 1);
+        println!("{:?}", target_dtv);
+        println!("{:#?}", target_scc_repr.quotient_graph.get_node_mapping());
+        assert_eq!(orig_reprs.len(), 1);
         let orig_repr = &orig_reprs[0];
 
         let call_site_type = parent_nodes
@@ -512,14 +524,48 @@ where
                 sketch
             })
             .flatten()
-            .reduce(|lhs, rhs| lhs.union(&rhs))
+            .reduce(|lhs, rhs| merge_operator(&lhs, &rhs))
             .unwrap_or(Sketch::empty_sketch(
                 target_dtv.clone(),
                 self.identity_element(),
             ));
 
-        let new_type = orig_repr.intersect(&call_site_type);
+        let new_type = application_operator(orig_repr, &call_site_type);
         target_scc_repr.replace_dtv(&target_dtv, new_type)
+    }
+
+    fn refine_formal_out(
+        &self,
+        condensed: &Graph<Vec<Tid>, (), Directed>,
+        target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
+        target_dtv: DerivedTypeVar,
+        target_idx: NodeIndex,
+    ) {
+        self.refine_formal(
+            condensed,
+            target_scc_repr,
+            target_dtv,
+            target_idx,
+            &Sketch::intersect,
+            &Sketch::union,
+        )
+    }
+
+    fn refine_formal_in(
+        &self,
+        condensed: &Graph<Vec<Tid>, (), Directed>,
+        target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
+        target_dtv: DerivedTypeVar,
+        target_idx: NodeIndex,
+    ) {
+        self.refine_formal(
+            condensed,
+            target_scc_repr,
+            target_dtv,
+            target_idx,
+            &Sketch::union,
+            &Sketch::intersect,
+        )
     }
 
     fn refine_formals(
@@ -546,14 +592,18 @@ where
             .quotient_graph
             .get_node_mapping()
             .iter()
-            .map(|(dtv, _idx)| dtv)
+            .map(|(dtv, _idx)| dtv.clone())
             .filter(|dtv| dtv.get_base_variable().get_cs_tag().is_none() && dtv.is_out_parameter());
+
+        for dtv in out_params.collect::<Vec<DerivedTypeVar>>() {
+            self.refine_formal_out(condensed, &mut orig_repr, dtv, target_idx);
+        }
 
         // for each parameter in the scc without
     }
 
     pub fn bind_polymorphic_types(&mut self) -> anyhow::Result<()> {
-        let (condensed, mut sorted) = self.get_topo_order_for_cg()?;
+        let (condensed, sorted) = self.get_topo_order_for_cg()?;
         for tgt_idx in sorted {
             let target_tid = &condensed[tgt_idx];
             self.refine_formals(&condensed, target_tid, tgt_idx);
@@ -577,21 +627,33 @@ impl<U: Clone + std::cmp::PartialEq + AbstractMagma<Additive>> SketchGraph<U> {
             .replace_node(dtv.clone(), sketch.quotient_graph)
     }
 
-    fn get_representing_sketchs_ignoring_callsite_tags(
+    fn get_representations_by_dtv(
         &self,
-        dtv: DerivedTypeVar,
+        flter: &impl Fn(&DerivedTypeVar) -> bool,
     ) -> Vec<Sketch<U>> {
-        let target_calee = dtv.to_callee();
         self.quotient_graph
             .get_node_mapping()
             .iter()
-            .filter(|(canidate, _idx)| canidate.to_callee() == target_calee)
+            .filter(|(canidate, _idx)| flter(canidate))
             .map(|(repr_dtv, idx)| Sketch {
                 quotient_graph: self.quotient_graph.get_reachable_subgraph(*idx),
                 representing: repr_dtv.clone(),
                 default_label: self.default_label.clone(),
             })
             .collect()
+    }
+
+    fn get_representing_sketchs_ignoring_callsite_tags(
+        &self,
+        dtv: DerivedTypeVar,
+    ) -> Vec<Sketch<U>> {
+        let target_calee = dtv.to_callee();
+        self.get_representations_by_dtv(&|canidate| target_calee == canidate.to_callee())
+    }
+
+    fn get_representing_sketch(&self, dtv: DerivedTypeVar) -> Vec<Sketch<U>> {
+        let target_calee = dtv.to_callee();
+        self.get_representations_by_dtv(&|canidate| &target_calee == canidate)
     }
 }
 
@@ -601,6 +663,7 @@ impl Alphabet for FieldLabel {}
 
 impl<T: std::cmp::PartialEq> DFA<FieldLabel> for Sketch<T> {
     fn entry(&self) -> usize {
+        println!("{:?}", self.representing);
         self.quotient_graph
             .get_node(&self.representing)
             .expect("subgraph should contain represented node")
@@ -674,14 +737,19 @@ pub struct Sketch<U: std::cmp::PartialEq> {
     representing: DerivedTypeVar,
     default_label: U,
 }
-
 impl<U: std::cmp::PartialEq> Sketch<U> {
     fn get_graph(&self) -> &MappingGraph<U, DerivedTypeVar, FieldLabel> {
         &self.quotient_graph
     }
+}
+
+impl<U: std::cmp::PartialEq + AbstractMagma<Additive>> Sketch<U> {
     pub fn empty_sketch(representing: DerivedTypeVar, default_label: U) -> Sketch<U> {
+        let mut grph = MappingGraph::new();
+        grph.add_node(representing.clone(), default_label.clone());
+
         Sketch {
-            quotient_graph: MappingGraph::new(),
+            quotient_graph: grph,
             representing,
             default_label,
         }
@@ -1263,6 +1331,11 @@ mod test {
                 assert_eq!(wt.upper_bound.get_name(), "int");
             }
         }
+
+        // Now lets examine the deepest polymorphic function we should have narrowed it to be compatible with both callsites in this function.
+        let sg = sketches
+            .get(&TypeVariable::new("sub_id".to_owned()))
+            .unwrap();
     }
 
     #[test]
