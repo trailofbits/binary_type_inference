@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::fmt::{format, Display};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -59,6 +60,17 @@ struct EdgeImplication {
 pub struct LatticeBounds<T: Clone + Lattice> {
     upper_bound: T,
     lower_bound: T,
+}
+
+impl<T> Display for LatticeBounds<T>
+where
+    T: Display,
+    T: Clone,
+    T: Lattice,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{},{}]", self.lower_bound, self.upper_bound)
+    }
 }
 
 impl<T> LatticeBounds<T>
@@ -619,6 +631,23 @@ where
 pub struct SketchGraph<U: std::cmp::PartialEq> {
     quotient_graph: MappingGraph<U, DerivedTypeVar, FieldLabel>,
     default_label: U,
+}
+
+impl<U> Display for SketchGraph<U>
+where
+    U: PartialEq,
+    U: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            Dot::new(&self.quotient_graph.get_graph().map(
+                |nd_id, nd_weight| format!("{}:{}", nd_id.index(), nd_weight),
+                |e_id, e_weight| format!("{}:{}", e_id.index(), e_weight),
+            )),
+        )
+    }
 }
 
 impl<U: Clone + std::cmp::PartialEq + AbstractMagma<Additive>> SketchGraph<U> {
@@ -1336,6 +1365,7 @@ mod test {
         let sg = sketches
             .get(&TypeVariable::new("sub_id".to_owned()))
             .unwrap();
+        println!("{}", sg);
     }
 
     #[test]
