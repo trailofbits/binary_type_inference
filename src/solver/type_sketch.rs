@@ -524,10 +524,6 @@ where
             &Sketch<LatticeBounds<U>>,
             &Sketch<LatticeBounds<U>>,
         ) -> Sketch<LatticeBounds<U>>,
-        application_operator: &impl Fn(
-            &Sketch<LatticeBounds<U>>,
-            &Sketch<LatticeBounds<U>>,
-        ) -> Sketch<LatticeBounds<U>>,
     ) {
         let parent_nodes = condensed.neighbors_directed(target_idx, EdgeDirection::Incoming);
 
@@ -552,14 +548,11 @@ where
             })
             .flatten()
             .reduce(|lhs, rhs| merge_operator(&lhs, &rhs))
-            .unwrap_or(Sketch::empty_sketch(
-                target_dtv.clone(),
-                self.identity_element(),
-            ));
+            .unwrap_or(orig_repr.clone());
         println!("Merged param type for: {} {}", target_dtv, call_site_type);
 
-        let new_type = application_operator(orig_repr, &call_site_type);
-        target_scc_repr.replace_dtv(&target_dtv, new_type)
+        //let new_type = application_operator(orig_repr, &call_site_type);
+        target_scc_repr.replace_dtv(&target_dtv, call_site_type)
     }
 
     fn refine_formal_out(
@@ -575,7 +568,6 @@ where
             target_dtv,
             target_idx,
             &Sketch::intersect,
-            &Sketch::union,
         )
     }
 
@@ -592,7 +584,6 @@ where
             target_dtv,
             target_idx,
             &Sketch::union,
-            &Sketch::intersect,
         )
     }
 
