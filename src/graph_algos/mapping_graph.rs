@@ -1,14 +1,15 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     hash::Hash,
 };
 
 use alga::general::{AbstractMagma, Additive};
+use itertools::Itertools;
 use petgraph::{
     data::Build,
     graph::{EdgeIndex, NodeIndex},
     stable_graph::StableDiGraph,
-    visit::{Dfs, IntoEdgeReferences, IntoEdges, Walker},
+    visit::{Dfs, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, Walker},
 };
 
 use petgraph::visit::EdgeRef;
@@ -73,6 +74,96 @@ impl<
         E: Hash + Eq + Clone,
     > MappingGraph<W, N, E>
 {
+    pub fn replace_node(&mut self, key: N, grph: MappingGraph<W, N, E>) {
+        let reached_graph = self.get_reachable_subgraph(
+            *self
+                .get_node(&key)
+                .expect("Should have node for replacement key"),
+        );
+
+        let nodes = reached_graph
+            .nodes
+            .iter()
+            .map(|(nd, _idx)| nd.clone())
+            .collect::<BTreeSet<N>>();
+
+        let edges_from_outside_subgraph: Vec<(N, E, N)> = nodes
+            .iter()
+            .map(|nd_in_subgraph| {
+                let nd = self
+                    .get_node(nd_in_subgraph)
+                    .expect("Reachable nodes should have repr");
+                let incoming_edges = self
+                    .get_graph()
+                    .edges_directed(*nd, petgraph::EdgeDirection::Incoming);
+
+                incoming_edges
+                    .filter_map(|orig_e| {
+                        let grp = self.get_group_for_node(orig_e.target());
+                        let target_repr = grp.iter().next().expect("groups should not be empty");
+                        if nodes.contains(target_repr) {
+                            // Internal edge
+                            None
+                        } else {
+                            Some((
+                                nd_in_subgraph.clone(),
+                                orig_e.weight().clone(),
+                                target_repr.clone(),
+                            ))
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+            })
+            .flatten()
+            .collect();
+
+        // remove reached nodes
+        nodes.iter().for_each(|nd| {
+            self.grph
+                .remove_node(*self.nodes.get(nd).expect("reached node should have repr"));
+        });
+        // insert new nodes getting ids
+        grph.reprs_to_graph_node.iter().for_each(|(_idx, group)| {
+            let repr_var = group.iter().next().expect("no empty groups").clone();
+            let wt = grph
+                .get_graph()
+                .node_weight(*grph.get_node(&repr_var).unwrap())
+                .expect("Nodes should have weights");
+            let _idx = self.add_node(repr_var.clone(), wt.clone());
+            for nd in group.iter() {
+                self.merge_nodes(repr_var.clone(), nd.clone());
+            }
+        });
+        // add edges within subgraph,
+
+        grph.grph.edge_references().for_each(|e| {
+            let srcv = grph
+                .get_group_for_node(e.source())
+                .into_iter()
+                .next()
+                .unwrap();
+            let destv = grph
+                .get_group_for_node(e.target())
+                .into_iter()
+                .next()
+                .unwrap();
+
+            let src_idx = self.get_node(&srcv).unwrap();
+            let dst_idx = self.get_node(&destv).unwrap();
+            self.grph.add_edge(*src_idx, *dst_idx, e.weight().clone());
+        });
+        // add edges into subgraph
+        edges_from_outside_subgraph
+            .into_iter()
+            .for_each(|(nd1, ewt, nd2)| {
+                let src = self.get_node(&nd1).unwrap();
+                let dst = self.get_node(&nd2).unwrap();
+                self.add_edge(*src, *dst, ewt.clone());
+            })
+        // Canonicalize(preserve invariant that no two equal outgoing edges without merging nodes)
+    }
+
     pub fn add_node(&mut self, key: N, weight: W) -> NodeIndex {
         if let Some(x) = self.nodes.get(&key) {
             let old_weight = self.grph.node_weight_mut(*x).unwrap();

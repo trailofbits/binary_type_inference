@@ -170,6 +170,10 @@ impl TypeVariable {
         TypeVariable::new(self.name.clone())
     }
 
+    pub fn get_cs_tag(&self) -> &Option<usize> {
+        &self.cs_tag
+    }
+
     /// Create a new type variable with the given name
     pub fn new(name: String) -> TypeVariable {
         //TODO(ian): Maybe we should check the validity of the name here.
@@ -416,6 +420,14 @@ impl DerivedTypeVar {
     /// Gets a reference to all field labels in order.
     pub fn get_field_labels(&self) -> &[FieldLabel] {
         &self.labels
+    }
+
+    pub fn is_in_parameter(&self) -> bool {
+        self.labels.len() == 1 && matches!(self.labels[0], FieldLabel::In(_))
+    }
+
+    pub fn is_out_parameter(&self) -> bool {
+        self.labels.len() == 1 && matches!(self.labels[0], FieldLabel::Out(_))
     }
 
     /// Gets the base type variable to which field labels are applied to create this derived type variable.
