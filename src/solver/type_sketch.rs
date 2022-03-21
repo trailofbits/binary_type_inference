@@ -21,11 +21,12 @@ use petgraph::graph::IndexType;
 use petgraph::stable_graph::{StableDiGraph, StableGraph};
 use petgraph::unionfind::UnionFind;
 use petgraph::visit::{
-    Dfs, EdgeRef, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNodeReferences,
+    Dfs, EdgeRef, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNeighborsDirected,
+    IntoNodeReferences,
 };
 use petgraph::visit::{IntoNodeIdentifiers, Walker};
 use petgraph::EdgeDirection::{self, Incoming};
-use petgraph::{algo, EdgeType};
+use petgraph::{algo, Directed, EdgeType};
 use petgraph::{
     graph::NodeIndex,
     graph::{EdgeIndex, Graph},
@@ -42,7 +43,9 @@ use crate::graph_algos::{explore_paths, find_node};
 use super::constraint_graph::TypeVarNode;
 use super::dfa_operations::{union, Alphabet, Indices, DFA};
 use super::scc_constraint_generation::SCCConstraints;
-use super::type_lattice::{CustomLatticeElement, NamedLattice, NamedLatticeElement};
+use super::type_lattice::{
+    CustomLatticeElement, LatticeDefinition, NamedLattice, NamedLatticeElement,
+};
 
 // an equivalence between eq nodes implies an equivalence between edge
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -52,7 +55,7 @@ struct EdgeImplication {
 }
 
 /// Labels for the sketch graph that mantain both an upper bound and lower bound on merged type
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Eq)]
 pub struct LatticeBounds<T: Clone + Lattice> {
     upper_bound: T,
     lower_bound: T,
@@ -63,20 +66,57 @@ where
     T: Lattice,
     T: Clone,
 {
-    fn join(&self, other: &T) -> Self {
+    fn refine_lower(&self, other: &T) -> Self {
         Self {
             upper_bound: self.upper_bound.clone(),
             lower_bound: self.lower_bound.join(other),
         }
     }
 
-    fn meet(&self, other: &T) -> Self {
+    fn refine_upper(&self, other: &T) -> Self {
         Self {
             upper_bound: self.upper_bound.meet(other),
             lower_bound: self.lower_bound.clone(),
         }
     }
 }
+
+impl<T: Lattice + Clone> JoinSemilattice for LatticeBounds<T> {
+    fn join(&self, other: &Self) -> Self {
+        Self {
+            upper_bound: self.upper_bound.join(&other.upper_bound),
+            lower_bound: self.lower_bound.join(&other.lower_bound),
+        }
+    }
+}
+
+impl<T: Lattice + Clone> MeetSemilattice for LatticeBounds<T> {
+    fn meet(&self, other: &Self) -> Self {
+        Self {
+            upper_bound: self.upper_bound.meet(&other.upper_bound),
+            lower_bound: self.lower_bound.meet(&other.lower_bound),
+        }
+    }
+}
+
+impl<T: Lattice + Clone> PartialOrd for LatticeBounds<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if other == self {
+            return Some(std::cmp::Ordering::Equal);
+        }
+
+        let j = self.join(other);
+        if &j == self {
+            Some(std::cmp::Ordering::Greater)
+        } else if &j == other {
+            Some(std::cmp::Ordering::Less)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: Lattice + Clone> Lattice for LatticeBounds<T> {}
 
 // TODO(ian): This is probably an abelian group, but that requires an identity implementation which is hard because that requires a function that can produce a
 // top and bottom element without context but top and bottom are runtime defined.
@@ -355,7 +395,7 @@ where
                             .get_elem(&subty.lhs.get_base_variable().get_name())
                             .unwrap(),
                         &subty.rhs,
-                        |x: &U, y: &LatticeBounds<U>| y.join(x),
+                        |x: &U, y: &LatticeBounds<U>| y.refine_lower(x),
                     );
                 } else if self.dtv_is_uninterpreted_lattice(&subty.rhs)
                     && grph.get_node(&subty.lhs).is_some()
@@ -366,7 +406,7 @@ where
                             .get_elem(&subty.rhs.get_base_variable().get_name())
                             .unwrap(),
                         &subty.lhs,
-                        |x: &U, y: &LatticeBounds<U>| y.meet(x),
+                        |x: &U, y: &LatticeBounds<U>| y.refine_upper(x),
                     );
                 }
             });
@@ -444,37 +484,83 @@ where
         new_repr
     }
 
-    fn get_representing_sketch() {}
-    /*
-    fn get_intersected_representation_of(&self, tid: &Tid) {
-        let callers = self
-            .cg
-            .neighbors_directed(
-                *self
-                    .tid_to_cg_idx
-                    .get(tid)
-                    .expect("All callees should have a node in the cg"),
-                Incoming,
-            )
-            .map(|caller| self.cg[caller]);
-    }
-
-    fn replace_tid_type_with_callers_if_callers_more_specific(
-        &mut self,
-        associated_scc_tids: &Vec<Tid>,
+    fn refine_formal_in(
+        &self,
+        condensed: &Graph<Vec<Tid>, (), Directed>,
+        target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
+        target_dtv: DerivedTypeVar,
+        target_idx: NodeIndex,
     ) {
-        let orig_repr = self.get_built_sketch_from_scc(associated_scc_tids);
+        let parent_nodes = condensed.neighbors_directed(target_idx, EdgeDirection::Incoming);
+
+        let orig_reprs =
+            target_scc_repr.get_representing_sketchs_ignoring_callsite_tags(target_dtv.clone());
+
+        // There should only be one representation of a formal in an SCC
+        assert!(orig_reprs.len() == 1);
+        let orig_repr = &orig_reprs[0];
+
+        let call_site_type = parent_nodes
+            .map(|scc_idx| {
+                let wt = condensed
+                    .node_weight(scc_idx)
+                    .expect("Should have weight for node index");
+                let repr_graph = self.get_built_sketch_from_scc(&wt);
+                let sketch =
+                    repr_graph.get_representing_sketchs_ignoring_callsite_tags(target_dtv.clone());
+
+                sketch
+            })
+            .flatten()
+            .reduce(|lhs, rhs| lhs.union(&rhs))
+            .unwrap_or(Sketch::empty_sketch(
+                target_dtv.clone(),
+                self.identity_element(),
+            ));
+
+        let new_type = orig_repr.intersect(&call_site_type);
+        target_scc_repr.replace_dtv(&target_dtv, new_type)
     }
 
-    pub fn push_down_intersections(&mut self) -> anyhow::Result<()> {
+    fn refine_formals(
+        &mut self,
+        condensed: &Graph<Vec<Tid>, (), Directed>,
+        associated_scc_tids: &Vec<Tid>,
+        target_idx: NodeIndex,
+    ) {
+        let mut orig_repr = self.get_built_sketch_from_scc(associated_scc_tids);
+        // for each in parameter without a callsite tag:
+        //bind intersection
+        let in_params = orig_repr
+            .quotient_graph
+            .get_node_mapping()
+            .iter()
+            .map(|(dtv, _idx)| dtv.clone())
+            .filter(|dtv| dtv.get_base_variable().get_cs_tag().is_none() && dtv.is_in_parameter());
+
+        for dtv in in_params.collect::<Vec<DerivedTypeVar>>() {
+            self.refine_formal_in(condensed, &mut orig_repr, dtv, target_idx);
+        }
+
+        let out_params = orig_repr
+            .quotient_graph
+            .get_node_mapping()
+            .iter()
+            .map(|(dtv, _idx)| dtv)
+            .filter(|dtv| dtv.get_base_variable().get_cs_tag().is_none() && dtv.is_out_parameter());
+
+        // for each parameter in the scc without
+    }
+
+    pub fn bind_polymorphic_types(&mut self) -> anyhow::Result<()> {
         let (condensed, mut sorted) = self.get_topo_order_for_cg()?;
         for tgt_idx in sorted {
             let target_tid = &condensed[tgt_idx];
-            self.replace_tid_type_with_callers_if_callers_more_specific(&condensed, target_tid);
+            self.refine_formals(&condensed, target_tid, tgt_idx);
         }
 
         Ok(())
-    }*/
+    }
 }
 
 /// A constraint graph quotiented over a symmetric subtyping relation. This is not guarenteed to be a DFA since it was not extracted as a reachable subgraph of the constraints.
@@ -485,7 +571,12 @@ pub struct SketchGraph<U: std::cmp::PartialEq> {
     default_label: U,
 }
 
-impl<U: Clone + std::cmp::PartialEq> SketchGraph<U> {
+impl<U: Clone + std::cmp::PartialEq + AbstractMagma<Additive>> SketchGraph<U> {
+    fn replace_dtv(&mut self, dtv: &DerivedTypeVar, sketch: Sketch<U>) {
+        self.quotient_graph
+            .replace_node(dtv.clone(), sketch.quotient_graph)
+    }
+
     fn get_representing_sketchs_ignoring_callsite_tags(
         &self,
         dtv: DerivedTypeVar,
@@ -587,6 +678,13 @@ pub struct Sketch<U: std::cmp::PartialEq> {
 impl<U: std::cmp::PartialEq> Sketch<U> {
     fn get_graph(&self) -> &MappingGraph<U, DerivedTypeVar, FieldLabel> {
         &self.quotient_graph
+    }
+    pub fn empty_sketch(representing: DerivedTypeVar, default_label: U) -> Sketch<U> {
+        Sketch {
+            quotient_graph: MappingGraph::new(),
+            representing,
+            default_label,
+        }
     }
 }
 
@@ -729,11 +827,11 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive>> Sketch<
     }
 
     fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
-        self.binop_sketch(other, &U::meet, intersection(self, other))
+        self.binop_sketch(other, &U::meet, union(self, other))
     }
 
     fn union(&self, other: &Sketch<U>) -> Sketch<U> {
-        self.binop_sketch(other, &U::join, union(self, other))
+        self.binop_sketch(other, &U::join, intersection(self, other))
     }
 }
 
