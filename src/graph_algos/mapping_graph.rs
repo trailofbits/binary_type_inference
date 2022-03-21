@@ -220,6 +220,7 @@ impl<
                     .insert(key2);
             }
             (Some(fst), Some(snd)) if fst != snd => {
+                println!("{} {}", fst.index(), snd.index());
                 let new_weight = self
                     .grph
                     .node_weight(fst)
@@ -231,38 +232,53 @@ impl<
                 self.update_all_children_of_idx_to(fst, new_idx);
                 self.update_all_children_of_idx_to(snd, new_idx);
 
-                for (src, dst, weight) in self
+                for (_src, dst, weight) in self
                     .grph
-                    .edges(fst)
-                    .map(|e| (e.target(), e.source(), e.weight().clone()))
+                    .edges_directed(fst, petgraph::EdgeDirection::Outgoing)
+                    .map(|e| (e.source(), e.target(), e.weight().clone()))
                     .collect::<Vec<_>>()
                 {
-                    if src == fst {
-                        // outgoing
-                        self.add_edge(new_idx, dst, weight);
-                    } else {
-                        // incoming
-                        self.add_edge(src, new_idx, weight);
-                    }
+                    self.add_edge(new_idx, dst, weight);
                 }
 
-                for (src, dst, weight) in self
+                for (src, _dst, weight) in self
                     .grph
-                    .edges(snd)
-                    .map(|e| (e.target(), e.source(), e.weight().clone()))
+                    .edges_directed(fst, petgraph::EdgeDirection::Incoming)
+                    .map(|e| (e.source(), e.target(), e.weight().clone()))
                     .collect::<Vec<_>>()
                 {
-                    if src == snd {
-                        // outgoing
-                        self.add_edge(new_idx, dst, weight);
-                    } else {
-                        // incoming
-                        self.add_edge(src, new_idx, weight);
-                    }
+                    self.add_edge(src, new_idx, weight);
+                }
+
+                for (_src, dst, weight) in self
+                    .grph
+                    .edges_directed(snd, petgraph::EdgeDirection::Outgoing)
+                    .map(|e| (e.source(), e.target(), e.weight().clone()))
+                    .collect::<Vec<_>>()
+                {
+                    self.add_edge(new_idx, dst, weight);
+                }
+
+                for (src, _dst, weight) in self
+                    .grph
+                    .edges_directed(snd, petgraph::EdgeDirection::Incoming)
+                    .map(|e| (e.source(), e.target(), e.weight().clone()))
+                    .collect::<Vec<_>>()
+                {
+                    println!("Adding  {} {}", src.index(), new_idx.index());
+                    self.add_edge(src, new_idx, weight);
+                }
+
+                for e in self.get_graph().edge_references() {
+                    println!("old {}:{}", e.source().index(), e.target().index());
                 }
 
                 self.grph.remove_node(fst);
                 self.grph.remove_node(snd);
+
+                for e in self.get_graph().edge_references() {
+                    println!("new {}:{}", e.source().index(), e.target().index());
+                }
             }
             (Some(_fst), Some(_snd)) => (),
         }

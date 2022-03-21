@@ -895,13 +895,15 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         assert!(self.representing.to_callee() == other.representing.to_callee());
 
         let (entry, grph) = self.create_graph_from_dfa(&resultant_grph);
-
+        println!("{}", Dot::new(&grph));
         // maps a new node index to an optional representation in both original graphs
 
         // find path to each node in grph lookup in both sketches intersect and annotate with set of nodes it is representing
 
         let mapping_from_new_node_to_representatives_in_orig =
             self.find_representative_nodes_for_new_nodes(entry, &grph, other);
+
+        println!("{:?}", mapping_from_new_node_to_representatives_in_orig.0);
 
         let mut quot_graph: MappingGraph<U, DerivedTypeVar, FieldLabel> = MappingGraph::new();
         for (base_node, (o1, o2)) in mapping_from_new_node_to_representatives_in_orig.iter() {
@@ -917,13 +919,13 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                 .unwrap_or(self.default_label.clone());
 
             let other_label = o2
-                .and_then(|o2| self.quotient_graph.get_graph().node_weight(o2).cloned())
+                .and_then(|o2| other.quotient_graph.get_graph().node_weight(o2).cloned())
                 .unwrap_or(self.default_label.clone());
 
             // Both nodes should recogonize the word in the case of an intersection
             //assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
             self_dtvs.extend(other_dtvs);
-
+            println!("{} {}", self_label, other_label);
             let new_label = lattice_op(&self_label, &other_label);
 
             let repr_node = self_dtvs
@@ -931,23 +933,39 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                 .next()
                 .expect("Since dtvs arent empty we should always have a repr")
                 .clone();
-            let r = quot_graph.add_node(repr_node.clone(), new_label);
+            let r = quot_graph.add_node(repr_node.clone(), new_label.clone());
+            println!(
+                "Node {} has dtv  {} and label {}",
+                r.index(),
+                repr_node,
+                new_label
+            );
             for e in grph.edges_directed(*base_node, EdgeDirection::Outgoing) {
                 let repr = mapping_from_new_node_to_representatives_in_orig
                     .get_representative_dtv_for(&self, other, e.target())
                     .expect(
                         "Every node in the dfa should have a repr in at least one of the origs",
                     );
-                let dst = quot_graph.add_node(repr, self.default_label.clone());
+                let dst = quot_graph.add_node(repr.clone(), self.default_label.clone());
+                println!(
+                    "Adding edges {}:{} {}:{}",
+                    repr_node,
+                    r.index(),
+                    repr,
+                    dst.index()
+                );
                 quot_graph.add_edge(r, dst, e.weight().clone());
             }
-
+            println!("{}", Dot::new(&quot_graph.get_graph()));
             //The part that isnt theoretically supported here is these merges... We need a single repr node for a dtv and everynode needs a dtv
             // TODO(ian): prove that this is ok, implement something different
             for dtv in self_dtvs.into_iter() {
+                println!("Merging: {} with {}", repr_node, dtv);
                 quot_graph.merge_nodes(repr_node.clone(), dtv);
             }
         }
+
+        println!("{}", Dot::new(&quot_graph.get_graph()));
 
         // At this point we have a new graph but it's not guarenteed to be a DFA so the last thing to do is quotient it.
         // We dont need to make anything equal via constraints that's already done, we just let edges sets do the work
@@ -978,7 +996,9 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                 .node_indices()
                 .collect::<Vec<_>>()
         );
-        self.binop_sketch(other, &U::meet, union(self, other))
+        let res = self.binop_sketch(other, &U::meet, union(self, other));
+        println!("result {}", res);
+        res
     }
 
     fn union(&self, other: &Sketch<U>) -> Sketch<U> {
@@ -1401,12 +1421,13 @@ mod test {
 
         let sketches = skb.scc_repr;
 
-        let sg_c2 = sketches
-            .get(&TypeVariable::new("sub_caller2".to_owned()))
+        let sg_id = sketches
+            .get(&TypeVariable::new("sub_id".to_owned()))
             .unwrap();
 
-        let (_, sub_c2_in) = parse_derived_type_variable("sub_caller2.in_0").unwrap();
-        let idx = sg_c2.quotient_graph.get_node(&sub_c2_in).unwrap();
+        println!("{}", sg_id);
+        //let (_, sub_c2_in) = parse_derived_type_variable("sub_caller2.in_0").unwrap();
+        //let idx = sg_c2.quotient_graph.get_node(&sub_c2_in).unwrap();
     }
 
     #[test]
