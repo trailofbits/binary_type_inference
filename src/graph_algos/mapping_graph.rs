@@ -6,7 +6,7 @@ use std::{
 use alga::general::{AbstractMagma, Additive};
 use itertools::Itertools;
 use petgraph::{
-    data::Build,
+    data::{Build, DataMap},
     graph::{EdgeIndex, NodeIndex},
     stable_graph::StableDiGraph,
     visit::{Dfs, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, Walker},
@@ -120,8 +120,7 @@ impl<
 
         // remove reached nodes
         nodes.iter().for_each(|nd| {
-            self.grph
-                .remove_node(*self.nodes.get(nd).expect("reached node should have repr"));
+            self.remove_node(nd);
         });
         // insert new nodes getting ids
         grph.reprs_to_graph_node.iter().for_each(|(_idx, group)| {
@@ -269,6 +268,34 @@ impl<
         }
     }
 
+    pub fn remove_node(&mut self, node: &N) -> Option<W> {
+        let idx = self.nodes.get(node);
+        if let Some(&idx) = idx {
+            let mapping = self
+                .reprs_to_graph_node
+                .get_mut(&idx)
+                .expect("idx should have group");
+
+            mapping.remove(node);
+            self.nodes.remove(node);
+
+            let wt = self
+                .grph
+                .node_weight(idx)
+                .expect("node should have weight")
+                .clone();
+
+            if mapping.is_empty() {
+                self.reprs_to_graph_node.remove(&idx);
+                self.grph.remove_node(idx);
+            }
+
+            Some(wt)
+        } else {
+            None
+        }
+    }
+
     /// Note it is invalid to pass this function an empty group
     pub fn quoetient_graph(&self, groups: &[BTreeSet<NodeIndex>]) -> MappingGraph<W, N, E> {
         let mut nd: MappingGraph<W, BTreeSet<NodeIndex>, E> = MappingGraph::new();
@@ -279,6 +306,12 @@ impl<
             .map(|(repr_indx, s)| s.iter().map(move |node_idx| (node_idx, repr_indx)))
             .flatten()
             .collect::<HashMap<_, _>>();
+
+        println!("{:?}", groups);
+        for idx in self.get_graph().node_indices() {
+            println!("{}", idx.index());
+            assert!(repr_mapping.get(&idx).is_some());
+        }
 
         for grp in groups.iter() {
             if !grp.is_empty() {
@@ -296,13 +329,13 @@ impl<
             let repr_src = &groups[*repr_mapping.get(&edge.source()).unwrap()];
             let repr_dst = &groups[*repr_mapping.get(&edge.target()).unwrap()];
 
-            let src_node = nd
+            let src_node = *nd
                 .get_node(repr_src)
                 .expect("All nodes should be added to the graph");
-            let dst_node = nd
+            let dst_node = *nd
                 .get_node(repr_dst)
                 .expect("All nodes should be added to the graph");
-            nd.add_edge(*src_node, *dst_node, edge.weight().clone());
+            nd.add_edge(src_node, dst_node, edge.weight().clone());
         }
 
         let new_mapping = self
