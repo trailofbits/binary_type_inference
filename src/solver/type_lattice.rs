@@ -8,6 +8,7 @@ use petgraph::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     hash::Hash,
     rc::Rc,
 };
@@ -290,6 +291,12 @@ impl NamedLatticeElement for CustomLatticeElement {
 
     fn is_bot(&self) -> bool {
         self.bot == self.elem
+    }
+}
+
+impl Display for CustomLatticeElement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.elem)
     }
 }
 
