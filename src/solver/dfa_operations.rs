@@ -33,7 +33,6 @@ struct IdContext<T> {
 
 impl<T: Hash + Eq + Debug> IdContext<T> {
     pub fn get_node(&mut self, nd: T) -> usize {
-        println!("Getting for {:?}", nd);
         if let Some(x) = self.mp.get(&nd) {
             *x
         } else {
@@ -394,8 +393,6 @@ where
         .map(|(src, a, dst)| (cont.get_rhs_node(src), a, cont.get_rhs_node(dst)))
         .collect();
 
-    println!("Rhs edges {:?}", rhs_edges);
-
     copied_edges.extend(rhs_edges);
 
     //accepts are the union of previous accepts we also have to check if the entries were accepts
@@ -412,14 +409,11 @@ where
         )
         .collect::<BTreeSet<_>>();
 
-    println!("{:?}", cont.cont.mp);
     let mut all_states = lhs
         .all_indices()
         .into_iter()
         .map(|x| cont.get_lhs_node(x))
         .collect::<BTreeSet<_>>();
-
-    println!("rhs indices {:?}", rhs.all_indices());
 
     let rhs_states = rhs
         .all_indices()
@@ -427,19 +421,10 @@ where
         .chain(rhs.all_indices().into_iter().map(|x| cont.get_rhs_node(x)))
         .collect::<BTreeSet<_>>();
 
-    println!("{:?}", rhs_states);
-
     all_states.extend(rhs_states);
 
     let ent_id = cont.get_lhs_node(lhs.entry());
-    println!("all indices {:?}", all_states);
-    println!(
-        "All edges {:?}",
-        copied_edges
-            .iter()
-            .map(|(src, _, dst)| (src, dst))
-            .collect::<Vec<(&usize, &usize)>>()
-    );
+
     ExplicitDFA {
         ent_id,
         edges: copied_edges,

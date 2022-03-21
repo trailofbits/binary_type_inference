@@ -220,7 +220,6 @@ impl<
                     .insert(key2);
             }
             (Some(fst), Some(snd)) if fst != snd => {
-                println!("{} {}", fst.index(), snd.index());
                 let new_weight = self
                     .grph
                     .node_weight(fst)
@@ -265,20 +264,11 @@ impl<
                     .map(|e| (e.source(), e.target(), e.weight().clone()))
                     .collect::<Vec<_>>()
                 {
-                    println!("Adding  {} {}", src.index(), new_idx.index());
                     self.add_edge(src, new_idx, weight);
-                }
-
-                for e in self.get_graph().edge_references() {
-                    println!("old {}:{}", e.source().index(), e.target().index());
                 }
 
                 self.grph.remove_node(fst);
                 self.grph.remove_node(snd);
-
-                for e in self.get_graph().edge_references() {
-                    println!("new {}:{}", e.source().index(), e.target().index());
-                }
             }
             (Some(_fst), Some(_snd)) => (),
         }
@@ -322,12 +312,6 @@ impl<
             .map(|(repr_indx, s)| s.iter().map(move |node_idx| (node_idx, repr_indx)))
             .flatten()
             .collect::<HashMap<_, _>>();
-
-        println!("{:?}", groups);
-        for idx in self.get_graph().node_indices() {
-            println!("{}", idx.index());
-            assert!(repr_mapping.get(&idx).is_some());
-        }
 
         for grp in groups.iter() {
             if !grp.is_empty() {

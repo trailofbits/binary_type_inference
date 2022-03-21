@@ -96,8 +96,8 @@ where
 impl<T: Lattice + Clone> JoinSemilattice for LatticeBounds<T> {
     fn join(&self, other: &Self) -> Self {
         Self {
-            upper_bound: self.upper_bound.join(&other.upper_bound),
-            lower_bound: self.lower_bound.join(&other.lower_bound),
+            upper_bound: self.upper_bound.meet(&other.upper_bound),
+            lower_bound: self.lower_bound.meet(&other.lower_bound),
         }
     }
 }
@@ -105,8 +105,8 @@ impl<T: Lattice + Clone> JoinSemilattice for LatticeBounds<T> {
 impl<T: Lattice + Clone> MeetSemilattice for LatticeBounds<T> {
     fn meet(&self, other: &Self) -> Self {
         Self {
-            upper_bound: self.upper_bound.meet(&other.upper_bound),
-            lower_bound: self.lower_bound.meet(&other.lower_bound),
+            upper_bound: self.upper_bound.join(&other.upper_bound),
+            lower_bound: self.lower_bound.join(&other.lower_bound),
         }
     }
 }
@@ -345,7 +345,6 @@ where
         {
             self.insert_dtv(nd_graph, var.clone());
         } else {
-            println!("Working on {:?}", is_internal_variable);
             let ext = self
                 .scc_repr
                 .get(&var.get_base_variable().to_callee())
@@ -535,8 +534,6 @@ where
         let orig_reprs = target_scc_repr.get_representing_sketch(target_dtv.clone());
 
         // There should only be one representation of a formal in an SCC
-        println!("Looking for formal {:?}", target_dtv);
-        //println!("{:#?}", target_scc_repr.quotient_graph.get_node_mapping());
         assert_eq!(orig_reprs.len(), 1);
         let orig_repr = &orig_reprs[0];
 
@@ -546,13 +543,8 @@ where
                     .node_weight(scc_idx)
                     .expect("Should have weight for node index");
                 let repr_graph = self.get_built_sketch_from_scc(&wt);
-                println!("full caller type {}", repr_graph);
-                println!("{:#?}", repr_graph.quotient_graph.get_node_mapping());
                 let sketch =
                     repr_graph.get_representing_sketchs_ignoring_callsite_tags(target_dtv.clone());
-                for child in sketch.iter() {
-                    println!("callsite_type {}", child);
-                }
                 sketch
             })
             .flatten()
@@ -712,7 +704,6 @@ impl Alphabet for FieldLabel {}
 
 impl<T: std::cmp::PartialEq> DFA<FieldLabel> for Sketch<T> {
     fn entry(&self) -> usize {
-        println!("{:?}", self.representing);
         self.quotient_graph
             .get_node(&self.representing)
             .expect("subgraph should contain represented node")
@@ -895,15 +886,12 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         assert!(self.representing.to_callee() == other.representing.to_callee());
 
         let (entry, grph) = self.create_graph_from_dfa(&resultant_grph);
-        println!("{}", Dot::new(&grph));
         // maps a new node index to an optional representation in both original graphs
 
         // find path to each node in grph lookup in both sketches intersect and annotate with set of nodes it is representing
 
         let mapping_from_new_node_to_representatives_in_orig =
             self.find_representative_nodes_for_new_nodes(entry, &grph, other);
-
-        println!("{:?}", mapping_from_new_node_to_representatives_in_orig.0);
 
         let mut quot_graph: MappingGraph<U, DerivedTypeVar, FieldLabel> = MappingGraph::new();
         for (base_node, (o1, o2)) in mapping_from_new_node_to_representatives_in_orig.iter() {
@@ -925,7 +913,6 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
             // Both nodes should recogonize the word in the case of an intersection
             //assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
             self_dtvs.extend(other_dtvs);
-            println!("{} {}", self_label, other_label);
             let new_label = lattice_op(&self_label, &other_label);
 
             let repr_node = self_dtvs
@@ -934,12 +921,7 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                 .expect("Since dtvs arent empty we should always have a repr")
                 .clone();
             let r = quot_graph.add_node(repr_node.clone(), new_label.clone());
-            println!(
-                "Node {} has dtv  {} and label {}",
-                r.index(),
-                repr_node,
-                new_label
-            );
+
             for e in grph.edges_directed(*base_node, EdgeDirection::Outgoing) {
                 let repr = mapping_from_new_node_to_representatives_in_orig
                     .get_representative_dtv_for(&self, other, e.target())
@@ -947,25 +929,15 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                         "Every node in the dfa should have a repr in at least one of the origs",
                     );
                 let dst = quot_graph.add_node(repr.clone(), self.default_label.clone());
-                println!(
-                    "Adding edges {}:{} {}:{}",
-                    repr_node,
-                    r.index(),
-                    repr,
-                    dst.index()
-                );
+
                 quot_graph.add_edge(r, dst, e.weight().clone());
             }
-            println!("{}", Dot::new(&quot_graph.get_graph()));
             //The part that isnt theoretically supported here is these merges... We need a single repr node for a dtv and everynode needs a dtv
             // TODO(ian): prove that this is ok, implement something different
             for dtv in self_dtvs.into_iter() {
-                println!("Merging: {} with {}", repr_node, dtv);
                 quot_graph.merge_nodes(repr_node.clone(), dtv);
             }
         }
-
-        println!("{}", Dot::new(&quot_graph.get_graph()));
 
         // At this point we have a new graph but it's not guarenteed to be a DFA so the last thing to do is quotient it.
         // We dont need to make anything equal via constraints that's already done, we just let edges sets do the work
@@ -979,31 +951,10 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
     }
 
     fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
-        println!("lhs intersect {}", &self);
-        println!(
-            "{:?}",
-            self.get_graph()
-                .get_graph()
-                .node_indices()
-                .collect::<Vec<_>>()
-        );
-        println!("rhs intersect {}", other);
-        println!(
-            "{:?}",
-            other
-                .get_graph()
-                .get_graph()
-                .node_indices()
-                .collect::<Vec<_>>()
-        );
-        let res = self.binop_sketch(other, &U::meet, union(self, other));
-        println!("result {}", res);
-        res
+        self.binop_sketch(other, &U::meet, union(self, other))
     }
 
     fn union(&self, other: &Sketch<U>) -> Sketch<U> {
-        println!("lhs union {}", &self);
-        println!("rhs union {}", other);
         self.binop_sketch(other, &U::join, intersection(self, other))
     }
 }
@@ -1425,9 +1376,36 @@ mod test {
             .get(&TypeVariable::new("sub_id".to_owned()))
             .unwrap();
 
-        println!("{}", sg_id);
-        //let (_, sub_c2_in) = parse_derived_type_variable("sub_caller2.in_0").unwrap();
-        //let idx = sg_c2.quotient_graph.get_node(&sub_c2_in).unwrap();
+        let (_, id_in0) = parse_derived_type_variable("sub_id.in_0").unwrap();
+
+        let idx = sg_id.quotient_graph.get_node(&id_in0).unwrap();
+
+        let wt = &sg_id.as_ref().quotient_graph.get_graph()[*idx];
+        assert_eq!(wt.upper_bound.get_name(), "top");
+        assert_eq!(wt.lower_bound.get_name(), "bottom");
+        assert_eq!(
+            sg_id
+                .quotient_graph
+                .get_graph()
+                .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
+                .count(),
+            1
+        );
+
+        let e = sg_id
+            .quotient_graph
+            .get_graph()
+            .edges_directed(*idx, petgraph::EdgeDirection::Outgoing)
+            .next()
+            .unwrap();
+
+        assert_eq!(e.weight(), &FieldLabel::Load);
+
+        let nidx = e.target();
+
+        let wt = &sg_id.as_ref().quotient_graph.get_graph()[nidx];
+        assert_eq!(wt.upper_bound.get_name(), "bytetype");
+        assert_eq!(wt.lower_bound.get_name(), "bottom");
     }
 
     #[test]
