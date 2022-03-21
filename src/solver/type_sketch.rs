@@ -261,6 +261,7 @@ struct SketckGraphBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
 impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> SketckGraphBuilder<'a, U, T>
 where
     T: 'a,
+    U: Display,
 {
     pub fn new(
         cg: CallGraph,
@@ -519,8 +520,8 @@ where
         let orig_reprs = target_scc_repr.get_representing_sketch(target_dtv.clone());
 
         // There should only be one representation of a formal in an SCC
-        println!("{:?}", target_dtv);
-        println!("{:#?}", target_scc_repr.quotient_graph.get_node_mapping());
+        println!("Looking for formal {:?}", target_dtv);
+        //println!("{:#?}", target_scc_repr.quotient_graph.get_node_mapping());
         assert_eq!(orig_reprs.len(), 1);
         let orig_repr = &orig_reprs[0];
 
@@ -530,9 +531,13 @@ where
                     .node_weight(scc_idx)
                     .expect("Should have weight for node index");
                 let repr_graph = self.get_built_sketch_from_scc(&wt);
+                println!("full caller type {}", repr_graph);
+                println!("{:#?}", repr_graph.quotient_graph.get_node_mapping());
                 let sketch =
                     repr_graph.get_representing_sketchs_ignoring_callsite_tags(target_dtv.clone());
-
+                for child in sketch.iter() {
+                    println!("callsite_type {}", child);
+                }
                 sketch
             })
             .flatten()
@@ -766,6 +771,23 @@ pub struct Sketch<U: std::cmp::PartialEq> {
     representing: DerivedTypeVar,
     default_label: U,
 }
+
+impl<U: std::cmp::PartialEq> Display for Sketch<U>
+where
+    U: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            Dot::new(&self.quotient_graph.get_graph().map(
+                |nd_id, nd_weight| format!("{}:{}", nd_id.index(), nd_weight),
+                |e_id, e_weight| format!("{}:{}", e_id.index(), e_weight),
+            )),
+        )
+    }
+}
+
 impl<U: std::cmp::PartialEq> Sketch<U> {
     fn get_graph(&self) -> &MappingGraph<U, DerivedTypeVar, FieldLabel> {
         &self.quotient_graph
@@ -785,7 +807,7 @@ impl<U: std::cmp::PartialEq + AbstractMagma<Additive>> Sketch<U> {
     }
 }
 
-impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive>> Sketch<U> {
+impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Display> Sketch<U> {
     fn get_entry(&self) -> NodeIndex {
         *self
             .quotient_graph
@@ -884,7 +906,7 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive>> Sketch<
                 .unwrap_or(self.default_label.clone());
 
             // Both nodes should recogonize the word in the case of an intersection
-            assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
+            //assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
             self_dtvs.extend(other_dtvs);
 
             let new_label = lattice_op(&self_label, &other_label);
@@ -924,10 +946,29 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive>> Sketch<
     }
 
     fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
+        println!("lhs intersect {}", &self);
+        println!(
+            "{:?}",
+            self.get_graph()
+                .get_graph()
+                .node_indices()
+                .collect::<Vec<_>>()
+        );
+        println!("rhs intersect {}", other);
+        println!(
+            "{:?}",
+            other
+                .get_graph()
+                .get_graph()
+                .node_indices()
+                .collect::<Vec<_>>()
+        );
         self.binop_sketch(other, &U::meet, union(self, other))
     }
 
     fn union(&self, other: &Sketch<U>) -> Sketch<U> {
+        println!("lhs union {}", &self);
+        println!("rhs union {}", other);
         self.binop_sketch(other, &U::join, intersection(self, other))
     }
 }
@@ -1360,12 +1401,6 @@ mod test {
                 assert_eq!(wt.upper_bound.get_name(), "int");
             }
         }
-
-        // Now lets examine the deepest polymorphic function we should have narrowed it to be compatible with both callsites in this function.
-        let sg = sketches
-            .get(&TypeVariable::new("sub_id".to_owned()))
-            .unwrap();
-        println!("{}", sg);
     }
 
     #[test]

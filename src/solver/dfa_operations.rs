@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
+    fmt::Debug,
     hash::Hash,
 };
 
@@ -30,8 +31,9 @@ struct IdContext<T> {
     mp: HashMap<T, usize>,
 }
 
-impl<T: Hash + Eq> IdContext<T> {
+impl<T: Hash + Eq + Debug> IdContext<T> {
     pub fn get_node(&mut self, nd: T) -> usize {
+        println!("Getting for {:?}", nd);
         if let Some(x) = self.mp.get(&nd) {
             *x
         } else {
@@ -374,6 +376,7 @@ impl UnionContext {
 pub fn union<T, U, A>(lhs: &T, rhs: &U) -> impl DFA<A>
 where
     A: Alphabet,
+    A: Debug,
     T: DFA<A>,
     U: DFA<A>,
 {
@@ -385,10 +388,13 @@ where
         .map(|(src, a, dst)| (cont.get_lhs_node(src), a, cont.get_lhs_node(dst)))
         .collect::<BTreeSet<(usize, A, usize)>>();
 
-    let rhs_edges = lhs
+    let rhs_edges: Vec<_> = rhs
         .dfa_edges()
         .into_iter()
-        .map(|(src, a, dst)| (cont.get_rhs_node(src), a, cont.get_rhs_node(dst)));
+        .map(|(src, a, dst)| (cont.get_rhs_node(src), a, cont.get_rhs_node(dst)))
+        .collect();
+
+    println!("Rhs edges {:?}", rhs_edges);
 
     copied_edges.extend(rhs_edges);
 
@@ -406,17 +412,34 @@ where
         )
         .collect::<BTreeSet<_>>();
 
-    let all_states = lhs
+    println!("{:?}", cont.cont.mp);
+    let mut all_states = lhs
         .all_indices()
         .into_iter()
         .map(|x| cont.get_lhs_node(x))
-        .collect::<Vec<_>>()
+        .collect::<BTreeSet<_>>();
+
+    println!("rhs indices {:?}", rhs.all_indices());
+
+    let rhs_states = rhs
+        .all_indices()
         .into_iter()
         .chain(rhs.all_indices().into_iter().map(|x| cont.get_rhs_node(x)))
         .collect::<BTreeSet<_>>();
 
-    let ent_id = cont.get_lhs_node(lhs.entry());
+    println!("{:?}", rhs_states);
 
+    all_states.extend(rhs_states);
+
+    let ent_id = cont.get_lhs_node(lhs.entry());
+    println!("all indices {:?}", all_states);
+    println!(
+        "All edges {:?}",
+        copied_edges
+            .iter()
+            .map(|(src, _, dst)| (src, dst))
+            .collect::<Vec<(&usize, &usize)>>()
+    );
     ExplicitDFA {
         ent_id,
         edges: copied_edges,
