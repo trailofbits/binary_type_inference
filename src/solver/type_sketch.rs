@@ -96,8 +96,8 @@ where
 impl<T: Lattice + Clone> JoinSemilattice for LatticeBounds<T> {
     fn join(&self, other: &Self) -> Self {
         Self {
-            upper_bound: self.upper_bound.meet(&other.upper_bound),
-            lower_bound: self.lower_bound.meet(&other.lower_bound),
+            upper_bound: self.upper_bound.join(&other.upper_bound),
+            lower_bound: self.lower_bound.join(&other.lower_bound),
         }
     }
 }
@@ -105,8 +105,8 @@ impl<T: Lattice + Clone> JoinSemilattice for LatticeBounds<T> {
 impl<T: Lattice + Clone> MeetSemilattice for LatticeBounds<T> {
     fn meet(&self, other: &Self) -> Self {
         Self {
-            upper_bound: self.upper_bound.join(&other.upper_bound),
-            lower_bound: self.lower_bound.join(&other.lower_bound),
+            upper_bound: self.upper_bound.meet(&other.upper_bound),
+            lower_bound: self.lower_bound.meet(&other.lower_bound),
         }
     }
 }
@@ -545,6 +545,9 @@ where
                 let repr_graph = self.get_built_sketch_from_scc(&wt);
                 let sketch =
                     repr_graph.get_representing_sketchs_ignoring_callsite_tags(target_dtv.clone());
+                for s in sketch.iter() {
+                    println!("Member type for: {} {}", target_dtv, s);
+                }
                 sketch
             })
             .flatten()
@@ -553,6 +556,7 @@ where
                 target_dtv.clone(),
                 self.identity_element(),
             ));
+        println!("Merged param type for: {} {}", target_dtv, call_site_type);
 
         let new_type = application_operator(orig_repr, &call_site_type);
         target_scc_repr.replace_dtv(&target_dtv, new_type)
