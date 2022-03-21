@@ -222,15 +222,30 @@ where
         cons.clone().into_labeling() != prev_labeling
     } {}
 
-    for (nd_idx, grouplab) in cons.clone().into_labeling().into_iter().enumerate() {
+    for (nd_idx, grouplab) in
+        cons.clone()
+            .into_labeling()
+            .into_iter()
+            .enumerate()
+            .filter(|(ndidx, _repr)| {
+                grph.get_graph()
+                    .node_weight(NodeIndex::new(*ndidx))
+                    .is_some()
+            })
+    {
         let nd_idx: NodeIndex = NodeIndex::new(nd_idx);
-        let nd = grph.get_graph().node_weight(nd_idx).unwrap();
         info!("Node {}: in group {}", nd_idx.index(), grouplab);
+        let _nd = grph.get_graph().node_weight(nd_idx).unwrap();
     }
 
     cons.into_labeling()
         .into_iter()
         .enumerate()
+        .filter(|(ndidx, _repr)| {
+            grph.get_graph()
+                .node_weight(NodeIndex::new(*ndidx))
+                .is_some()
+        })
         .map(|(ndidx, repr)| (NodeIndex::new(ndidx), repr))
         .fold(
             HashMap::<usize, BTreeSet<NodeIndex>>::new(),
@@ -1300,6 +1315,98 @@ mod test {
         assert_eq!(singl_edge.weight(), &FieldLabel::Load);
         let target = &sg_c1.quotient_graph.get_graph()[singl_edge.target()];
         assert_eq!(target.upper_bound.get_name(), "char");
+    }
+
+    #[test]
+    fn test_intersected_pointer_should_be_applied_to_callee() {
+        init();
+        let ids_scc = parse_cons_set(
+            "
+        sub_id.in_0 <= sub_id.out
+        ",
+        );
+
+        let ids_tid = Tid::create("sub_id".to_owned(), "0x1000".to_owned());
+
+        let caller1_scc = parse_cons_set(
+            "
+        sub_caller1.in_0 <= sub_id.in_0
+        sub_id.out <= sub_caller1.out
+        sub_caller1.in_0.load <= char
+        ",
+        );
+
+        let caller1_tid = Tid::create("sub_caller1".to_owned(), "0x3000".to_owned());
+
+        let caller2_scc = parse_cons_set(
+            "
+        sub_caller2.in_0 <= sub_id.in_0
+        sub_id.out <= sub_caller2.out
+        sub_caller2.in_0.load <= int
+        ",
+        );
+
+        let caller2_tid = Tid::create("sub_caller2".to_owned(), "0x4000".to_owned());
+
+        let def = LatticeDefinition::new(
+            vec![
+                ("char".to_owned(), "bytetype".to_owned()),
+                ("int".to_owned(), "bytetype".to_owned()),
+                ("bottom".to_owned(), "char".to_owned()),
+                ("bottom".to_owned(), "int".to_owned()),
+                ("bytetype".to_owned(), "top".to_owned()),
+            ],
+            "top".to_owned(),
+            "bottom".to_owned(),
+            "int".to_owned(),
+        );
+
+        let lat = def.generate_lattice();
+        let nd_set = lat
+            .get_nds()
+            .iter()
+            .map(|x| TypeVariable::new(x.0.clone()))
+            .collect::<HashSet<TypeVariable>>();
+
+        let mut cg: CallGraph = DiGraph::new();
+
+        let id_node = cg.add_node(ids_tid.clone());
+        let c1_node = cg.add_node(caller1_tid.clone());
+        let c2_node = cg.add_node(caller2_tid.clone());
+
+        cg.add_edge(c1_node, id_node, ());
+        cg.add_edge(c2_node, id_node, ());
+
+        let mut skb = SketckGraphBuilder::new(
+            cg,
+            vec![
+                SCCConstraints {
+                    constraints: ids_scc,
+                    scc: vec![ids_tid.clone()],
+                },
+                SCCConstraints {
+                    constraints: caller1_scc,
+                    scc: vec![caller1_tid.clone()],
+                },
+                SCCConstraints {
+                    constraints: caller2_scc,
+                    scc: vec![caller2_tid.clone()],
+                },
+            ],
+            &lat,
+            nd_set,
+        );
+
+        skb.build().expect("Should succeed in building sketch");
+
+        let sketches = skb.scc_repr;
+
+        let sg_c2 = sketches
+            .get(&TypeVariable::new("sub_caller2".to_owned()))
+            .unwrap();
+
+        let (_, sub_c2_in) = parse_derived_type_variable("sub_caller2.in_0").unwrap();
+        let idx = sg_c2.quotient_graph.get_node(&sub_c2_in).unwrap();
     }
 
     #[test]
