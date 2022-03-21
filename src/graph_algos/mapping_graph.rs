@@ -149,17 +149,17 @@ impl<
                 .next()
                 .unwrap();
 
-            let src_idx = self.get_node(&srcv).unwrap();
-            let dst_idx = self.get_node(&destv).unwrap();
-            self.grph.add_edge(*src_idx, *dst_idx, e.weight().clone());
+            let src_idx = *self.get_node(&srcv).unwrap();
+            let dst_idx = *self.get_node(&destv).unwrap();
+            self.grph.add_edge(src_idx, dst_idx, e.weight().clone());
         });
         // add edges into subgraph
         edges_from_outside_subgraph
             .into_iter()
             .for_each(|(nd1, ewt, nd2)| {
-                let src = self.get_node(&nd1).unwrap();
-                let dst = self.get_node(&nd2).unwrap();
-                self.add_edge(*src, *dst, ewt.clone());
+                let src = *self.get_node(&nd1).unwrap();
+                let dst = *self.get_node(&nd2).unwrap();
+                self.add_edge(src, dst, ewt.clone());
             })
         // Canonicalize(preserve invariant that no two equal outgoing edges without merging nodes)
     }
