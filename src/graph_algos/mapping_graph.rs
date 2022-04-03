@@ -4,17 +4,22 @@ use std::{
 };
 
 use alga::general::{AbstractMagma, Additive};
+
 use itertools::Itertools;
 use petgraph::{
     data::{Build, DataMap},
     graph::{EdgeIndex, NodeIndex},
     stable_graph::StableDiGraph,
-    visit::{Dfs, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, Walker},
+    visit::{Dfs, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNodeReferences, Walker},
+    EdgeDirection::Outgoing,
 };
 
 use petgraph::visit::EdgeRef;
 
-use crate::constraints::DerivedTypeVar;
+use crate::solver::dfa_operations::DFA;
+use crate::{constraints::DerivedTypeVar, solver::dfa_operations::Alphabet};
+
+use super::{explore_paths, find_node};
 
 // TODO(ian): use this abstraction for the transducer
 /// A mapping graph allows the lookup of nodes by a hashable element. A node can also be queried for which hashable element it represents.
@@ -24,6 +29,17 @@ pub struct MappingGraph<W, N, E> {
     grph: StableDiGraph<W, E>,
     nodes: HashMap<N, NodeIndex>,
     reprs_to_graph_node: HashMap<NodeIndex, BTreeSet<N>>,
+}
+
+impl<W, N, E> MappingGraph<W, N, E> {
+    /// Produces an unlabeled mapping graph from a DFA, actually we should just take the stable digraph here.
+    pub fn from_dfa_and_labeling(dfa: StableDiGraph<W, E>) -> MappingGraph<W, N, E> {
+        MappingGraph {
+            grph: dfa,
+            nodes: HashMap::new(),
+            reprs_to_graph_node: HashMap::new(),
+        }
+    }
 }
 
 impl<W, N, E> MappingGraph<W, N, E>
@@ -75,91 +91,104 @@ impl<
     > MappingGraph<W, N, E>
 {
     pub fn replace_node(&mut self, key: N, grph: MappingGraph<W, N, E>) {
-        let reached_graph = self.get_reachable_subgraph(
-            *self
-                .get_node(&key)
-                .expect("Should have node for replacement key"),
-        );
+        let orig_var_idx = *self
+            .get_node(&key)
+            .expect("Should have node for replacement key");
+        let reached_graph = self.get_reachable_subgraph(orig_var_idx);
 
         let nodes = reached_graph
             .nodes
             .iter()
-            .map(|(nd, _idx)| nd.clone())
-            .collect::<BTreeSet<N>>();
+            .map(|(_nd, idx)| *idx)
+            .collect::<BTreeSet<NodeIndex>>();
 
-        let edges_from_outside_subgraph: Vec<(N, E, N)> = nodes
-            .iter()
-            .map(|nd_in_subgraph| {
-                let nd = self
-                    .get_node(nd_in_subgraph)
-                    .expect("Reachable nodes should have repr");
+        // Nodes are looked up by their original path. Since we always refine the original type we should be able to follow a path from the original
+        // tvar in the refined tvar.
+        let edges_outside_subgraph = explore_paths(&self.grph, orig_var_idx)
+            .map(|(pth, reached_id)| {
                 let incoming_edges = self
                     .get_graph()
-                    .edges_directed(*nd, petgraph::EdgeDirection::Incoming);
+                    .edges_directed(reached_id, petgraph::EdgeDirection::Incoming);
 
                 incoming_edges
                     .filter_map(|orig_e| {
-                        let grp = self.get_group_for_node(orig_e.target());
-                        let target_repr = grp.iter().next().expect("groups should not be empty");
-                        if nodes.contains(target_repr) {
-                            // Internal edge
+                        assert!(orig_e.source() != reached_id);
+                        if nodes.contains(&orig_e.source()) {
+                            //internal _edge
                             None
                         } else {
-                            Some((
-                                nd_in_subgraph.clone(),
-                                orig_e.weight().clone(),
-                                target_repr.clone(),
-                            ))
+                            Some((orig_e.weight().clone(), orig_e.source(), pth.clone()))
                         }
                     })
                     .collect::<Vec<_>>()
                     .into_iter()
             })
             .flatten()
-            .collect();
+            .collect::<Vec<_>>();
 
         // remove reached nodes
         nodes.iter().for_each(|nd| {
-            self.remove_node(nd);
+            self.remove_node_by_idx(*nd);
         });
         // insert new nodes getting ids
-        grph.reprs_to_graph_node.iter().for_each(|(_idx, group)| {
-            let repr_var = group.iter().next().expect("no empty groups").clone();
-            let wt = grph
-                .get_graph()
-                .node_weight(*grph.get_node(&repr_var).unwrap())
-                .expect("Nodes should have weights");
-            let _idx = self.add_node(repr_var.clone(), wt.clone());
-            for nd in group.iter() {
-                self.merge_nodes(repr_var.clone(), nd.clone());
-            }
-        });
-        // add edges within subgraph,
+        let mut old_idx_to_new_idx_mapping = HashMap::new();
 
-        grph.grph.edge_references().for_each(|e| {
-            let srcv = grph
-                .get_group_for_node(e.source())
-                .into_iter()
-                .next()
-                .unwrap();
-            let destv = grph
-                .get_group_for_node(e.target())
-                .into_iter()
-                .next()
-                .unwrap();
-
-            let src_idx = *self.get_node(&srcv).unwrap();
-            let dst_idx = *self.get_node(&destv).unwrap();
-            self.grph.add_edge(src_idx, dst_idx, e.weight().clone());
-        });
-        // add edges into subgraph
-        edges_from_outside_subgraph
-            .into_iter()
-            .for_each(|(nd1, ewt, nd2)| {
-                let src = *self.get_node(&nd1).unwrap();
-                let dst = *self.get_node(&nd2).unwrap();
-                self.add_edge(src, dst, ewt.clone());
+        let mut add_node = |target_idx| {
+            *old_idx_to_new_idx_mapping
+                .entry(target_idx)
+                .or_insert_with(|| {
+                    let weight = grph.get_graph().node_weight(target_idx).unwrap().clone();
+                    let grp = grph.get_group_for_node(target_idx);
+                    if let Some(repr) = grp.iter().next() {
+                        let idx = self.add_node(repr.clone(), weight);
+                        for elem in grp.iter() {
+                            self.merge_nodes(repr.clone(), elem.clone());
+                        }
+                        idx
+                    } else {
+                        self.grph.add_node(weight)
+                    }
+                })
+        };
+        grph.get_graph()
+            .node_indices()
+            .map(|nd| {
+                let src = add_node(nd);
+                let mut tot = Vec::new();
+                for edge in grph.get_graph().edges_directed(src, Outgoing) {
+                    let dst = add_node(edge.target());
+                    tot.push((src, edge.weight().clone(), dst));
+                }
+                tot.into_iter()
             })
+            .flatten()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .for_each(|(src, wt, dst)| {
+                self.grph.add_edge(src, dst, wt);
+            });
+
+        // add edges into subgraph
+        edges_outside_subgraph.into_iter().for_each(
+            |(edge_weight, src_node, nd_in_subgraph_pth)| {
+                if let Some(old_idx) = find_node(
+                    grph.get_graph(),
+                    *grph
+                        .get_node(&key)
+                        .expect("replacing graph should represent node being replaced"),
+                    nd_in_subgraph_pth.iter().map(|e_index| {
+                        grph.grph
+                            .edge_weight(*e_index)
+                            .expect("edge references should be valid")
+                    }),
+                ) {
+                    let new_idx = old_idx_to_new_idx_mapping
+                        .get(&old_idx)
+                        .expect("all old idxs should be added");
+                    self.grph.add_edge(src_node, *new_idx, edge_weight);
+                }
+            },
+        );
         // Canonicalize(preserve invariant that no two equal outgoing edges without merging nodes)
     }
 
@@ -274,6 +303,17 @@ impl<
         }
     }
 
+    pub fn remove_node_by_idx(&mut self, idx: NodeIndex) -> Option<W> {
+        let nd_set = self.reprs_to_graph_node.remove(&idx);
+        if let Some(nd_set) = nd_set {
+            for nd in nd_set {
+                self.nodes.remove(&nd);
+            }
+        }
+
+        self.grph.remove_node(idx)
+    }
+
     pub fn remove_node(&mut self, node: &N) -> Option<W> {
         let idx = self.nodes.get(node);
         if let Some(&idx) = idx {
@@ -362,6 +402,31 @@ impl<
             grph: nd.grph,
             nodes: new_mapping,
             reprs_to_graph_node: new_rev_mapping,
+        }
+    }
+}
+
+impl<W: std::cmp::PartialEq + Clone, N: Clone + Hash + Eq + Ord, E: Hash + Eq + Clone>
+    MappingGraph<W, N, E>
+{
+    pub fn relable_representative_nodes(
+        &self,
+        mapping: HashMap<N, NodeIndex>,
+    ) -> MappingGraph<W, N, E> {
+        // construct set
+
+        let mut index_to_reprs = HashMap::new();
+        mapping.iter().for_each(|(nd, idx)| {
+            index_to_reprs
+                .entry(*idx)
+                .or_insert_with(|| BTreeSet::new())
+                .insert(nd.clone());
+        });
+
+        MappingGraph {
+            grph: self.grph.clone(),
+            nodes: mapping,
+            reprs_to_graph_node: index_to_reprs,
         }
     }
 }
