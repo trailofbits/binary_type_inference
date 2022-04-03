@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::{format, Display};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::{collections::HashMap, hash::Hash};
 
@@ -533,7 +533,7 @@ where
         assert_eq!(orig_reprs.len(), 1);
         let orig_repr = &orig_reprs[0];
 
-        let call_site_type = parent_nodes
+        let mut call_site_type = parent_nodes
             .map(|scc_idx| {
                 let wt = condensed
                     .node_weight(scc_idx)
@@ -550,6 +550,8 @@ where
             .reduce(|lhs, rhs| merge_operator(&lhs, &rhs))
             .unwrap_or(orig_repr.clone());
         println!("Merged param type for: {} {}", target_dtv, call_site_type);
+
+        call_site_type.label_dtvs(&orig_repr);
 
         //let new_type = application_operator(orig_repr, &call_site_type);
         target_scc_repr.replace_dtv(&target_dtv, call_site_type)
@@ -795,6 +797,52 @@ impl<U: std::cmp::PartialEq> Sketch<U> {
     }
 }
 
+impl<U: std::cmp::PartialEq> Sketch<U> {
+    fn get_entry(&self) -> NodeIndex {
+        *self
+            .quotient_graph
+            .get_node(&self.representing)
+            .expect("Should have the node being represented")
+    }
+}
+
+impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
+    /// Labels this sketchs nodes with the dtvs in the argument,
+    /// Also copies the repr.
+    // We can actually label without caring about the node weights
+    pub fn label_dtvs<V: std::cmp::PartialEq>(&mut self, other_sketch: &Sketch<V>) {
+        let mapping: HashMap<DerivedTypeVar, NodeIndex> =
+            explore_paths(self.quotient_graph.get_graph(), self.get_entry())
+                .filter_map(|(pth, tgt)| {
+                    let pth_as_weights = pth
+                        .iter()
+                        .map(|e| {
+                            self.quotient_graph
+                                .get_graph()
+                                .edge_weight(*e)
+                                .expect("indices should be valid")
+                        })
+                        .collect::<Vec<_>>();
+                    let maybe_node = find_node(
+                        other_sketch.quotient_graph.get_graph(),
+                        other_sketch.get_entry(),
+                        pth_as_weights.iter().map(|e| *e),
+                    );
+                    maybe_node.map(|other_idx| {
+                        let grp = other_sketch.get_graph().get_group_for_node(other_idx);
+                        grp.into_iter()
+                            .map(|dtv| (dtv, tgt))
+                            .collect::<Vec<_>>()
+                            .into_iter()
+                    })
+                })
+                .flatten()
+                .collect();
+
+        self.quotient_graph = self.quotient_graph.relable_representative_nodes(mapping);
+    }
+}
+
 impl<U: std::cmp::PartialEq + AbstractMagma<Additive>> Sketch<U> {
     pub fn empty_sketch(representing: DerivedTypeVar, default_label: U) -> Sketch<U> {
         let mut grph = MappingGraph::new();
@@ -809,13 +857,6 @@ impl<U: std::cmp::PartialEq + AbstractMagma<Additive>> Sketch<U> {
 }
 
 impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Display> Sketch<U> {
-    fn get_entry(&self) -> NodeIndex {
-        *self
-            .quotient_graph
-            .get_node(&self.representing)
-            .expect("Should have the node being represented")
-    }
-
     /// Returns a graph of the dfa and the entry node index.
     fn create_graph_from_dfa(
         &self,
@@ -888,15 +929,8 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         let mapping_from_new_node_to_representatives_in_orig =
             self.find_representative_nodes_for_new_nodes(entry, &grph, other);
 
-        let mut quot_graph: MappingGraph<U, DerivedTypeVar, FieldLabel> = MappingGraph::new();
+        let mut weight_mapping = MappingGraph::from_dfa_and_labeling(grph);
         for (base_node, (o1, o2)) in mapping_from_new_node_to_representatives_in_orig.iter() {
-            let mut self_dtvs = o1
-                .map(|o1| self.quotient_graph.get_group_for_node(o1))
-                .unwrap_or(BTreeSet::new());
-            let other_dtvs = o2
-                .map(|o2| other.quotient_graph.get_group_for_node(o2))
-                .unwrap_or(BTreeSet::new());
-
             let self_label = o1
                 .and_then(|o1| self.quotient_graph.get_graph().node_weight(o1).cloned())
                 .unwrap_or(self.default_label.clone());
@@ -907,39 +941,23 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
 
             // Both nodes should recogonize the word in the case of an intersection
             //assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
-            self_dtvs.extend(other_dtvs);
+
             let new_label = lattice_op(&self_label, &other_label);
-
-            let repr_node = self_dtvs
-                .iter()
-                .next()
-                .expect("Since dtvs arent empty we should always have a repr")
-                .clone();
-            let r = quot_graph.add_node(repr_node.clone(), new_label.clone());
-
-            for e in grph.edges_directed(*base_node, EdgeDirection::Outgoing) {
-                let repr = mapping_from_new_node_to_representatives_in_orig
-                    .get_representative_dtv_for(&self, other, e.target())
-                    .expect(
-                        "Every node in the dfa should have a repr in at least one of the origs",
-                    );
-                let dst = quot_graph.add_node(repr.clone(), self.default_label.clone());
-
-                quot_graph.add_edge(r, dst, e.weight().clone());
-            }
-            //The part that isnt theoretically supported here is these merges... We need a single repr node for a dtv and everynode needs a dtv
-            // TODO(ian): prove that this is ok, implement something different
-            for dtv in self_dtvs.into_iter() {
-                quot_graph.merge_nodes(repr_node.clone(), dtv);
-            }
+            *weight_mapping
+                .get_graph_mut()
+                .node_weight_mut(*base_node)
+                .unwrap() = new_label;
         }
 
         // At this point we have a new graph but it's not guarenteed to be a DFA so the last thing to do is quotient it.
         // We dont need to make anything equal via constraints that's already done, we just let edges sets do the work
-        let quot_groups = generate_quotient_groups::<U>(&quot_graph, &ConstraintSet::default());
-        quot_graph.quoetient_graph(&quot_groups);
+        let quot_groups = generate_quotient_groups::<U>(&weight_mapping, &ConstraintSet::default());
+        let quot_graph = weight_mapping.quoetient_graph(&quot_groups);
+        let relab = quot_graph
+            .relable_representative_nodes(HashMap::from([(self.representing.clone(), entry)]));
+
         Sketch {
-            quotient_graph: quot_graph,
+            quotient_graph: relab,
             representing: self.representing.clone(),
             default_label: self.default_label.clone(),
         }
