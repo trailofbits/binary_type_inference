@@ -68,11 +68,16 @@ where
     mp
 }
 
-struct ExplicitDFA<A> {
-    ent_id: usize,
-    edges: BTreeSet<(usize, A, usize)>,
-    accept_indexes: BTreeSet<usize>,
-    all_indeces: BTreeSet<usize>,
+/// Represents a DFA as an explicit set of usize indices
+pub struct ExplicitDFA<A> {
+    /// Entry index
+    pub ent_id: usize,
+    /// Edges from (src, alphabet, dsts)
+    pub edges: BTreeSet<(usize, A, usize)>,
+    /// Accept indices
+    pub accept_indexes: BTreeSet<usize>,
+    /// Accept indices + reject indices
+    pub all_indeces: BTreeSet<usize>,
 }
 
 impl<A: Alphabet> DFA<A> for ExplicitDFA<A> {
