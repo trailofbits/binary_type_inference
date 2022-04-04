@@ -167,7 +167,7 @@ impl<
         let mut new_labeling = self.nodes.clone();
         for (old_idx, new_idx) in old_idx_to_new_idx_mapping.iter() {
             for n in grph.get_group_for_node(*old_idx) {
-                println!("Old n {}", n);
+                println!("Old n {} {}->{}", n, old_idx.index(), new_idx.index());
                 assert!(!self.nodes.contains_key(&n));
                 new_labeling.insert(n, *new_idx);
             }
