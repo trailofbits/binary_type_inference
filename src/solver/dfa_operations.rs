@@ -165,10 +165,18 @@ where
         lhs.dfa_edges().into_iter().map(|e| (e.0, e.2)),
     );
 
-    let reached_idxs: BTreeSet<usize> = Dfs::new(&g, NodeIndex::from(lhs.entry()))
-        .iter(&g)
-        .map(|idx| idx.index())
-        .collect();
+    let reached_idxs: BTreeSet<usize> = if g
+        .node_indices()
+        .collect::<BTreeSet<_>>()
+        .contains(&NodeIndex::from(lhs.entry()))
+    {
+        Dfs::new(&g, NodeIndex::from(lhs.entry()))
+            .iter(&g)
+            .map(|idx| idx.index())
+            .collect()
+    } else {
+        BTreeSet::from([lhs.entry()])
+    };
 
     let accepts = lhs
         .accept_indices()
@@ -434,4 +442,38 @@ where
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    impl Alphabet for usize {}
+    use std::collections::BTreeSet;
+
+    use crate::solver::dfa_operations::{minimize, DFA};
+
+    use super::{intersection, Alphabet, ExplicitDFA};
+
+    #[test]
+    fn test_null_intersection() {
+        let lhs = ExplicitDFA::<usize> {
+            ent_id: 0,
+            edges: BTreeSet::new(),
+            accept_indexes: BTreeSet::from([0]),
+            all_indeces: BTreeSet::from([0]),
+        };
+
+        let rhs = ExplicitDFA::<usize> {
+            ent_id: 0,
+            edges: BTreeSet::from([(0, 10, 2)]),
+            accept_indexes: BTreeSet::from([0, 2]),
+            all_indeces: BTreeSet::from([0, 2]),
+        };
+
+        let new_dfa = intersection(&lhs, &rhs);
+
+        assert_eq!(new_dfa.accept_indices().len(), 2);
+        assert_eq!(new_dfa.all_indices().len(), 2);
+
+        assert_eq!(new_dfa.dfa_edges().len(), 0);
+
+        let min = minimize(&new_dfa);
+        assert_eq!(min.all_indices().len(), 1);
+    }
+}

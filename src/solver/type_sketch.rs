@@ -554,7 +554,9 @@ where
         call_site_type.label_dtvs(&orig_repr);
 
         //let new_type = application_operator(orig_repr, &call_site_type);
-        target_scc_repr.replace_dtv(&target_dtv, call_site_type)
+        target_scc_repr.replace_dtv(&target_dtv, call_site_type);
+
+        println!("After replace {}", target_scc_repr);
     }
 
     fn refine_formal_out(
@@ -595,6 +597,7 @@ where
         associated_scc_tids: &Vec<Tid>,
         target_idx: NodeIndex,
     ) {
+        println!("Working on group {:?}", associated_scc_tids);
         let mut orig_repr = self.get_built_sketch_from_scc(associated_scc_tids);
         // for each in parameter without a callsite tag:
         //bind intersection
@@ -659,8 +662,9 @@ where
     }
 }
 
-impl<U: Clone + std::cmp::PartialEq + AbstractMagma<Additive>> SketchGraph<U> {
+impl<U: Display + Clone + std::cmp::PartialEq + AbstractMagma<Additive>> SketchGraph<U> {
     fn replace_dtv(&mut self, dtv: &DerivedTypeVar, sketch: Sketch<U>) {
+        println!("Target {}", self);
         self.quotient_graph
             .replace_node(dtv.clone(), sketch.quotient_graph)
     }
@@ -1169,8 +1173,8 @@ mod test {
 
         let alias_scc = parse_cons_set(
             "
-        sub_alias.in_0 <= sub_id.in_0
-        sub_id.out <= sub_alias.out
+        sub_alias.in_0 <= sub_id:0.in_0
+        sub_id:0.out <= sub_alias.out
         ",
         );
 
@@ -1178,8 +1182,8 @@ mod test {
 
         let caller1_scc = parse_cons_set(
             "
-        sub_caller1.in_0 <= sub_alias.in_0
-        sub_alias.out <= sub_caller1.out
+        sub_caller1.in_0 <= sub_alias:0.in_0
+        sub_alias:0.out <= sub_caller1.out
         sub_caller1.in_0.load <= char
         ",
         );
@@ -1188,8 +1192,8 @@ mod test {
 
         let caller2_scc = parse_cons_set(
             "
-        sub_caller2.in_0 <= sub_alias.in_0
-        sub_alias.out <= sub_caller2.out
+        sub_caller2.in_0 <= sub_alias:0.in_0
+        sub_alias:0.out <= sub_caller2.out
         sub_caller2.in_0 <= int
         ",
         );
