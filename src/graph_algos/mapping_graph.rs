@@ -136,16 +136,19 @@ impl<
         let mut old_idx_to_new_idx_mapping = HashMap::new();
 
         let mut add_node = |target_idx| {
-            *old_idx_to_new_idx_mapping
+            let new = *old_idx_to_new_idx_mapping
                 .entry(target_idx)
                 .or_insert_with(|| {
                     let weight = grph.get_graph().node_weight(target_idx).unwrap().clone();
                     self.grph.add_node(weight)
-                })
+                });
+            println!("{}", old_idx_to_new_idx_mapping.len());
+            new
         };
         grph.get_graph()
             .node_indices()
             .map(|nd| {
+                println!("Looking at nd {}", nd.index());
                 let src = add_node(nd);
                 let mut tot = Vec::new();
                 for edge in grph.get_graph().edges_directed(nd, Outgoing) {
@@ -162,10 +165,13 @@ impl<
                 self.grph.add_edge(src, dst, wt);
             });
 
+        assert!(old_idx_to_new_idx_mapping.len() > 0);
         // relabel ourselves to inclue the original labels
         // We dont need to merge because the labels are received from the graph we are replacing into so any labels inside the subgraph are not elsewhere
         let mut new_labeling = self.nodes.clone();
+        println!("{:#?}", grph.get_node_mapping());
         for (old_idx, new_idx) in old_idx_to_new_idx_mapping.iter() {
+            println!("Attempting to get group for: {}", old_idx.index());
             for n in grph.get_group_for_node(*old_idx) {
                 println!("Old n {} {}->{}", n, old_idx.index(), new_idx.index());
                 assert!(!self.nodes.contains_key(&n));

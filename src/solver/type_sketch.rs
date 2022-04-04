@@ -571,6 +571,16 @@ where
 
         call_site_type.label_dtvs(&orig_repr);
 
+        let mp = call_site_type.get_graph().get_node_mapping();
+        let idxs = call_site_type
+            .get_graph()
+            .get_graph()
+            .node_indices()
+            .collect::<BTreeSet<_>>();
+        for ty in mp.values() {
+            assert!(idxs.contains(ty));
+        }
+
         //let new_type = application_operator(orig_repr, &call_site_type);
         target_scc_repr.replace_dtv(&target_dtv, call_site_type);
 
@@ -806,6 +816,7 @@ impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
     /// Also copies the repr.
     // We can actually label without caring about the node weights
     pub fn label_dtvs<V: std::cmp::PartialEq>(&mut self, other_sketch: &Sketch<V>) {
+        println!("{}", self.get_entry().index());
         let mapping: HashMap<DerivedTypeVar, NodeIndex> =
             explore_paths(self.quotient_graph.get_graph(), self.get_entry())
                 .filter_map(|(pth, tgt)| {
@@ -833,7 +844,7 @@ impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
                 })
                 .flatten()
                 .collect();
-
+        println!("{:?}", mapping.values().collect::<Vec<_>>());
         self.quotient_graph = self.quotient_graph.relable_representative_nodes(mapping);
     }
 }
@@ -975,15 +986,15 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                 .unwrap() = new_label;
         }
 
+        let relab = weight_mapping
+            .relable_representative_nodes(HashMap::from([(self.representing.clone(), entry)]));
         // At this point we have a new graph but it's not guarenteed to be a DFA so the last thing to do is quotient it.
         // We dont need to make anything equal via constraints that's already done, we just let edges sets do the work
         let quot_groups = generate_quotient_groups::<U>(&weight_mapping, &ConstraintSet::default());
-        let quot_graph = weight_mapping.quoetient_graph(&quot_groups);
-        let relab = quot_graph
-            .relable_representative_nodes(HashMap::from([(self.representing.clone(), entry)]));
+        let quot_graph = relab.quoetient_graph(&quot_groups);
 
         Sketch {
-            quotient_graph: relab,
+            quotient_graph: quot_graph,
             representing: self.representing.clone(),
             default_label: self.default_label.clone(),
         }
