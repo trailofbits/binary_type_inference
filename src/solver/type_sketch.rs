@@ -526,6 +526,7 @@ where
             &Sketch<LatticeBounds<U>>,
         ) -> Sketch<LatticeBounds<U>>,
     ) {
+        println!("Refining: {}", target_dtv);
         let parent_nodes = condensed.neighbors_directed(target_idx, EdgeDirection::Incoming);
 
         let orig_reprs = target_scc_repr.get_representing_sketch(target_dtv.clone());
@@ -618,7 +619,10 @@ where
             .get_node_mapping()
             .iter()
             .map(|(dtv, _idx)| dtv.clone())
-            .filter(|dtv| dtv.get_base_variable().get_cs_tag().is_none() && dtv.is_out_parameter());
+            .filter(|dtv| {
+                println!("trying to find out {}", dtv);
+                dtv.get_base_variable().get_cs_tag().is_none() && dtv.is_out_parameter()
+            });
 
         for dtv in out_params.collect::<Vec<DerivedTypeVar>>() {
             self.refine_formal_out(condensed, &mut orig_repr, dtv, target_idx);
