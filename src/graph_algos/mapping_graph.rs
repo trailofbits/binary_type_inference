@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
+    fmt::{Debug, Display},
     hash::Hash,
 };
 
@@ -83,10 +84,9 @@ where
     }
 }
 
-// we can only quotient the graph if the weight is mergeable
 impl<
         W: AbstractMagma<Additive> + std::cmp::PartialEq,
-        N: Clone + Hash + Eq + Ord,
+        N: Clone + Hash + Eq + Ord + Display + Debug,
         E: Hash + Eq + Clone,
     > MappingGraph<W, N, E>
 {
@@ -140,16 +140,7 @@ impl<
                 .entry(target_idx)
                 .or_insert_with(|| {
                     let weight = grph.get_graph().node_weight(target_idx).unwrap().clone();
-                    let grp = grph.get_group_for_node(target_idx);
-                    if let Some(repr) = grp.iter().next() {
-                        let idx = self.add_node(repr.clone(), weight);
-                        for elem in grp.iter() {
-                            self.merge_nodes(repr.clone(), elem.clone());
-                        }
-                        idx
-                    } else {
-                        self.grph.add_node(weight)
-                    }
+                    self.grph.add_node(weight)
                 })
         };
         grph.get_graph()
@@ -170,6 +161,18 @@ impl<
             .for_each(|(src, wt, dst)| {
                 self.grph.add_edge(src, dst, wt);
             });
+
+        // relabel ourselves to inclue the original labels
+        // We dont need to merge because the labels are received from the graph we are replacing into so any labels inside the subgraph are not elsewhere
+        let mut new_labeling = self.nodes.clone();
+        for (old_idx, new_idx) in old_idx_to_new_idx_mapping.iter() {
+            for n in grph.get_group_for_node(*old_idx) {
+                println!("Old n {}", n);
+                assert!(!self.nodes.contains_key(&n));
+                new_labeling.insert(n, *new_idx);
+            }
+        }
+        self.inplace_relable_representative_nodes(new_labeling);
 
         // add edges into subgraph
         edges_outside_subgraph.into_iter().for_each(
@@ -195,7 +198,15 @@ impl<
         );
         // Canonicalize(preserve invariant that no two equal outgoing edges without merging nodes)
     }
+}
 
+// we can only quotient the graph if the weight is mergeable
+impl<
+        W: AbstractMagma<Additive> + std::cmp::PartialEq,
+        N: Clone + Hash + Eq + Ord,
+        E: Hash + Eq + Clone,
+    > MappingGraph<W, N, E>
+{
     pub fn add_node(&mut self, key: N, weight: W) -> NodeIndex {
         if let Some(x) = self.nodes.get(&key) {
             let old_weight = self.grph.node_weight_mut(*x).unwrap();
@@ -413,12 +424,7 @@ impl<
 impl<W: std::cmp::PartialEq + Clone, N: Clone + Hash + Eq + Ord, E: Hash + Eq + Clone>
     MappingGraph<W, N, E>
 {
-    pub fn relable_representative_nodes(
-        &self,
-        mapping: HashMap<N, NodeIndex>,
-    ) -> MappingGraph<W, N, E> {
-        // construct set
-
+    fn inplace_relable_representative_nodes(&mut self, mapping: HashMap<N, NodeIndex>) {
         let mut index_to_reprs = HashMap::new();
         mapping.iter().for_each(|(nd, idx)| {
             index_to_reprs
@@ -427,11 +433,19 @@ impl<W: std::cmp::PartialEq + Clone, N: Clone + Hash + Eq + Ord, E: Hash + Eq + 
                 .insert(nd.clone());
         });
 
-        MappingGraph {
-            grph: self.grph.clone(),
-            nodes: mapping,
-            reprs_to_graph_node: index_to_reprs,
-        }
+        self.nodes = mapping;
+        self.reprs_to_graph_node = index_to_reprs;
+    }
+
+    /// Takes a mapping of reprs to node indices to relable the graph
+    pub fn relable_representative_nodes(
+        &self,
+        mapping: HashMap<N, NodeIndex>,
+    ) -> MappingGraph<W, N, E> {
+        // construct set
+        let mut new_graph = self.clone();
+        new_graph.inplace_relable_representative_nodes(mapping);
+        return new_graph;
     }
 }
 

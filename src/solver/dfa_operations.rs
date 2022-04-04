@@ -296,14 +296,6 @@ where
 {
     let new_dfa = cartesian_product_internal(lhs, rhs, false);
 
-    println!(
-        "dfa after intersection before min {:?}",
-        new_dfa
-            .dfa_edges()
-            .iter()
-            .map(|(src, _, dst)| (src, dst))
-            .collect::<Vec<_>>()
-    );
     return minimize(&new_dfa);
 }
 
@@ -442,14 +434,7 @@ where
     U: DFA<A>,
 {
     let new_dfa = cartesian_product_internal(lhs, rhs, true);
-    println!(
-        "dfa after union before min {:?}",
-        new_dfa
-            .dfa_edges()
-            .iter()
-            .map(|(src, _, dst)| (src, dst))
-            .collect::<Vec<_>>()
-    );
+
     return minimize(&new_dfa);
 }
 
