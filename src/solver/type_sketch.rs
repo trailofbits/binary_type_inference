@@ -585,6 +585,9 @@ where
         target_scc_repr.replace_dtv(&target_dtv, call_site_type);
 
         println!("After replace {}", target_scc_repr);
+
+        // Note(Ian): we may have disconnected a node by replacing all outoing edges with edges into the scc
+        // target_scc_repr.remove_unreachable();
     }
 
     fn refine_formal_out(

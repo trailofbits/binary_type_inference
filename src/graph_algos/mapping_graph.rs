@@ -49,8 +49,12 @@ where
     E: Clone,
     N: Clone + std::cmp::Eq + Hash,
 {
+    fn get_reachable_idxs(&self, idx: NodeIndex) -> BTreeSet<NodeIndex> {
+        Dfs::new(&self.grph, idx).iter(&self.grph).collect()
+    }
+
     pub fn get_reachable_subgraph(&self, idx: NodeIndex) -> MappingGraph<W, N, E> {
-        let reachable_idxs: BTreeSet<_> = Dfs::new(&self.grph, idx).iter(&self.grph).collect();
+        let reachable_idxs: BTreeSet<_> = self.get_reachable_idxs(idx);
         let filtered_grph = self.grph.filter_map(
             |idx, nd| {
                 if reachable_idxs.contains(&idx) {
@@ -94,14 +98,9 @@ impl<
         let orig_var_idx = *self
             .get_node(&key)
             .expect("Should have node for replacement key");
-        let reached_graph = self.get_reachable_subgraph(orig_var_idx);
+        let nodes = self.get_reachable_idxs(orig_var_idx);
 
-        let nodes = reached_graph
-            .nodes
-            .iter()
-            .map(|(_nd, idx)| *idx)
-            .collect::<BTreeSet<NodeIndex>>();
-
+        println!("Reached {:?}", nodes);
         // Nodes are looked up by their original path. Since we always refine the original type we should be able to follow a path from the original
         // tvar in the refined tvar.
         let edges_outside_subgraph = explore_paths(&self.grph, orig_var_idx)
