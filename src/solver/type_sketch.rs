@@ -514,6 +514,20 @@ where
         new_repr
     }
 
+    fn replace_scc_repr(
+        &mut self,
+        associated_scc_tids: &Vec<Tid>,
+        sg: SketchGraph<LatticeBounds<U>>,
+    ) {
+        assert!(!associated_scc_tids.is_empty());
+        let shared = Rc::new(sg);
+
+        for tid in associated_scc_tids {
+            let target_tvar = tid_to_tvar(tid);
+            self.scc_repr.insert(target_tvar, shared.clone());
+        }
+    }
+
     // TODO(ian): this could be generalized to let us swap to different lattice reprs
     fn refine_formal(
         &self,
@@ -534,13 +548,15 @@ where
         // There should only be one representation of a formal in an SCC
         assert_eq!(orig_reprs.len(), 1);
         let orig_repr = &orig_reprs[0];
-
         let mut call_site_type = parent_nodes
             .map(|scc_idx| {
                 let wt = condensed
                     .node_weight(scc_idx)
                     .expect("Should have weight for node index");
+                println!("{:?}", wt);
                 let repr_graph = self.get_built_sketch_from_scc(&wt);
+
+                println!("Fetching type from {}", repr_graph);
                 let sketch =
                     repr_graph.get_representing_sketchs_ignoring_callsite_tags(target_dtv.clone());
                 for s in sketch.iter() {
@@ -628,7 +644,7 @@ where
             self.refine_formal_out(condensed, &mut orig_repr, dtv, target_idx);
         }
 
-        // for each parameter in the scc without
+        self.replace_scc_repr(associated_scc_tids, orig_repr);
     }
 
     pub fn bind_polymorphic_types(&mut self) -> anyhow::Result<()> {
@@ -682,10 +698,13 @@ impl<U: Display + Clone + std::cmp::PartialEq + AbstractMagma<Additive>> SketchG
             .get_node_mapping()
             .iter()
             .filter(|(canidate, _idx)| flter(canidate))
-            .map(|(repr_dtv, idx)| Sketch {
-                quotient_graph: self.quotient_graph.get_reachable_subgraph(*idx),
-                representing: repr_dtv.clone(),
-                default_label: self.default_label.clone(),
+            .map(|(repr_dtv, idx)| {
+                println!("Found at idx: {}", idx.index());
+                Sketch {
+                    quotient_graph: self.quotient_graph.get_reachable_subgraph(*idx),
+                    representing: repr_dtv.clone(),
+                    default_label: self.default_label.clone(),
+                }
             })
             .collect()
     }
