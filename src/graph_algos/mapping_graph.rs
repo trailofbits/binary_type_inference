@@ -112,6 +112,8 @@ impl<
 
                 incoming_edges
                     .filter_map(|orig_e| {
+                        println!("{} {}", orig_e.source().index(), orig_e.target().index());
+                        // TODO(Ian): saw a reflexive edge in the original graph... why?
                         assert!(orig_e.source() != reached_id);
                         if nodes.contains(&orig_e.source()) {
                             //internal _edge
@@ -155,8 +157,9 @@ impl<
             .map(|nd| {
                 let src = add_node(nd);
                 let mut tot = Vec::new();
-                for edge in grph.get_graph().edges_directed(src, Outgoing) {
+                for edge in grph.get_graph().edges_directed(nd, Outgoing) {
                     let dst = add_node(edge.target());
+                    assert!(src != dst);
                     tot.push((src, edge.weight().clone(), dst));
                 }
                 tot.into_iter()
@@ -185,6 +188,7 @@ impl<
                     let new_idx = old_idx_to_new_idx_mapping
                         .get(&old_idx)
                         .expect("all old idxs should be added");
+                    assert!(src_node != *new_idx);
                     self.grph.add_edge(src_node, *new_idx, edge_weight);
                 }
             },
