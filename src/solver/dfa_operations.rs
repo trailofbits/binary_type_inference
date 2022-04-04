@@ -255,8 +255,13 @@ where
 
     let all_nodes = paritions
         .iter()
-        .map(|x| x.into_iter().cloned())
-        .flatten()
+        .filter_map(|part| {
+            if !part.is_empty() {
+                Some(cont.get_node(part.clone()))
+            } else {
+                None
+            }
+        })
         .collect::<BTreeSet<_>>();
 
     let all_accept_nodes = accepts
@@ -284,6 +289,29 @@ where
     T: DFA<A>,
     U: DFA<A>,
 {
+    let new_dfa = cartesian_product_internal(lhs, rhs, false);
+
+    println!(
+        "dfa after intersection before min {:?}",
+        new_dfa
+            .dfa_edges()
+            .iter()
+            .map(|(src, _, dst)| (src, dst))
+            .collect::<Vec<_>>()
+    );
+    return minimize(&new_dfa);
+}
+
+fn cartesian_product_internal<T, U, A>(
+    lhs: &T,
+    rhs: &U,
+    should_accept_nodes_with_one_reject: bool,
+) -> impl DFA<A>
+where
+    A: Alphabet,
+    T: DFA<A>,
+    U: DFA<A>,
+{
     let mut cont = IdContext::default();
 
     let lhs_edge_map = create_edge_map(lhs);
@@ -298,26 +326,47 @@ where
     let mut new_edges: BTreeSet<(usize, A, usize)> = BTreeSet::new();
 
     for (fst, snd) in lhs_idxs.iter().cartesian_product(rhs_idxs.clone()) {
-        if let Some(edges) = lhs_edge_map.get(fst) {
-            for (a, dst) in edges.iter() {
-                if let Some(snd_edges) = rhs_edge_map.get(&snd) {
-                    if let Some(snd_dst) = snd_edges.get(a) {
-                        let new_src = cont.get_node((*fst, snd));
-                        let new_dst = cont.get_node((*dst, *snd_dst));
-                        new_edges.insert((new_src, a.clone(), new_dst));
-                    }
-                }
-            }
+        let emp_edge_map = BTreeMap::new();
+        let lhs_edges = lhs_edge_map.get(fst).unwrap_or(&emp_edge_map);
+        let rhs_edges = rhs_edge_map.get(&snd).unwrap_or(&emp_edge_map);
+
+        for a in lhs_edges.keys().chain(rhs_edges.keys()) {
+            let lhs_target = lhs_edges
+                .get(a)
+                .cloned()
+                .expect("Every node should have an edge for each alphabet character in a DFA");
+            let rhs_target = rhs_edges
+                .get(a)
+                .cloned()
+                .expect("Every node should have an edge for each alphabet character in a DFA");
+
+            let new_src = cont.get_node((*fst, snd));
+            let new_dst = cont.get_node((lhs_target, rhs_target));
+            new_edges.insert((new_src, a.clone(), new_dst));
         }
     }
 
+    let accept_idxs_lhs = lhs.accept_indices();
     let accept_idxs_rhs = rhs.accept_indices();
-    let accept_indexes: BTreeSet<usize> = lhs
-        .accept_indices()
-        .into_iter()
-        .cartesian_product(accept_idxs_rhs)
-        .map(|(fst, snd)| cont.get_node((fst, snd)))
-        .collect();
+    let accept_indexes: BTreeSet<usize> = if !should_accept_nodes_with_one_reject {
+        accept_idxs_lhs
+            .into_iter()
+            .cartesian_product(accept_idxs_rhs)
+            .map(|(fst, snd)| cont.get_node((fst, snd)))
+            .collect()
+    } else {
+        let laccept = accept_idxs_lhs
+            .into_iter()
+            .cartesian_product(rhs_idxs.clone())
+            .map(|(fst, snd)| cont.get_node((fst, snd)))
+            .collect::<Vec<_>>()
+            .into_iter();
+        let r_accept = lhs_idxs
+            .iter()
+            .cartesian_product(accept_idxs_rhs)
+            .map(|(fst, snd)| cont.get_node((*fst, snd)));
+        laccept.chain(r_accept).collect()
+    };
 
     let all_indeces = lhs_idxs
         .iter()
@@ -387,58 +436,16 @@ where
     T: DFA<A>,
     U: DFA<A>,
 {
-    let mut cont = UnionContext::new(lhs.entry(), rhs.entry());
-
-    let mut copied_edges = lhs
-        .dfa_edges()
-        .into_iter()
-        .map(|(src, a, dst)| (cont.get_lhs_node(src), a, cont.get_lhs_node(dst)))
-        .collect::<BTreeSet<(usize, A, usize)>>();
-
-    let rhs_edges: Vec<_> = rhs
-        .dfa_edges()
-        .into_iter()
-        .map(|(src, a, dst)| (cont.get_rhs_node(src), a, cont.get_rhs_node(dst)))
-        .collect();
-
-    copied_edges.extend(rhs_edges);
-
-    //accepts are the union of previous accepts we also have to check if the entries were accepts
-    let all_accepts = lhs
-        .accept_indices()
-        .into_iter()
-        .map(|x| cont.get_lhs_node(x))
-        .collect::<Vec<_>>()
-        .into_iter()
-        .chain(
-            rhs.accept_indices()
-                .into_iter()
-                .map(|x| cont.get_rhs_node(x)),
-        )
-        .collect::<BTreeSet<_>>();
-
-    let mut all_states = lhs
-        .all_indices()
-        .into_iter()
-        .map(|x| cont.get_lhs_node(x))
-        .collect::<BTreeSet<_>>();
-
-    let rhs_states = rhs
-        .all_indices()
-        .into_iter()
-        .chain(rhs.all_indices().into_iter().map(|x| cont.get_rhs_node(x)))
-        .collect::<BTreeSet<_>>();
-
-    all_states.extend(rhs_states);
-
-    let ent_id = cont.get_lhs_node(lhs.entry());
-
-    ExplicitDFA {
-        ent_id,
-        edges: copied_edges,
-        accept_indexes: all_accepts,
-        all_indeces: all_states,
-    }
+    let new_dfa = cartesian_product_internal(lhs, rhs, true);
+    println!(
+        "dfa after union before min {:?}",
+        new_dfa
+            .dfa_edges()
+            .iter()
+            .map(|(src, _, dst)| (src, dst))
+            .collect::<Vec<_>>()
+    );
+    return minimize(&new_dfa);
 }
 
 #[cfg(test)]
@@ -446,34 +453,76 @@ mod test {
     impl Alphabet for usize {}
     use std::collections::BTreeSet;
 
-    use crate::solver::dfa_operations::{minimize, DFA};
+    use crate::solver::dfa_operations::{cartesian_product_internal, minimize, DFA};
 
-    use super::{intersection, Alphabet, ExplicitDFA};
+    use super::{Alphabet, ExplicitDFA};
 
     #[test]
     fn test_null_intersection() {
         let lhs = ExplicitDFA::<usize> {
             ent_id: 0,
-            edges: BTreeSet::new(),
+            edges: BTreeSet::from([(0, 10, 1), (1, 10, 1)]),
             accept_indexes: BTreeSet::from([0]),
-            all_indeces: BTreeSet::from([0]),
+            all_indeces: BTreeSet::from([0, 1]),
         };
 
         let rhs = ExplicitDFA::<usize> {
             ent_id: 0,
-            edges: BTreeSet::from([(0, 10, 2)]),
+            edges: BTreeSet::from([(0, 10, 2), (2, 10, 2)]),
             accept_indexes: BTreeSet::from([0, 2]),
             all_indeces: BTreeSet::from([0, 2]),
         };
 
-        let new_dfa = intersection(&lhs, &rhs);
+        let new_dfa = cartesian_product_internal(&lhs, &rhs, false);
 
         assert_eq!(new_dfa.accept_indices().len(), 2);
-        assert_eq!(new_dfa.all_indices().len(), 2);
+        assert_eq!(new_dfa.all_indices().len(), 4);
 
-        assert_eq!(new_dfa.dfa_edges().len(), 0);
+        // we shouldnt have incoming edges to accept nodes.
+        for accept_idx in new_dfa.accept_indices() {
+            assert!(new_dfa
+                .dfa_edges()
+                .into_iter()
+                .find(|(_src, _, dst)| *dst == accept_idx)
+                .is_none());
+        }
 
         let min = minimize(&new_dfa);
-        assert_eq!(min.all_indices().len(), 1);
+        // just need an accept and then a reject
+        assert_eq!(min.all_indices().len(), 2);
+        assert_eq!(min.accept_indices().len(), 1);
+    }
+
+    #[test]
+    fn test_simple_union() {
+        let lhs = ExplicitDFA::<usize> {
+            ent_id: 0,
+            edges: BTreeSet::from([(0, 10, 1), (1, 10, 1)]),
+            accept_indexes: BTreeSet::from([0]),
+            all_indeces: BTreeSet::from([0, 1]),
+        };
+
+        let rhs = ExplicitDFA::<usize> {
+            ent_id: 0,
+            edges: BTreeSet::from([(0, 10, 2), (2, 10, 2)]),
+            accept_indexes: BTreeSet::from([0, 2]),
+            all_indeces: BTreeSet::from([0, 2]),
+        };
+
+        let new_dfa = cartesian_product_internal(&lhs, &rhs, true);
+
+        assert_eq!(new_dfa.accept_indices().len(), 4);
+        assert_eq!(new_dfa.all_indices().len(), 4);
+
+        assert_eq!(new_dfa.dfa_edges().len(), 4);
+
+        let minimal_dfa = minimize(&new_dfa);
+
+        assert_eq!(minimal_dfa.accept_indices().len(), 1);
+        assert_eq!(minimal_dfa.all_indices().len(), 1);
+        assert_eq!(minimal_dfa.dfa_edges().len(), 1);
+
+        let (src, _, dst) = minimal_dfa.dfa_edges()[0];
+        assert_eq!(src, dst);
     }
 }
