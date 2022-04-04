@@ -32,6 +32,7 @@ use petgraph::{
     graph::NodeIndex,
     graph::{EdgeIndex, Graph},
 };
+use EdgeDirection::Outgoing;
 
 use crate::analysis::callgraph::CallGraph;
 use crate::constraint_generation::{self, tid_to_tvar};
@@ -42,7 +43,7 @@ use crate::graph_algos::mapping_graph::{self, MappingGraph};
 use crate::graph_algos::{explore_paths, find_node};
 
 use super::constraint_graph::TypeVarNode;
-use super::dfa_operations::{union, Alphabet, Indices, DFA};
+use super::dfa_operations::{union, Alphabet, ExplicitDFA, Indices, DFA};
 use super::scc_constraint_generation::SCCConstraints;
 use super::type_lattice::{
     CustomLatticeElement, LatticeDefinition, NamedLattice, NamedLatticeElement,
@@ -703,39 +704,6 @@ use crate::solver::dfa_operations::intersection;
 
 impl Alphabet for FieldLabel {}
 
-impl<T: std::cmp::PartialEq> DFA<FieldLabel> for Sketch<T> {
-    fn entry(&self) -> usize {
-        self.quotient_graph
-            .get_node(&self.representing)
-            .expect("subgraph should contain represented node")
-            .index()
-    }
-
-    fn accept_indices(&self) -> Indices {
-        self.quotient_graph
-            .get_graph()
-            .node_indices()
-            .map(|i| i.index())
-            .collect()
-    }
-
-    fn all_indices(&self) -> Indices {
-        self.quotient_graph
-            .get_graph()
-            .node_indices()
-            .map(|i| i.index())
-            .collect()
-    }
-
-    fn dfa_edges(&self) -> Vec<(usize, FieldLabel, usize)> {
-        self.quotient_graph
-            .get_graph()
-            .edge_references()
-            .map(|e| (e.source().index(), e.weight().clone(), e.target().index()))
-            .collect()
-    }
-}
-
 struct ReprMapping(BTreeMap<NodeIndex, (Option<NodeIndex>, Option<NodeIndex>)>);
 
 impl Deref for ReprMapping {
@@ -879,6 +847,23 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
             grph.add_edge(*st, *end, w);
         });
 
+        // So two cases here allow us to remove reject nodes without worrying about it.
+        // In a union there is only one node (rej,rej) it had no edges so all edges will go to reject so we can simply remove it and all incoming edges
+        // In the case of the intersection, any node with a reject on either side will be reject. But a reject node can never make it back to accept node because
+        // reject nodes have no outgoing nodes that dont loop back. So we can remove all the reject nodes since they will never reach an accept node.
+
+        let accepts = BTreeSet::from_iter(dfa.accept_indices().into_iter());
+        for reject_idx in dfa
+            .all_indices()
+            .into_iter()
+            .filter(|idx| !accepts.contains(idx))
+        {
+            let nd_idx = mp
+                .get(&reject_idx)
+                .expect("all indicies should be contained in the mapping");
+            grph.remove_node(*nd_idx);
+        }
+
         (
             *mp.get(&dfa.entry())
                 .expect("Entry should be in all_indices"),
@@ -915,15 +900,28 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         )
     }
 
-    fn binop_sketch(
+    fn binop_sketch<D: DFA<FieldLabel>>(
         &self,
         other: &Sketch<U>,
         lattice_op: &impl Fn(&U, &U) -> U,
-        resultant_grph: impl DFA<FieldLabel>,
+        dfa_op: &impl Fn(&ExplicitDFA<FieldLabel>, &ExplicitDFA<FieldLabel>) -> D,
     ) -> Sketch<U> {
         // Shouldnt operate over sketches representing different types
         // We ignore callsite tags
         assert!(self.representing.to_callee() == other.representing.to_callee());
+
+        let alphabet = self
+            .quotient_graph
+            .get_graph()
+            .edge_references()
+            .chain(other.quotient_graph.get_graph().edge_references())
+            .map(|x| x.weight().clone())
+            .collect::<BTreeSet<_>>();
+
+        let resultant_grph = dfa_op(
+            &self.construct_dfa(&alphabet),
+            &other.construct_dfa(&alphabet),
+        );
 
         let (entry, grph) = self.create_graph_from_dfa(&resultant_grph);
         println!("Unlabeled dfa: {}", Dot::new(&grph));
@@ -968,12 +966,71 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         }
     }
 
+    // Note we cant implement DFA for sketches since DFAs are expected to be complete
+    fn construct_dfa(&self, alphabet: &BTreeSet<FieldLabel>) -> ExplicitDFA<FieldLabel> {
+        let accept_idxs = self
+            .quotient_graph
+            .get_graph()
+            .node_indices()
+            .map(|x| x.index())
+            .collect::<BTreeSet<_>>();
+
+        let reject_idx = accept_idxs.iter().max().cloned().unwrap_or(0) + 1;
+
+        let mut reject_idxs = accept_idxs.clone();
+        reject_idxs.insert(reject_idx);
+
+        let entry_idx = self.get_entry().index();
+
+        let mut edges = self
+            .quotient_graph
+            .get_graph()
+            .node_indices()
+            .map(|nd_idx| {
+                let out_edges = self
+                    .quotient_graph
+                    .get_graph()
+                    .edges_directed(nd_idx, Outgoing)
+                    .map(|e| (e.weight(), e.target()))
+                    .collect::<HashMap<_, _>>();
+
+                alphabet
+                    .iter()
+                    .map(|a| {
+                        (
+                            nd_idx.index(),
+                            a.clone(),
+                            out_edges
+                                .get(a)
+                                .map(|idx| idx.index())
+                                .unwrap_or(reject_idx),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+            })
+            .flatten()
+            .collect::<BTreeSet<_>>();
+
+        // Reject just stays reject forever.
+        for a in alphabet {
+            edges.insert((reject_idx, a.clone(), reject_idx));
+        }
+
+        ExplicitDFA {
+            ent_id: entry_idx,
+            accept_indexes: accept_idxs,
+            all_indeces: reject_idxs,
+            edges,
+        }
+    }
+
     fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
-        self.binop_sketch(other, &U::meet, union(self, other))
+        self.binop_sketch(other, &U::meet, &union)
     }
 
     fn union(&self, other: &Sketch<U>) -> Sketch<U> {
-        self.binop_sketch(other, &U::join, intersection(self, other))
+        self.binop_sketch(other, &U::join, &intersection)
     }
 }
 
