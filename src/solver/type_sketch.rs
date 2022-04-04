@@ -926,6 +926,7 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         assert!(self.representing.to_callee() == other.representing.to_callee());
 
         let (entry, grph) = self.create_graph_from_dfa(&resultant_grph);
+        println!("Unlabeled dfa: {}", Dot::new(&grph));
         // maps a new node index to an optional representation in both original graphs
 
         // find path to each node in grph lookup in both sketches intersect and annotate with set of nodes it is representing
