@@ -100,7 +100,6 @@ impl<
             .expect("Should have node for replacement key");
         let nodes = self.get_reachable_idxs(orig_var_idx);
 
-        println!("Reached {:?}", nodes);
         // Nodes are looked up by their original path. Since we always refine the original type we should be able to follow a path from the original
         // tvar in the refined tvar.
         let edges_outside_subgraph = explore_paths(&self.grph, orig_var_idx)
@@ -111,7 +110,6 @@ impl<
 
                 incoming_edges
                     .filter_map(|orig_e| {
-                        println!("{} {}", orig_e.source().index(), orig_e.target().index());
                         // TODO(Ian): saw a reflexive edge in the original graph... why?
                         assert!(orig_e.source() != reached_id);
                         if nodes.contains(&orig_e.source()) {
@@ -168,11 +166,9 @@ impl<
         // relabel ourselves to inclue the original labels
         // We dont need to merge because the labels are received from the graph we are replacing into so any labels inside the subgraph are not elsewhere
         let mut new_labeling = self.nodes.clone();
-        println!("{:#?}", grph.get_node_mapping());
+
         for (old_idx, new_idx) in old_idx_to_new_idx_mapping.iter() {
-            println!("Attempting to get group for: {}", old_idx.index());
             for n in grph.get_group_for_node(*old_idx) {
-                println!("Old n {} {}->{}", n, old_idx.index(), new_idx.index());
                 assert!(!self.nodes.contains_key(&n));
                 new_labeling.insert(n, *new_idx);
             }

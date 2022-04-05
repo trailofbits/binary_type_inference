@@ -548,6 +548,7 @@ where
         // There should only be one representation of a formal in an SCC
         assert_eq!(orig_reprs.len(), 1);
         let orig_repr = &orig_reprs[0];
+        println!("Orig repr {}", orig_repr);
         let mut call_site_type = parent_nodes
             .map(|scc_idx| {
                 let wt = condensed
@@ -566,6 +567,7 @@ where
             })
             .flatten()
             .reduce(|lhs, rhs| merge_operator(&lhs, &rhs))
+            .map(|merged| merged.intersect(orig_repr))
             .unwrap_or(orig_repr.clone());
         println!("Merged param type for: {} {}", target_dtv, call_site_type);
 
@@ -1413,8 +1415,8 @@ mod test {
 
         let caller1_scc = parse_cons_set(
             "
-        sub_caller1.in_0 <= sub_id.in_0
-        sub_id.out <= sub_caller1.out
+        sub_caller1.in_0 <= sub_id:0.in_0
+        sub_id:0.out <= sub_caller1.out
         sub_caller1.in_0.load <= char
         ",
         );
@@ -1423,8 +1425,8 @@ mod test {
 
         let caller2_scc = parse_cons_set(
             "
-        sub_caller2.in_0 <= sub_id.in_0
-        sub_id.out <= sub_caller2.out
+        sub_caller2.in_0 <= sub_id:0.in_0
+        sub_id:0.out <= sub_caller2.out
         sub_caller2.in_0.load <= int
         ",
         );
@@ -1516,7 +1518,7 @@ mod test {
         let nidx = e.target();
 
         let wt = &sg_id.as_ref().quotient_graph.get_graph()[nidx];
-        assert_eq!(wt.upper_bound.get_name(), "bytetype");
+        assert_eq!(wt.upper_bound.get_name(), "bottom");
         assert_eq!(wt.lower_bound.get_name(), "bottom");
     }
 
