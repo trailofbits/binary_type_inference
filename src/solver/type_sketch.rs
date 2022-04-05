@@ -559,7 +559,11 @@ where
         // resulting labeling is tricky because we could end up referencing the in parameter within a bound type which wont actually have that dtv label since we dont copy them down.
         // We should only label base variables imo. This means we look through the scc and find the sccs base variables within the graph
         for (dtv, tgt_idx) in sg.quotient_graph.get_node_mapping().iter() {
-            if dtv.get_field_labels().len() == 0 && dtv.get_base_variable().get_cs_tag().is_none() {
+            if dtv.get_field_labels().len() == 0
+                && dtv.get_base_variable().get_cs_tag().is_none()
+                // Dont want labels for concrete types, no need to solve for them if not used.
+                && !self.type_lattice_elements.contains(dtv.get_base_variable())
+            {
                 resulting_labeling.insert(
                     dtv.clone(),
                     *location_to_index
@@ -595,8 +599,8 @@ where
         }
 
         let mp = MappingGraph::from_dfa_and_labeling(resulting_graph);
-        let final_graph = mp.relable_representative_nodes(resulting_labeling);
-
+        let mut final_graph = mp.relable_representative_nodes(resulting_labeling);
+        final_graph.remove_nodes_unreachable_from_label();
         Ok(SketchGraph {
             quotient_graph: final_graph,
             default_label: self.identity_element(),

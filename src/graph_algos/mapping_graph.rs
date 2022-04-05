@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt::{Debug, Display},
     hash::Hash,
 };
@@ -32,13 +32,34 @@ pub struct MappingGraph<W, N, E> {
     reprs_to_graph_node: HashMap<NodeIndex, BTreeSet<N>>,
 }
 
-impl<W, N, E> MappingGraph<W, N, E> {
+impl<W, N: Debug, E> MappingGraph<W, N, E> {
     /// Produces an unlabeled mapping graph from a DFA, actually we should just take the stable digraph here.
     pub fn from_dfa_and_labeling(dfa: StableDiGraph<W, E>) -> MappingGraph<W, N, E> {
         MappingGraph {
             grph: dfa,
             nodes: HashMap::new(),
             reprs_to_graph_node: HashMap::new(),
+        }
+    }
+
+    /// Clean up the mapping graph to only keep around parts of the graph that are reachable from a label (we dont care about anything not reacable because we only need to type vars)
+    pub fn remove_nodes_unreachable_from_label(&mut self) {
+        let stack = self.nodes.values().cloned().collect::<Vec<_>>();
+        println!("map before remove: {:#?}", self.nodes);
+        let mut dfs = Dfs::from_parts(stack, HashSet::new());
+        let mut reached = BTreeSet::new();
+        while let Some(nx) = dfs.next(&self.grph) {
+            reached.insert(nx);
+        }
+
+        for unreached_idx in self
+            .grph
+            .node_indices()
+            .filter(|x| !reached.contains(x))
+            .collect::<Vec<_>>()
+        {
+            // NOTE(Ian): ok to remove since it isnt labeled
+            self.grph.remove_node(unreached_idx);
         }
     }
 }
