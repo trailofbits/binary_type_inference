@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Debug,
     hash::Hash,
+    iter::FromIterator,
 };
 
 use itertools::Itertools;
@@ -160,8 +161,7 @@ fn partition_vector_to_id_map<'a>(
         .collect()
 }
 
-/// Simple and ineffecient minimization of a DFA by building the Myhill–Nerode relation directly.
-pub fn minimize<T, A>(lhs: &T) -> impl DFA<A>
+fn get_reachable_idxs<T, A>(lhs: &T) -> BTreeSet<usize>
 where
     A: Alphabet,
     T: DFA<A>,
@@ -182,7 +182,16 @@ where
     } else {
         BTreeSet::from([lhs.entry()])
     };
+    reached_idxs
+}
 
+/// Simple and ineffecient minimization of a DFA by building the Myhill–Nerode relation directly.
+pub fn minimize<T, A>(lhs: &T) -> impl DFA<A>
+where
+    A: Alphabet,
+    T: DFA<A>,
+{
+    let reached_idxs = get_reachable_idxs(lhs);
     let accepts = lhs
         .accept_indices()
         .into_iter()
@@ -423,9 +432,7 @@ impl UnionContext {
     }
 }
 
-/// Unions the DFA by merging entry nodes
-/// TODO(ian): this doesnt actually work because it creates an NFA
-/// TODO(ian): do a product construction for the union instead
+/// Unions the DFA by cartesian product
 pub fn union<T, U, A>(lhs: &T, rhs: &U) -> impl DFA<A>
 where
     A: Alphabet,
@@ -436,6 +443,35 @@ where
     let new_dfa = cartesian_product_internal(lhs, rhs, true);
 
     return minimize(&new_dfa);
+}
+
+/// Compplement of the DFA
+pub fn complement<T, A>(lhs: &T) -> impl DFA<A>
+where
+    A: Alphabet,
+    A: Debug,
+    T: DFA<A>,
+{
+    let all_indeces = BTreeSet::from_iter(lhs.all_indices().into_iter());
+    let accept_indeces = BTreeSet::from_iter(lhs.accept_indices().into_iter());
+
+    let new_accepts = all_indeces.difference(&accept_indeces).cloned().collect();
+
+    ExplicitDFA {
+        ent_id: lhs.entry(),
+        all_indeces: all_indeces,
+        accept_indexes: new_accepts,
+        edges: BTreeSet::from_iter(lhs.dfa_edges().into_iter()),
+    }
+}
+
+/// Checks if this DFA's language is empty
+pub fn is_empty_language<A: Alphabet>(lhs: &impl DFA<A>) -> bool {
+    let reached = get_reachable_idxs(lhs);
+    // if the language is empty we shouldnt be able to reach any accept idxs
+    !lhs.accept_indices()
+        .into_iter()
+        .any(|aidx| reached.contains(&aidx))
 }
 
 #[cfg(test)]
