@@ -11,18 +11,20 @@ use cwe_checker_lib::{
         graph::{Graph, Node},
         pointer_inference::Config,
     },
-    intermediate_representation::{ExternSymbol, Project, Tid},
+    intermediate_representation::{Project, Tid},
     utils::binary::RuntimeMemoryImage,
 };
 use petgraph::graph::NodeIndex;
 use serde::de::DeserializeOwned;
-use tempdir::TempDir;
 
 use crate::{
     analysis::{callgraph, fixup_returns},
     constraint_generation::NodeContext,
-    constraints::{ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable, VariableManager},
-    lowering::CType,
+    constraints::{
+        AdditionalConstraint, ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable,
+        VariableManager,
+    },
+    lowering::{self, CType},
     node_context::{
         points_to::PointsToContext,
         register_map::{self, RegisterContext},
@@ -31,8 +33,10 @@ use crate::{
     solver::{
         constraint_graph::RuleContext,
         scc_constraint_generation::{self, SCCConstraints},
-        type_lattice::{CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition},
-        type_sketch::SketchGraph,
+        type_lattice::{
+            CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLatticeElement,
+        },
+        type_sketch::{LatticeBounds, SketchGraph, SketchGraphBuilder},
     },
 };
 use crate::{ctypes, pb_constraints};
@@ -69,7 +73,7 @@ pub struct InferenceJob {
     proj: Project,
     lattice: EnumeratedNamedLattice,
     weakest_integral_type: TypeVariable,
-    additional_constraints: ConstraintSet,
+    additional_constraints: BTreeMap<Tid, ConstraintSet>,
     interesting_tids: HashSet<Tid>,
     vman: VariableManager,
 }
@@ -119,6 +123,17 @@ impl InferenceParsing<Tid> for ProtobufDef {
             .into_iter()
             .map(|x: ctypes::Tid| Tid::create(x.name, x.address))
             .collect())
+    }
+}
+
+impl InferenceParsing<AdditionalConstraint> for ProtobufDef {
+    fn parse_collection<R: Read>(rdr: R) -> anyhow::Result<Vec<AdditionalConstraint>> {
+        try_from_collection::<
+            pb_constraints::AdditionalConstraint,
+            AdditionalConstraint,
+            ProtobufParsing,
+            R,
+        >(rdr)
     }
 }
 
@@ -188,19 +203,21 @@ impl InferenceJob {
         ))
     }
 
-    fn parse_additional_constraints<T: InferenceParsing<SubtypeConstraint>>(
+    fn parse_additional_constraints<T: InferenceParsing<AdditionalConstraint>>(
         additional_constraints_file: &str,
-    ) -> anyhow::Result<ConstraintSet> {
+    ) -> anyhow::Result<BTreeMap<Tid, ConstraintSet>> {
         let constraint_file =
             std::fs::File::open(additional_constraints_file).context("additional constraints")?;
         let constraints = T::parse_collection(constraint_file)?;
 
-        let additional_constraints: BTreeSet<TyConstraint> = constraints
+        Ok(constraints
             .into_iter()
-            .map(|x| TyConstraint::SubTy(x))
-            .collect::<BTreeSet<TyConstraint>>();
-
-        Ok(ConstraintSet::from(additional_constraints))
+            .fold(BTreeMap::new(), |mut acc, add_cons| {
+                acc.entry(add_cons.associated_variable)
+                    .or_insert_with(|| ConstraintSet::default())
+                    .insert(TyConstraint::SubTy(add_cons.constraint));
+                acc
+            }))
     }
 
     fn parse_tid_set<T: InferenceParsing<Tid>>(
@@ -277,7 +294,7 @@ impl InferenceJob {
             .map(|(name, _elem)| TypeVariable::new(name.clone()))
     }
 
-    pub fn get_additional_constraints(&self) -> &ConstraintSet {
+    pub fn get_additional_constraints(&self) -> &BTreeMap<Tid, ConstraintSet> {
         &self.additional_constraints
     }
 
@@ -343,44 +360,41 @@ impl InferenceJob {
 
     pub fn get_labeled_sketch_graph(
         &self,
-        constraints: &ConstraintSet,
-    ) -> SketchGraph<CustomLatticeElement> {
-        let grph = SketchGraph::<()>::new(&constraints);
-        let lbling_context =
-            LabelingContext::new(&self.lattice, self.get_lattice_elems().collect());
-        let labeled_graph = lbling_context.create_labeled_sketchgraph(constraints, &grph);
+        scc_constraints: Vec<scc_constraint_generation::SCCConstraints>,
+    ) -> anyhow::Result<SketchGraph<LatticeBounds<CustomLatticeElement>>> {
+        let cg = callgraph::Context::new(&self.proj).get_graph();
+        let elems = self.get_lattice_elems();
+        let mut bldr = SketchGraphBuilder::new(
+            cg,
+            scc_constraints,
+            &self.lattice,
+            self.get_lattice_elems().collect(),
+        );
 
-        labeled_graph
+        bldr.build()?;
+        bldr.build_global_type_graph()
     }
 
-    pub fn lower_labeled_sketch_graph(
-        sg: &SketchGraph<CustomLatticeElement>,
+    pub fn lower_labeled_sketch_graph<U: NamedLatticeElement>(
+        sg: &SketchGraph<LatticeBounds<U>>,
     ) -> anyhow::Result<HashMap<NodeIndex, CType>> {
-        let facts_in_path = TempDir::new("facts_in")?;
-        let facts_out_path = TempDir::new("facts_out")?;
-        crate::lowering::collect_ctypes(&sg, facts_in_path, facts_out_path)
-    }
-
-    pub fn scc_constraints_to_constraints(scc_constraints: Vec<SCCConstraints>) -> ConstraintSet {
-        scc_constraints.into_iter().map(|x| x.constraints).fold(
-            ConstraintSet::default(),
-            |mut x, y| {
-                x.insert_all(&y);
-                x
-            },
-        )
+        lowering::collect_ctypes(sg)
     }
 
     pub fn infer_ctypes(
         &mut self,
         // debug_dir: &PathBuf,
-    ) -> anyhow::Result<(SketchGraph<CustomLatticeElement>, HashMap<NodeIndex, CType>)> {
+    ) -> anyhow::Result<(
+        SketchGraph<LatticeBounds<CustomLatticeElement>>,
+        HashMap<NodeIndex, CType>,
+    )> {
         self.recover_additional_shared_returns();
-        let mut cons = Self::scc_constraints_to_constraints(self.get_simplified_constraints()?);
-        //immutably_push(debug_dir, "constraints.ctxt");
+        let cons = self.get_simplified_constraints()?;
 
-        cons.insert_all(&self.additional_constraints);
-        let labeled_graph = self.get_labeled_sketch_graph(&cons);
+        // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.
+        todo!();
+
+        let labeled_graph = self.get_labeled_sketch_graph(cons)?;
         let lowered = Self::lower_labeled_sketch_graph(&labeled_graph)?;
         Ok((labeled_graph, lowered))
     }
@@ -389,7 +403,7 @@ impl InferenceJob {
         &self.interesting_tids
     }
 
-    pub fn parse<T: InferenceParsing<SubtypeConstraint> + InferenceParsing<Tid>>(
+    pub fn parse<T: InferenceParsing<AdditionalConstraint> + InferenceParsing<Tid>>(
         def: &JobDefinition,
     ) -> anyhow::Result<InferenceJob> {
         let bin = Self::parse_binary(&def.binary_path).with_context(|| "Trying to parse binary")?;

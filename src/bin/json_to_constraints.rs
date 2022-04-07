@@ -1,4 +1,4 @@
-/*use binary_type_inference::{
+use binary_type_inference::{
     constraint_generation,
     constraints::{
         parse_constraint_set, ConstraintSet, DerivedTypeVar, SubtypeConstraint, TyConstraint,
@@ -6,7 +6,6 @@
     },
     ctypes::{self},
     inference_job::{InferenceJob, JobDefinition, JsonDef, ProtobufDef},
-    lowering::immutably_push,
     node_context,
     pb_constraints::{self},
     solver::{
@@ -61,6 +60,15 @@ fn parse_collection_from_file<T: Message + Default>(filename: &str) -> anyhow::R
             }
         }
     }
+}
+
+pub fn immutably_push<P>(pb: &PathBuf, new_path: P) -> PathBuf
+where
+    P: AsRef<Path>,
+{
+    let mut npath = pb.clone();
+    npath.push(new_path);
+    npath
 }
 
 fn main() -> anyhow::Result<()> {
@@ -118,8 +126,8 @@ fn main() -> anyhow::Result<()> {
 
     let (grph, ctypes) = if_job.infer_ctypes()?;
 
-    let mapped_graph = grph.get_graph().map(
-        |idx, nd_elem| format!("{}:{}", idx.index(), nd_elem.get_name()),
+    let mapped_graph = grph.get_graph().get_graph().map(
+        |idx, nd_elem| format!("{}:{}", idx.index(), nd_elem.get_upper().get_name()),
         |_e, fld_label| format!("{}", fld_label),
     );
 
@@ -160,5 +168,3 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-*/
-fn main() {}

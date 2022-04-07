@@ -2,6 +2,7 @@ use crate::pb_constraints;
 use alga::general::Multiplicative;
 use alga::general::{AbstractMagma, AbstractSemigroup, Identity, TwoSidedInverse};
 use alga_derive::Alga;
+use cwe_checker_lib::intermediate_representation::Tid;
 use log::error;
 use nom::branch::alt;
 use nom::bytes::complete::take_while;
@@ -503,6 +504,32 @@ impl TryFrom<pb_constraints::DerivedTypeVariable> for DerivedTypeVar {
         Ok(DerivedTypeVar {
             var: TypeVariable::new(bv),
             labels,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+pub struct AdditionalConstraint {
+    pub constraint: SubtypeConstraint,
+    pub associated_variable: Tid,
+}
+
+impl TryFrom<pb_constraints::AdditionalConstraint> for AdditionalConstraint {
+    type Error = anyhow::Error;
+
+    fn try_from(value: pb_constraints::AdditionalConstraint) -> Result<Self, Self::Error> {
+        let constraint = value
+            .sub_ty
+            .ok_or(anyhow::anyhow!("No constraint in addsubty"))
+            .and_then(|orig_cons| SubtypeConstraint::try_from(orig_cons))?;
+
+        let associated_variable = value
+            .target_variable
+            .ok_or(anyhow::anyhow!("No tid in addsubty"))
+            .map(|tid| Tid::create(tid.name, tid.address))?;
+        Ok(AdditionalConstraint {
+            constraint,
+            associated_variable,
         })
     }
 }
