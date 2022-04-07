@@ -79,6 +79,16 @@ where
     T: Lattice,
     T: Clone,
 {
+    /// Get the upper bound on this lattice element
+    pub fn get_upper(&self) -> &T {
+        &self.upper_bound
+    }
+
+    /// Get the lower bound on this lattice element
+    pub fn get_lower(&self) -> &T {
+        &self.lower_bound
+    }
+
     fn refine_lower(&self, other: &T) -> Self {
         Self {
             upper_bound: self.upper_bound.clone(),
@@ -846,6 +856,12 @@ where
                 |e_id, e_weight| format!("{}:{}", e_id.index(), e_weight),
             )),
         )
+    }
+}
+
+impl<U: std::cmp::PartialEq> SketchGraph<U> {
+    pub fn get_graph(&self) -> &MappingGraph<U, DerivedTypeVar, FieldLabel> {
+        &self.quotient_graph
     }
 }
 
