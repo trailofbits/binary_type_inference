@@ -19,19 +19,19 @@ message CTypeMapping {
 
 message Parameter {
   uint32 parameter_index = 1;
-  uint32 type = 2;
+  CType type = 2;
 }
 
 message Function {
   repeated Parameter parameters = 1;
-  uint32 return_type = 2;
+  CType return_type = 2;
   bool has_return = 3;
 }
 
 message Field {
   uint32 bit_size = 1;
   uint32 byte_offset = 2;
-  uint32 type = 3;
+  CType type = 3;
 }
 
 message Structure { repeated Field fields = 1; }
@@ -40,7 +40,9 @@ message Alias { uint32 to_type = 1; }
 
 message Primitive { string type_constant = 1; }
 
-message Pointer { uint32 to_type = 1; }
+message Pointer { CType to_type = 1; }
+
+message Union { repeated CType target_types = 1; }
 
 message CType {
   oneof inner_type {
@@ -49,5 +51,6 @@ message CType {
     Alias alias = 3;
     Primitive primitive = 4;
     Pointer pointer = 5;
+    Union union = 6;
   }
 }

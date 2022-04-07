@@ -27,7 +27,7 @@ pub mod solver;
 pub mod graph_algos;
 
 /// Takes a sketch graph of types and lowers this type information to ctypes, using datalog defined heurisitics.
-//pub mod lowering;
+pub mod lowering;
 
 /// Protobuf ctypes
 pub mod ctypes {
