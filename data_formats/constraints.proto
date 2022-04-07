@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package constraints;
 
+import "ctypes.proto";
+
 enum Pointer {
   POINTER_LOAD_UNSPECIFIED = 0;
   POINTER_STORE = 1;
@@ -29,4 +31,9 @@ message DerivedTypeVariable {
 message SubtypingConstraint {
   DerivedTypeVariable lhs = 1;
   DerivedTypeVariable rhs = 2;
+}
+
+message AdditionalConstraint {
+  SubtypingConstraint sub_ty = 1;
+  ctypes.Tid target_variable = 2;
 }

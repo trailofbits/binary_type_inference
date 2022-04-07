@@ -280,7 +280,7 @@ struct TypeLocation {
 /// This algorithm creates polymorphic function types.
 /// Type information flows up to callers but not down to callees (callees wont be unified).
 /// The reachable subgraph of the callee is copied up to the caller. Callee nodes are labeled.
-struct SketckGraphBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
+pub struct SketchGraphBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     // Allows us to map any tid to the correct constraintset
     scc_signatures: HashMap<Tid, Rc<ConstraintSet>>,
     // Collects a shared sketchgraph representing the functions in the SCC
@@ -293,7 +293,7 @@ struct SketckGraphBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     parameter_aliases: BTreeMap<TypeLocation, TypeLocation>,
 }
 
-impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> SketckGraphBuilder<'a, U, T>
+impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> SketchGraphBuilder<'a, U, T>
 where
     T: 'a,
     U: Display,
@@ -303,7 +303,7 @@ where
         scc_constraints: Vec<SCCConstraints>,
         lattice: &'a T,
         type_lattice_elements: HashSet<TypeVariable>,
-    ) -> SketckGraphBuilder<'a, U, T> {
+    ) -> SketchGraphBuilder<'a, U, T> {
         let scc_signatures = scc_constraints
             .into_iter()
             .map(|cons| {
@@ -318,7 +318,7 @@ where
             .map(|idx| (cg[idx].clone(), idx))
             .collect();
 
-        SketckGraphBuilder {
+        SketchGraphBuilder {
             scc_signatures,
             scc_repr: HashMap::new(),
             cg,
@@ -823,7 +823,7 @@ where
         self.replace_scc_repr(associated_scc_tids, orig_repr);
     }
 
-    pub fn bind_polymorphic_types(&mut self) -> anyhow::Result<()> {
+    fn bind_polymorphic_types(&mut self) -> anyhow::Result<()> {
         let (condensed, sorted) = self.get_topo_order_for_cg()?;
         for tgt_idx in sorted {
             let target_tid = &condensed[tgt_idx];
@@ -856,6 +856,12 @@ where
                 |e_id, e_weight| format!("{}:{}", e_id.index(), e_weight),
             )),
         )
+    }
+}
+
+impl<U: std::cmp::PartialEq> SketchGraph<U> {
+    pub fn get_node_index_for_variable(&self, wt: &DerivedTypeVar) -> Option<NodeIndex> {
+        self.quotient_graph.get_node(wt).cloned()
     }
 }
 
@@ -1391,7 +1397,7 @@ mod test {
         },
     };
 
-    use super::SketckGraphBuilder;
+    use super::SketchGraphBuilder;
 
     #[test]
     fn test_simple_equivalence() {
@@ -1516,7 +1522,7 @@ mod test {
         cg.add_edge(c2_node, alias_node, ());
         cg.add_edge(alias_node, id_node, ());
 
-        let mut skb = SketckGraphBuilder::new(
+        let mut skb = SketchGraphBuilder::new(
             cg,
             vec![
                 SCCConstraints {
@@ -1651,7 +1657,7 @@ mod test {
         cg.add_edge(c1_node, id_node, ());
         cg.add_edge(c2_node, id_node, ());
 
-        let mut skb = SketckGraphBuilder::new(
+        let mut skb = SketchGraphBuilder::new(
             cg,
             vec![
                 SCCConstraints {
@@ -1769,7 +1775,7 @@ mod test {
 
         cg.add_edge(caller_node, id_node, ());
 
-        let mut skb = SketckGraphBuilder::new(
+        let mut skb = SketchGraphBuilder::new(
             cg,
             vec![
                 SCCConstraints {

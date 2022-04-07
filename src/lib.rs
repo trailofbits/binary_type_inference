@@ -41,7 +41,7 @@ pub mod pb_constraints {
 
 /// Parses a context of file inputs into an inference job which can be run to retrieve generated constraints,
 /// simplified constraints, and lowered types.
-//pub mod inference_job;
+pub mod inference_job;
 
 // Integration tests
 #[cfg(test)]
