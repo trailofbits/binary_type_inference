@@ -14,6 +14,7 @@ use cwe_checker_lib::{
     intermediate_representation::{Project, Tid},
     utils::binary::RuntimeMemoryImage,
 };
+use log::info;
 use petgraph::graph::NodeIndex;
 use serde::de::DeserializeOwned;
 
@@ -394,13 +395,11 @@ impl InferenceJob {
         // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.
         for scc in cons.iter_mut() {
             for tid in scc.scc.iter() {
-                if let Some(new_cons) =  self.additional_constraints.get(tid) {
-                    scc.constraints.insert_all(& new_cons);
+                if let Some(new_cons) = self.additional_constraints.get(tid) {
+                    scc.constraints.insert_all(&new_cons);
                 }
             }
-
         }
-        
 
         let labeled_graph = self.get_labeled_sketch_graph(cons)?;
         let lowered = Self::lower_labeled_sketch_graph(&labeled_graph)?;

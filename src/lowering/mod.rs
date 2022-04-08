@@ -4,7 +4,7 @@ use log::warn;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     ffi::OsStr,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, fmt::Display,
 };
 
 use crate::{
