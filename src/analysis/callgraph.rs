@@ -40,7 +40,7 @@ impl Context<'_> {
     pub fn get_graph(&self) -> DiGraph<Tid, ()> {
         let mut grph: DiGraph<Tid, ()> = DiGraph::new();
 
-        let proj: HashMap<Tid, NodeIndex> = self
+        let mut proj: HashMap<Tid, NodeIndex> = self
             .proj
             .program
             .term
@@ -48,6 +48,15 @@ impl Context<'_> {
             .iter()
             .map(|x| (x.tid.clone(), grph.add_node(x.tid.clone())))
             .collect();
+
+        self.proj
+            .program
+            .term
+            .extern_symbols
+            .keys()
+            .for_each(|tid| {
+                proj.insert(tid.clone(), grph.add_node(tid.clone()));
+            });
 
         for sub in self.proj.program.term.subs.iter() {
             let start_nd = proj.get(&sub.tid).unwrap();
