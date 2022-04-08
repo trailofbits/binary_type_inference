@@ -189,7 +189,7 @@ where
     C: std::cmp::PartialEq,
 {
     let mut uf: UnionFind<usize> =
-        UnionFind::new(grph.get_graph().node_indices().max().unwrap().index() + 1);
+        UnionFind::new(grph.get_graph().node_indices().max().unwrap_or(NodeIndex::from(0)).index() + 1);
 
     if cons.is_empty() {
         return uf;
@@ -363,6 +363,8 @@ where
     ) -> anyhow::Result<()> {
         if is_internal_variable.contains(var.get_base_variable())
             || self.type_lattice_elements.contains(var.get_base_variable())
+            // TODO(Ian): evaluate this and where cs tags are inserted
+            || var.get_base_variable().get_cs_tag().is_none()
         {
             self.insert_dtv(nd_graph, var.clone());
         } else {
