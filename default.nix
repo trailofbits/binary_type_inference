@@ -1,20 +1,6 @@
 let
   pkgs = import <nixpkgs> { };
 
-  lowering-datalog = pkgs.stdenv.mkDerivation
-    {
-      name = "lowering-datalog";
-      src = ./.;
-
-      nativeBuildInputs = [ pkgs.souffle ];
-
-      buildPhase = "souffle -o lowertypes ./lowering/type_inference.dl";
-
-      installPhase = ''
-        mkdir -p $out/bin
-        cp lowertypes $out/bin/
-      '';
-    };
 
   p = { lib, fetchFromGitHub, rustPlatform }:
     rustPlatform.buildRustPackage rec {
@@ -31,5 +17,5 @@ let
 in
 pkgs.symlinkJoin {
   name = "bti";
-  paths = [ rust-bin lowering-datalog ];
+  paths = [ rust-bin ];
 }

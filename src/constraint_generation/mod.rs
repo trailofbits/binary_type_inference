@@ -585,6 +585,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn make_constraints<T>(
         &self,
+        calling_blk: Option<&Term<Blk>>,
         sub: &Term<T>,
         args: &[Arg],
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
@@ -652,6 +653,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn handle_return_actual(
         &self,
+        calling_blk: &Term<Blk>,
         sub: &Term<Sub>,
         vman: &mut VariableManager,
         return_address_displacement: i64,
@@ -671,6 +673,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     //TODO(Ian): implement callsite cloning
     fn handle_call_actual(
         &self,
+        calling_blk: &Term<Blk>,
         sub: &Term<Sub>,
         vman: &mut VariableManager,
         return_address_displacement: i64,

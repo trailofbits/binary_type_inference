@@ -389,10 +389,18 @@ impl InferenceJob {
         HashMap<NodeIndex, CType>,
     )> {
         self.recover_additional_shared_returns();
-        let cons = self.get_simplified_constraints()?;
+        let mut cons = self.get_simplified_constraints()?;
 
         // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.
-        todo!();
+        for scc in cons.iter_mut() {
+            for tid in scc.scc.iter() {
+                if let Some(new_cons) =  self.additional_constraints.get(tid) {
+                    scc.constraints.insert_all(& new_cons);
+                }
+            }
+
+        }
+        
 
         let labeled_graph = self.get_labeled_sketch_graph(cons)?;
         let lowered = Self::lower_labeled_sketch_graph(&labeled_graph)?;
