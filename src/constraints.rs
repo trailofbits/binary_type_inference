@@ -44,8 +44,12 @@ pub fn parse_type_variable_with_cs_tag(input: &str) -> IResult<&str, TypeVariabl
     map_res::<_, _, _, _, ParseIntError, _, _>(
         tuple((parse_identifier, tag(":"), digit1)),
         |(id, _, ctr): (&str, &str, &str)| {
-            let tg: usize = ctr.parse()?;
-            Ok(TypeVariable::with_tag(id.to_owned(), tg))
+           
+            // NOTE(Ian): This is a hack to allow creating tags in tests
+            let mut fake_id = String::new();
+            fake_id.push_str("fakeidforctrtags_");
+            fake_id.push_str(ctr);
+            Ok(TypeVariable::with_tag(id.to_owned(), Tid::create(fake_id, ctr.to_owned())))
         },
     )(input)
 }
@@ -152,18 +156,18 @@ pub fn parse_constraint_set(input: &str) -> IResult<&str, ConstraintSet> {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 pub struct TypeVariable {
     name: String,
-    cs_tag: Option<usize>,
+    cs_tag: Option<Tid>,
 }
 
 impl TypeVariable {
-    pub fn with_tag(name: String, cs_tag: usize) -> TypeVariable {
+    pub fn with_tag(name: String, cs_tag: Tid) -> TypeVariable {
         TypeVariable {
             name,
             cs_tag: Some(cs_tag),
         }
     }
 
-    pub fn get_tag(&self) -> &Option<usize> {
+    pub fn get_tag(&self) -> &Option<Tid> {
         &self.cs_tag
     }
 
@@ -171,7 +175,7 @@ impl TypeVariable {
         TypeVariable::new(self.name.clone())
     }
 
-    pub fn get_cs_tag(&self) -> &Option<usize> {
+    pub fn get_cs_tag(&self) -> &Option<Tid> {
         &self.cs_tag
     }
 
@@ -183,7 +187,7 @@ impl TypeVariable {
 
     /// Gets the string of the identifier for this type variable.
     pub fn get_name(&self) -> String {
-        if let Some(cs_tag) = self.cs_tag {
+        if let Some(cs_tag) = &self.cs_tag {
             format!("{}:{}", self.name, cs_tag)
         } else {
             self.name.clone()
