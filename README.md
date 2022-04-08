@@ -1,6 +1,6 @@
 # Binary Type Inference 
 
-Implements the generation of subtyping constraints over the json PCODE IR implemented in [CWE Checker](https://github.com/fkie-cad/cwe_checker)
+Implements the generation and solving of subtyping constraints over the json PCODE IR implemented in [CWE Checker](https://github.com/fkie-cad/cwe_checker)
 
 ## Prerequisites
 * A rust stable toolchain (install via rustup)
