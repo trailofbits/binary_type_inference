@@ -37,9 +37,20 @@ pub fn tid_to_tvar(tid: &Tid) -> TypeVariable {
     TypeVariable::new(tid.get_str_repr().to_owned())
 }
 
+/// Converts a [Tid] to a [TypeVariable] by retrieving the string representation of the TID
+pub fn tid_to_tvar_with_tag(tid: &Tid, tag: &Tid) -> TypeVariable {
+    TypeVariable::with_tag(tid.get_str_repr().to_owned(), tag.clone())
+}
+
+
 /// Converts a term to a TypeVariable by using its unique term identifier (Tid).
 pub fn term_to_tvar<T>(term: &Term<T>) -> TypeVariable {
     tid_to_tvar(&term.tid)
+}
+
+/// Converts a term to a TypeVariable by using its unique term identifier (Tid). Takes by the TID of the other term.
+pub fn term_to_tvar_with_tag<T,V>(term: &Term<T>, tag: &Term<V>) -> TypeVariable {
+    tid_to_tvar_with_tag(&term.tid, &tag.tid)
 }
 
 /// Creates an actual argument type variable for the procedure
@@ -626,6 +637,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
             sub.term.formal_args.len()
         );
         self.make_constraints(
+            None,
             sub,
             &sub.term.formal_args,
             &|i| FieldLabel::In(i),
@@ -638,6 +650,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     /// make each formal the subtype of the addressing info for this parameter within the current state
     fn handle_return_formals(&self, sub: &Term<Sub>, vman: &mut VariableManager) -> ConstraintSet {
         self.make_constraints(
+            None,
             sub,
             &sub.term.formal_rets,
             &|i| FieldLabel::Out(i),
@@ -659,6 +672,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         return_address_displacement: i64,
     ) -> ConstraintSet {
         let res = self.make_constraints(
+            Some(calling_blk),
             sub,
             &sub.term.formal_rets,
             &|i| FieldLabel::Out(i),
@@ -679,6 +693,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         return_address_displacement: i64,
     ) -> ConstraintSet {
         self.make_constraints(
+            Some(calling_blk),
             sub,
             &sub.term.formal_args,
             &|i| FieldLabel::In(i),
@@ -690,11 +705,13 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn handle_extern_actual_params(
         &self,
+        calling_blk: &Term<Blk>,
         sub: &Term<ExternSymbol>,
         vman: &mut VariableManager,
         return_address_displacement: i64,
     ) -> ConstraintSet {
         self.make_constraints(
+            Some(calling_blk),
             sub,
             &sub.term.parameters,
             &|i| FieldLabel::In(i),
@@ -706,11 +723,13 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
 
     fn handle_extern_actual_rets(
         &self,
+        calling_blk: &Term<Blk>,
         sub: &Term<ExternSymbol>,
         vman: &mut VariableManager,
         return_address_displacement: i64,
     ) -> ConstraintSet {
         self.make_constraints(
+            Some(calling_blk),
             sub,
             &sub.term.return_values,
             &|i| FieldLabel::Out(i),
@@ -817,16 +836,17 @@ where
     */
     fn collect_extern_call_constraints(
         &self,
-        edges: &[Term<Jmp>],
+        calling_blk: &Term<Blk>,
         nd_ctxt: &NodeContext<R, P, S>,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
+        let edges = &calling_blk.term.jmps;
         let called_externs = edges.iter().filter_map(|jmp| {
             if let Jmp::Call { target, .. } = &jmp.term {
                 return self.extern_symbols.get(target).map(|t| Term {
                     term: t.clone(),
                     tid: target.clone(),
-                });
+                })
             }
 
             None
@@ -834,36 +854,35 @@ where
 
         called_externs
             .into_iter()
-            .map(|ext| nd_ctxt.handle_extern_actual_params(&ext, vman, 0))
+            .map(|ext| nd_ctxt.handle_extern_actual_params(calling_blk,&ext, vman, 0))
             .fold(ConstraintSet::default(), |mut prev, nxt| {
                 prev.insert_all(&nxt);
                 prev
             })
     }
 
-    fn edges_to_edge_iter<E, Ty: EdgeType, Idx: IndexType>(
-        edges: Edges<E, Ty, Idx>,
-    ) -> impl Iterator<Item = &E> {
-        edges.map(|x| x.weight())
-    }
 
     fn collect_extern_ret_constraints(
         &self,
-        edges: impl Iterator<Item = &'a Edge<'a>>,
+        nd_ind: NodeIndex,
         nd_ctxt: &NodeContext<R, P, S>,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
         let mut cons = ConstraintSet::default();
-        for edge in edges {
-            if let Edge::ExternCallStub(jmp) = edge {
+        for edge in self.graph.edges_directed(nd_ind, EdgeDirection::Outgoing) {
+            let source_node: Node = self.graph[edge.source()];
+            if let Edge::ExternCallStub(jmp) = edge.weight() {
                 if let Jmp::Call { target, .. } = &jmp.term {
                     if let Some(extern_symb) = self.extern_symbols.get(target) {
                         let term = Term {
                             term: extern_symb.clone(),
                             tid: target.clone(),
                         };
-
-                        cons.insert_all(&nd_ctxt.handle_extern_actual_rets(&term, vman, 0));
+                        // Calls to externs  should go from blocks to blocks
+                        assert!(matches!(source_node, Node::BlkEnd(_, _)));
+                        if let Node::BlkEnd(blk, _) = source_node {
+                            cons.insert_all(&nd_ctxt.handle_extern_actual_rets(blk,&term, vman, 0));
+                        }
                     }
                 }
             }
@@ -913,13 +932,9 @@ where
 
                     let mut total_cons = ConstraintSet::default();
 
-                    let incoming_edges = Self::edges_to_edge_iter(
-                        self.graph.edges_directed(nd_ind, EdgeDirection::Incoming),
-                    );
-
                     info!("Collecting extern constraints for {} {}", sub.tid, blk.tid);
                     let add_cons =
-                        self.collect_extern_ret_constraints(incoming_edges, nd_cont, vman);
+                        self.collect_extern_ret_constraints(nd_ind, nd_cont, vman);
 
                     info!("Cons extern: {}", add_cons);
                     total_cons.insert_all(&add_cons);
@@ -934,7 +949,7 @@ where
                     total_cons
                 }
                 Node::CallReturn {
-                    call: (_call_blk, calling_proc),
+                    call: (call_blk, calling_proc),
                     return_: (_returned_to_blk, return_proc),
                 } => {
                     info!(
@@ -951,7 +966,7 @@ where
 
                         if self.should_generate_for_block(self.graph[tgt]) {
                             if let Some(child_ctxt) = self.node_contexts.get(&tgt) {
-                                total_cons.insert_all(&child_ctxt.handle_return_actual(
+                                total_cons.insert_all(&child_ctxt.handle_return_actual(call_blk,
                                     return_proc,
                                     vman,
                                     0,
@@ -963,15 +978,15 @@ where
                     total_cons
                 }
                 Node::CallSource {
-                    source: _source,
-                    target: (_calling_blk, target_func),
-                } => nd_cont.handle_call_actual(target_func, vman, 0),
+                    source: (source_blk,_src_func),
+                    target: (_called_blk, target_func),
+                } => nd_cont.handle_call_actual(source_blk,target_func, vman, 0),
                 // block post conditions arent needed to generate constraints
                 Node::BlkEnd(blk, sub) => {
                     let mut cs = ConstraintSet::default();
 
                     let add_cons =
-                        self.collect_extern_call_constraints(&blk.term.jmps, nd_cont, vman);
+                        self.collect_extern_call_constraints(&blk,nd_cont, vman);
                     info!("Extern cons: {}\n", add_cons);
                     cs.insert_all(&add_cons);
 
