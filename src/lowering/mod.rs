@@ -88,7 +88,7 @@ impl Classroom {
     }
 
     fn compute_upper_bound_exclusive(base: usize, size: usize) -> usize {
-        base + size
+        base + size / 8
     }
 
     fn compute_fld_upper_bound_exlcusive(fld: &Field) -> usize {
