@@ -4,7 +4,8 @@ use log::warn;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     ffi::OsStr,
-    path::{Path, PathBuf}, fmt::Display,
+    fmt::Display,
+    path::{Path, PathBuf},
 };
 
 use crate::{
@@ -115,7 +116,7 @@ impl Classroom {
     }
 
     fn schedule_fld(&mut self, fld: Field) -> bool {
-        if self.get_next_scheduluable_offset() < fld.byte_offset {
+        if self.get_next_scheduluable_offset() > fld.byte_offset {
             return false;
         }
 
@@ -175,6 +176,7 @@ fn schedule_structures(fields: &Vec<Field>) -> Vec<CType> {
             if !scheduled {
                 let mut new_class = Classroom::new();
                 let res = new_class.schedule_fld(fld.clone());
+
                 assert!(res);
                 hp.push(new_class);
             }
