@@ -188,8 +188,14 @@ fn constraint_quotients<C>(
 where
     C: std::cmp::PartialEq,
 {
-    let mut uf: UnionFind<usize> =
-        UnionFind::new(grph.get_graph().node_indices().max().unwrap_or(NodeIndex::from(0)).index() + 1);
+    let mut uf: UnionFind<usize> = UnionFind::new(
+        grph.get_graph()
+            .node_indices()
+            .max()
+            .unwrap_or(NodeIndex::from(0))
+            .index()
+            + 1,
+    );
 
     if cons.is_empty() {
         return uf;
@@ -366,6 +372,7 @@ where
             // TODO(Ian): evaluate this and where cs tags are inserted
             || var.get_base_variable().get_cs_tag().is_none()
         {
+            println!("Internal var: {}", var);
             self.insert_dtv(nd_graph, var.clone());
         } else {
             let ext = self
@@ -376,7 +383,11 @@ where
                     var.get_base_variable().to_callee().to_string()
                 ))?;
 
-            ext.copy_reachable_subgraph_into(var, nd_graph);
+            if matches!(ext.copy_reachable_subgraph_into(var, nd_graph), None) {
+                // so the representative isnt copyable.
+                // in this case we should add an empty type variable for it
+                nd_graph.add_node(var.clone(), self.identity_element());
+            }
         }
 
         Ok(())
@@ -1336,7 +1347,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         &self,
         from: &DerivedTypeVar,
         into: &mut MappingGraph<T, DerivedTypeVar, FieldLabel>,
-    ) {
+    ) -> Option<NodeIndex> {
         let representing = DerivedTypeVar::create_with_path(
             from.get_base_variable().to_callee(),
             Vec::from_iter(from.get_field_labels().iter().cloned()),
@@ -1359,6 +1370,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
             });
 
             // add edges where both ends are in the subgraph
+            let mut repr = None;
             for edge in self.quotient_graph.get_graph().edge_references() {
                 if reachable_idxs.contains(&edge.target())
                     && reachable_idxs.contains(&edge.source())
@@ -1366,16 +1378,26 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
                     let (key1, w1) = self.get_key_and_weight_for_index(edge.source());
                     let key1 = Self::tag_base_with_destination_tag(from.get_base_variable(), key1);
                     info!("Source nd {}", key1);
-                    let source = into.add_node(key1, w1);
+                    let source = into.add_node(key1.clone(), w1);
+                    if &key1 == from {
+                        repr = Some(source);
+                    }
 
                     let (key2, w2) = self.get_key_and_weight_for_index(edge.target());
                     let key2 = Self::tag_base_with_destination_tag(from.get_base_variable(), key2);
                     info!("Dst nd {}", key2);
-                    let target = into.add_node(key2, w2);
+                    let target = into.add_node(key2.clone(), w2);
+                    if &key2 == from {
+                        repr = Some(target);
+                    }
 
                     into.add_edge(source, target, edge.weight().clone());
                 }
             }
+
+            repr
+        } else {
+            None
         }
     }
 }
