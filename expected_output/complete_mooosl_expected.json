@@ -2,19 +2,103 @@
     {
         "scc": [
             {
-                "id": "sub_001013db",
-                "address": "001013db"
+                "address": "001014fb",
+                "id": "sub_001014fb"
             }
         ],
-        "constraints": []
-    },
-    {
-        "scc": [
+        "constraints": [
             {
-                "id": "sub_001014fb",
-                "address": "001014fb"
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 1
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_001013db",
+                        "cs_tag": {
+                            "address": "001014fb",
+                            "id": "blk_001014fb"
+                        }
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 2
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_001013db"
+                    },
+                    "labels": [
+                        {
+                            "In": 1
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 1
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00101080"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 2
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00101080"
+                    },
+                    "labels": [
+                        {
+                            "In": 2
+                        }
+                    ]
+                }
             }
-        ],
-        "constraints": []
+        ]
     }
 ]

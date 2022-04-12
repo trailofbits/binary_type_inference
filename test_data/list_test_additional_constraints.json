@@ -1,38 +1,50 @@
 [
     {
-        "lhs": {
-            "var": {
-                "name": "sub_00001000"
+        "constraint": {
+            "lhs": {
+                "var": {
+                    "name": "sub_00001000"
+                },
+                "labels": [
+                    {
+                        "Out": 0
+                    }
+                ]
             },
-            "labels": [
-                {
-                    "Out": 0
-                }
-            ]
+            "rhs": {
+                "var": {
+                    "name": "int"
+                },
+                "labels": []
+            }
         },
-        "rhs": {
-            "var": {
-                "name": "int"
-            },
-            "labels": []
+        "associated_variable": {
+            "id": "sub_00001000",
+            "address": "00001000"
         }
     },
     {
-        "lhs": {
-            "var": {
-                "name": "file_descriptor"
+        "constraint": {
+            "lhs": {
+                "var": {
+                    "name": "file_descriptor"
+                },
+                "labels": []
             },
-            "labels": []
+            "rhs": {
+                "var": {
+                    "name": "sub_00001000"
+                },
+                "labels": [
+                    {
+                        "In": 0
+                    }
+                ]
+            }
         },
-        "rhs": {
-            "var": {
-                "name": "sub_00001000"
-            },
-            "labels": [
-                {
-                    "In": 0
-                }
-            ]
+        "associated_variable": {
+            "id": "sub_00001000",
+            "address": "00001000"
         }
     }
 ]

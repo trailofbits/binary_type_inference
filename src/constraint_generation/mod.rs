@@ -42,14 +42,13 @@ pub fn tid_to_tvar_with_tag(tid: &Tid, tag: &Tid) -> TypeVariable {
     TypeVariable::with_tag(tid.get_str_repr().to_owned(), tag.clone())
 }
 
-
 /// Converts a term to a TypeVariable by using its unique term identifier (Tid).
 pub fn term_to_tvar<T>(term: &Term<T>) -> TypeVariable {
     tid_to_tvar(&term.tid)
 }
 
 /// Converts a term to a TypeVariable by using its unique term identifier (Tid). Takes by the TID of the other term.
-pub fn term_to_tvar_with_tag<T,V>(term: &Term<T>, tag: &Term<V>) -> TypeVariable {
+pub fn term_to_tvar_with_tag<T, V>(term: &Term<T>, tag: &Term<V>) -> TypeVariable {
     tid_to_tvar_with_tag(&term.tid, &tag.tid)
 }
 
@@ -585,11 +584,18 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     }
 
     fn create_formal_tvar<T>(
+        calling_blk: Option<&Term<Blk>>,
         indx: usize,
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
         sub: &Term<T>,
     ) -> DerivedTypeVar {
-        let mut base = DerivedTypeVar::new(term_to_tvar(sub));
+        let base_tv = if let Some(tg) = calling_blk {
+            term_to_tvar_with_tag(sub, tg)
+        } else {
+            term_to_tvar(sub)
+        };
+
+        let mut base = DerivedTypeVar::new(base_tv);
         base.add_field_label(index_to_field_label(indx));
         base
     }
@@ -606,7 +612,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     ) -> ConstraintSet {
         let mut start_constraints = ConstraintSet::default();
         for (i, arg) in args.iter().enumerate() {
-            let formal_tv = Self::create_formal_tvar(i, index_to_field_label, sub);
+            let formal_tv = Self::create_formal_tvar(calling_blk, i, index_to_field_label, sub);
             let arg_tvars = self
                 .subprocedure_locators
                 .get_type_variables_and_constraints_for_arg(
@@ -846,7 +852,7 @@ where
                 return self.extern_symbols.get(target).map(|t| Term {
                     term: t.clone(),
                     tid: target.clone(),
-                })
+                });
             }
 
             None
@@ -854,13 +860,12 @@ where
 
         called_externs
             .into_iter()
-            .map(|ext| nd_ctxt.handle_extern_actual_params(calling_blk,&ext, vman, 0))
+            .map(|ext| nd_ctxt.handle_extern_actual_params(calling_blk, &ext, vman, 0))
             .fold(ConstraintSet::default(), |mut prev, nxt| {
                 prev.insert_all(&nxt);
                 prev
             })
     }
-
 
     fn collect_extern_ret_constraints(
         &self,
@@ -881,7 +886,9 @@ where
                         // Calls to externs  should go from blocks to blocks
                         assert!(matches!(source_node, Node::BlkEnd(_, _)));
                         if let Node::BlkEnd(blk, _) = source_node {
-                            cons.insert_all(&nd_ctxt.handle_extern_actual_rets(blk,&term, vman, 0));
+                            cons.insert_all(
+                                &nd_ctxt.handle_extern_actual_rets(blk, &term, vman, 0),
+                            );
                         }
                     }
                 }
@@ -933,8 +940,7 @@ where
                     let mut total_cons = ConstraintSet::default();
 
                     info!("Collecting extern constraints for {} {}", sub.tid, blk.tid);
-                    let add_cons =
-                        self.collect_extern_ret_constraints(nd_ind, nd_cont, vman);
+                    let add_cons = self.collect_extern_ret_constraints(nd_ind, nd_cont, vman);
 
                     info!("Cons extern: {}", add_cons);
                     total_cons.insert_all(&add_cons);
@@ -966,7 +972,8 @@ where
 
                         if self.should_generate_for_block(self.graph[tgt]) {
                             if let Some(child_ctxt) = self.node_contexts.get(&tgt) {
-                                total_cons.insert_all(&child_ctxt.handle_return_actual(call_blk,
+                                total_cons.insert_all(&child_ctxt.handle_return_actual(
+                                    call_blk,
                                     return_proc,
                                     vman,
                                     0,
@@ -978,15 +985,14 @@ where
                     total_cons
                 }
                 Node::CallSource {
-                    source: (source_blk,_src_func),
+                    source: (source_blk, _src_func),
                     target: (_called_blk, target_func),
-                } => nd_cont.handle_call_actual(source_blk,target_func, vman, 0),
+                } => nd_cont.handle_call_actual(source_blk, target_func, vman, 0),
                 // block post conditions arent needed to generate constraints
                 Node::BlkEnd(blk, sub) => {
                     let mut cs = ConstraintSet::default();
 
-                    let add_cons =
-                        self.collect_extern_call_constraints(&blk,nd_cont, vman);
+                    let add_cons = self.collect_extern_call_constraints(&blk, nd_cont, vman);
                     info!("Extern cons: {}\n", add_cons);
                     cs.insert_all(&add_cons);
 
