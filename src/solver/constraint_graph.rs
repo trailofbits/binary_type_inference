@@ -106,6 +106,15 @@ pub struct TypeVarControlState {
     variance: Variance,
 }
 
+impl TypeVarControlState {
+    fn get_tv(&self) -> &TypeVariable {
+        match &self.dt_var {
+            VHat::Interesting(iv) => &iv.tv,
+            VHat::Uninteresting(tv) => tv,
+        }
+    }
+}
+
 impl Display for TypeVarControlState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.dt_var, self.variance)
@@ -191,7 +200,7 @@ impl RuleContext {
     }
 
     fn lhs(&self, ty: TypeVariable) -> VHat {
-        if self.interesting.contains(&ty) {
+        if self.interesting.contains(&ty.to_callee()) {
             VHat::Interesting(InterestingVar {
                 tv: ty,
                 dir: Direction::Lhs,
@@ -202,7 +211,7 @@ impl RuleContext {
     }
 
     fn rhs(&self, ty: TypeVariable) -> VHat {
-        if self.interesting.contains(&ty) {
+        if self.interesting.contains(&ty.to_callee()) {
             VHat::Interesting(InterestingVar {
                 tv: ty,
                 dir: Direction::Rhs,
@@ -1274,6 +1283,11 @@ impl FSA {
             }
         }
         None
+    }
+
+    fn st_to_tvar(st: &ControlState) -> &TypeVariable {
+        let ControlState::TypeVar(tv) = st;
+        tv.get_tv()
     }
 
     /// Create a non-saturated FSA for the constraint set and RuleContext

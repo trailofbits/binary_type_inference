@@ -46,19 +46,20 @@ pub mod inference_job;
 // Integration tests
 #[cfg(test)]
 mod tests {
-    /*
     use std::{
         collections::{BTreeSet, HashMap},
         iter::FromIterator,
         path::{Path, PathBuf},
     };
 
+    use alga::general::Lattice;
     use petgraph::visit::EdgeRef;
 
     use crate::{
         constraints::{ConstraintSet, Field, FieldLabel, SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
         lowering::CType,
+        solver::type_sketch::LatticeBounds,
     };
     use crate::{
         constraints::{DerivedTypeVar, TypeVariable},
@@ -84,7 +85,7 @@ mod tests {
         constraint_gen: Option<String>,
         constraint_simplification: Option<String>,
         ctype_mapping: Option<String>,
-        sketch_properties: Vec<Box<dyn Fn(&SketchGraph<CustomLatticeElement>)>>,
+        sketch_properties: Vec<Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>>,
     }
 
     fn parse_constraint_set_test(fname: &str) -> anyhow::Result<ConstraintSet> {
@@ -128,7 +129,7 @@ mod tests {
         constraint_gen: Option<Vec<DeserSCCCons>>,
         constraint_simplification: Option<ConstraintSet>,
         ctype_mapping: Option<HashMap<NodeIndex, CType>>,
-        sketch_properties: Vec<Box<dyn Fn(&SketchGraph<CustomLatticeElement>)>>,
+        sketch_properties: Vec<Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>>,
     }
 
     impl TryFrom<ExpectedOutputFiles> for ExpectedOutputs {
@@ -200,7 +201,7 @@ mod tests {
 
         let expected_values = ExpectedOutputs::try_from(tc.expected_outputs)
             .expect("could not open expected outputs");
-        let genned_cons = job
+        let mut genned_cons = job
             .get_simplified_constraints()
             .expect("could not get constraints");
 
@@ -226,28 +227,18 @@ mod tests {
 
         test_equivalence(expected_values.constraint_gen.as_ref(), &normalized);
 
-        let mut simplified = InferenceJob::scc_constraints_to_constraints(genned_cons);
+        job.insert_additional_constraints(&mut genned_cons);
 
-        assert_eq_if_available(
-            &simplified,
-            expected_values.constraint_simplification.as_ref(),
-        );
-
-        simplified.insert_all(job.get_additional_constraints());
-
-        let labeled_graph = job.get_labeled_sketch_graph(&simplified);
+        let labeled_graph = job
+            .get_labeled_sketch_graph(genned_cons)
+            .expect("Creating the sketch graph should not fail");
 
         for prop in expected_values.sketch_properties.iter() {
             prop(&labeled_graph);
         }
 
-        let mapped_graph = labeled_graph.get_graph().map(
-            |idx, nd_elem| format!("{}:{}", idx.index(), nd_elem.get_name()),
-            |_e, fld_label| format!("{}", fld_label),
-        );
-
-        println!("{}", Dot::new(&mapped_graph));
-        for (dtv, idx) in labeled_graph.get_dtv_to_group().iter() {
+        println!("{}", labeled_graph);
+        for (dtv, idx) in labeled_graph.get_graph().get_node_mapping().iter() {
             println!("Dtv: {} Group: {}", dtv, idx.index());
         }
 
@@ -283,7 +274,7 @@ mod tests {
         expec_constraint_gen: Option<String>,
         expec_constraint_simplification: Option<String>,
         expec_ctype_mapping: Option<String>,
-        sketch_properties: Vec<Box<dyn Fn(&SketchGraph<CustomLatticeElement>)>>,
+        sketch_properties: Vec<Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>>,
     }
 
     impl TestCaseBuilder {
@@ -317,7 +308,7 @@ mod tests {
 
         fn add_sketch_property(
             &mut self,
-            t: Box<dyn Fn(&SketchGraph<CustomLatticeElement>)>,
+            t: Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>,
         ) -> &mut Self {
             self.sketch_properties.push(t);
             self
@@ -395,30 +386,6 @@ mod tests {
         // TODO(ian): comaprisons on types arent actually useful since ordering can change .set_expec_ctype_mapping("list_test_expected_types.json".to_string());
         run_test_case(bldr.build());
     }
-    /*
-    #[test]
-    fn mooosl_lookup() {
-        let mut bldr = TestCaseBuilder::new();
-        bldr.set_binary_path("new_moosl_bin".to_owned())
-            .set_ir_json_path("new_moosl.json".to_owned())
-            .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
-            .set_lattice_json("new_moosl_lattice.json".to_owned())
-            .set_interesting_tids_file("new_moosl_test_interesting_tids.json".to_owned())
-            .set_expec_constraint_gen("new_moosl_scc_cons.json".to_owned());
-        run_test_case(bldr.build());
-    }*/
-
-    #[test]
-    fn test_mooosl_delete_constraint_gen() {
-        let mut bldr = TestCaseBuilder::new();
-        bldr.set_binary_path("new_moosl_bin".to_owned())
-            .set_ir_json_path("new_moosl.json".to_owned())
-            .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
-            .set_lattice_json("new_moosl_lattice.json".to_owned())
-            .set_interesting_tids_file("new_moosl_test_interesting_tids.json".to_owned())
-            .set_expec_constraint_gen("delete_scc_check.json".to_owned());
-        run_test_case(bldr.build());
-    }
 
     #[test]
     fn test_mooosl_full_constraint_gen() {
@@ -431,75 +398,4 @@ mod tests {
             .set_expec_constraint_gen("complete_mooosl_expected.json".to_owned());
         run_test_case(bldr.build());
     }
-
-    #[test]
-    fn test_polymorphism_disallow_vertical_unification() {
-        let mut bldr = TestCaseBuilder::new();
-        bldr.set_binary_path("polymorphism_tests/test_prevent_unification.o".to_owned())
-            .set_ir_json_path("polymorphism_tests/test_prevent_unfication_ir.json".to_owned())
-            .set_additional_constraints(
-                "polymorphism_tests/prevent_unification_additional_constraints.json".to_owned(),
-            )
-            .set_lattice_json("polymorphism_tests/simple_lattice.json".to_owned())
-            .set_interesting_tids_file(
-                "polymorphism_tests/unification_interesting_tids.json".to_owned(),
-            )
-            .set_expec_constraint_gen(
-                "polymorphism_tests/unification_expected_sccs.json".to_owned(),
-            )
-            .add_sketch_property(Box::new(|grph| {
-                // check that caller1 only has a char pointer
-                let idx = grph
-                    .get_node_index_for_variable(&DerivedTypeVar::new(TypeVariable::new(
-                        "sub_00000010".to_owned(),
-                    )))
-                    .expect("Should have node for caller1");
-
-                let neighbors = &grph
-                    .get_graph()
-                    .edges_directed(idx, petgraph::Direction::Outgoing)
-                    .collect::<Vec<_>>();
-                assert_eq!(neighbors.len(), 2);
-                assert_eq!(neighbors[0].target(), neighbors[1].target());
-                assert_eq!(neighbors[0].weight(), &FieldLabel::In(0));
-                assert_eq!(neighbors[1].weight(), &FieldLabel::Out(0));
-
-                let load_edge = &grph
-                    .get_graph()
-                    .edges_directed(neighbors[0].target(), petgraph::Direction::Outgoing)
-                    .collect::<Vec<_>>();
-
-                assert_eq!(load_edge.len(), 1);
-                assert_eq!(load_edge[0].weight(), &FieldLabel::Load);
-
-                let field_edges = &grph
-                    .get_graph()
-                    .edges_directed(load_edge[0].target(), petgraph::Direction::Outgoing)
-                    .collect::<Vec<_>>();
-
-                assert_eq!(field_edges.len(), 1);
-                assert_eq!(
-                    field_edges[0].weight(),
-                    &FieldLabel::Field(Field { offset: 0, size: 8 })
-                );
-                assert_eq!(grph.get_graph()[field_edges[0].target()].get_name(), "char");
-
-                // check that caller2 only has an int pointer
-            }));
-        run_test_case(bldr.build());
-    }
-
-    #[test]
-
-    fn mooosl_keyhash() {
-        let mut bldr = TestCaseBuilder::new();
-        bldr.set_binary_path("new_moosl_bin".to_owned())
-            .set_ir_json_path("new_moosl.json".to_owned())
-            .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
-            .set_lattice_json("new_moosl_lattice.json".to_owned())
-            .set_interesting_tids_file("key_hash_tid.json".to_owned())
-            .set_expec_constraint_gen("key_hash_expec_new_moosl.json".to_owned());
-        run_test_case(bldr.build());
-    }
-    */
 }

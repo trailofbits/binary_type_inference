@@ -24,7 +24,6 @@ use super::{explore_paths, find_node};
 
 // TODO(ian): use this abstraction for the transducer
 /// A mapping graph allows the lookup of nodes by a hashable element. A node can also be queried for which hashable element it represents.
-/// ie. there is an injective relationship between node indices and hashable elements.
 #[derive(Clone)]
 pub struct MappingGraph<W, N, E> {
     grph: StableDiGraph<W, E>,
@@ -45,7 +44,7 @@ impl<W, N: Debug, E> MappingGraph<W, N, E> {
     /// Clean up the mapping graph to only keep around parts of the graph that are reachable from a label (we dont care about anything not reacable because we only need to type vars)
     pub fn remove_nodes_unreachable_from_label(&mut self) {
         let stack = self.nodes.values().cloned().collect::<Vec<_>>();
-        println!("map before remove: {:#?}", self.nodes);
+
         let mut dfs = Dfs::from_parts(stack, HashSet::new());
         let mut reached = BTreeSet::new();
         while let Some(nx) = dfs.next(&self.grph) {

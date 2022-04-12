@@ -127,7 +127,19 @@ fn main() -> anyhow::Result<()> {
     let (grph, ctypes) = if_job.infer_ctypes()?;
 
     let mapped_graph = grph.get_graph().get_graph().map(
-        |idx, nd_elem| format!("{}:{}", idx.index(), nd_elem.get_upper().get_name()),
+        |idx, nd_elem| {
+            format!(
+                "{}:{}:{}",
+                grph.get_graph()
+                    .get_group_for_node(idx)
+                    .into_iter()
+                    .next()
+                    .map(|maybe| format!("{}", maybe))
+                    .unwrap_or("".to_owned()),
+                idx.index(),
+                nd_elem.get_upper().get_name()
+            )
+        },
         |_e, fld_label| format!("{}", fld_label),
     );
 
