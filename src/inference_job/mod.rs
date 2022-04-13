@@ -37,7 +37,7 @@ use crate::{
         type_lattice::{
             CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLatticeElement,
         },
-        type_sketch::{LatticeBounds, SketchGraph, SketchGraphBuilder},
+        type_sketch::{LatticeBounds, SCCSketchsBuilder, SketchGraph},
     },
 };
 use crate::{ctypes, pb_constraints};
@@ -365,7 +365,7 @@ impl InferenceJob {
     ) -> anyhow::Result<SketchGraph<LatticeBounds<CustomLatticeElement>>> {
         let cg = callgraph::Context::new(&self.proj).get_graph();
         let elems = self.get_lattice_elems();
-        let mut bldr = SketchGraphBuilder::new(
+        let mut bldr = SCCSketchsBuilder::new(
             cg,
             scc_constraints,
             &self.lattice,
