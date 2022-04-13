@@ -275,139 +275,57 @@ where
         .collect()
 }
 
-/// Refers to some type node in a sketch graph within a program
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct TypeLocation {
-    scc: Vec<Tid>,
-    target_path: NodeIndex,
+/// The identity operation described for Lattice bounds
+fn identity_element<T: NamedLattice<U>, U: NamedLatticeElement>(lattice: &T) -> LatticeBounds<U> {
+    let bot = lattice.bot();
+    let top = lattice.top();
+    LatticeBounds {
+        upper_bound: top,
+        lower_bound: bot,
+    }
 }
 
-/// Creates a structured and labeled sketch graph
-/// This algorithm creates polymorphic function types.
-/// Type information flows up to callers but not down to callees (callees wont be unified).
-/// The reachable subgraph of the callee is copied up to the caller. Callee nodes are labeled.
-pub struct SketchGraphBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
-    // Allows us to map any tid to the correct constraintset
-    scc_signatures: HashMap<Tid, Rc<ConstraintSet>>,
-    // Collects a shared sketchgraph representing the functions in the SCC
-    scc_repr: HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>,
-    cg: CallGraph,
-    tid_to_cg_idx: HashMap<Tid, NodeIndex>,
+pub fn insert_dtv<T: NamedLattice<U>, U: NamedLatticeElement>(
+    lattice: &T,
+    grph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
+    dtv: DerivedTypeVar,
+) {
+    let mut curr_var = DerivedTypeVar::new(dtv.get_base_variable().clone());
+
+    let mut prev = grph.add_node(curr_var.clone(), identity_element(lattice));
+    for fl in dtv.get_field_labels() {
+        curr_var.add_field_label(fl.clone());
+        let next = grph.add_node(curr_var.clone(), identity_element(lattice));
+        grph.add_edge(prev, next, fl.clone());
+        prev = next;
+    }
+}
+
+struct SketchBuilder<'a, U, T, V> {
     lattice: &'a T,
-    type_lattice_elements: HashSet<TypeVariable>,
-    /// Aliases some type nodes accross sccs to bind polymorphic parameters loc->loc
-    parameter_aliases: BTreeMap<TypeLocation, TypeLocation>,
+    type_lattice_elements: &'a HashSet<TypeVariable>,
+    add_new_var: &'a V,
+    element_type: PhantomData<U>,
 }
 
-impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> SketchGraphBuilder<'a, U, T>
+impl<'a, U, T, V> SketchBuilder<'a, U, T, V>
 where
-    T: 'a,
-    U: Display,
+    U: NamedLatticeElement,
+    T: NamedLattice<U>,
+    V: Fn(
+        &DerivedTypeVar,
+        &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
+    ) -> anyhow::Result<()>,
 {
-    pub fn new(
-        cg: CallGraph,
-        scc_constraints: Vec<SCCConstraints>,
-        lattice: &'a T,
-        type_lattice_elements: HashSet<TypeVariable>,
-    ) -> SketchGraphBuilder<'a, U, T> {
-        let scc_signatures = scc_constraints
-            .into_iter()
-            .map(|cons| {
-                let repr = Rc::new(cons.constraints);
-                cons.scc.into_iter().map(move |t| (t.clone(), repr.clone()))
-            })
-            .flatten()
-            .collect::<HashMap<_, _>>();
-
-        let cg_callers = cg
-            .node_indices()
-            .map(|idx| (cg[idx].clone(), idx))
-            .collect();
-
-        SketchGraphBuilder {
-            scc_signatures,
-            scc_repr: HashMap::new(),
-            cg,
-            tid_to_cg_idx: cg_callers,
-            lattice,
-            type_lattice_elements,
-            parameter_aliases: BTreeMap::new(),
-        }
-    }
-
-    /// The identity operation described for Lattice bounds
-    fn identity_element(&self) -> LatticeBounds<U> {
-        let bot = self.lattice.bot();
-        let top = self.lattice.top();
-        LatticeBounds {
-            upper_bound: top,
-            lower_bound: bot,
-        }
-    }
-
-    fn insert_dtv(
-        &self,
-        grph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
-        dtv: DerivedTypeVar,
-    ) {
-        let mut curr_var = DerivedTypeVar::new(dtv.get_base_variable().clone());
-
-        let mut prev = grph.add_node(curr_var.clone(), self.identity_element());
-        for fl in dtv.get_field_labels() {
-            curr_var.add_field_label(fl.clone());
-            let next = grph.add_node(curr_var.clone(), self.identity_element());
-            grph.add_edge(prev, next, fl.clone());
-            prev = next;
-        }
-    }
-
-    fn add_variable(
-        &self,
-        var: &DerivedTypeVar,
-        is_internal_variable: &BTreeSet<TypeVariable>,
-        nd_graph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
-    ) -> anyhow::Result<()> {
-        if is_internal_variable.contains(var.get_base_variable())
-            || self.type_lattice_elements.contains(var.get_base_variable())
-            // TODO(Ian): evaluate this and where cs tags are inserted
-            || var.get_base_variable().get_cs_tag().is_none()
-        {
-            println!("Internal var: {}", var);
-            self.insert_dtv(nd_graph, var.clone());
-        } else {
-            let ext = self
-                .scc_repr
-                .get(&var.get_base_variable().to_callee())
-                .ok_or(anyhow::anyhow!(
-                    "An external variable must have a representation already built {}",
-                    var.get_base_variable().to_callee().to_string()
-                ))?;
-
-            if matches!(ext.copy_reachable_subgraph_into(var, nd_graph), None) {
-                // so the representative isnt copyable.
-                // in this case we should add an empty type variable for it
-                nd_graph.add_node(var.clone(), self.identity_element());
-            }
-        }
-
-        Ok(())
-    }
-
     fn add_nodes_and_initial_edges(
         &self,
-        representing: &Vec<Tid>,
         cs_set: &ConstraintSet,
         nd_graph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
     ) -> anyhow::Result<()> {
-        let is_internal_variable = representing
-            .iter()
-            .map(|x| constraint_generation::tid_to_tvar(x))
-            .collect::<BTreeSet<_>>();
-
         for constraint in cs_set.iter() {
             if let TyConstraint::SubTy(sty) = constraint {
-                self.add_variable(&sty.lhs, &is_internal_variable, nd_graph)?;
-                self.add_variable(&sty.rhs, &is_internal_variable, nd_graph)?;
+                (self.add_new_var)(&sty.lhs, nd_graph)?;
+                (self.add_new_var)(&sty.rhs, nd_graph)?;
             }
         }
 
@@ -473,19 +391,15 @@ where
             });
     }
 
-    fn build_and_label_scc_sketch(&mut self, to_reprs: &Vec<Tid>) -> anyhow::Result<()> {
-        let sig = self
-            .scc_signatures
-            .get(&to_reprs[0])
-            .expect("scc should have a sig");
-
+    pub fn build_and_label_constraints(
+        &self,
+        sig: &ConstraintSet,
+    ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
         let mut nd_graph: MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel> =
             MappingGraph::new();
 
-        self.add_nodes_and_initial_edges(&to_reprs, sig, &mut nd_graph)?;
+        self.add_nodes_and_initial_edges(sig, &mut nd_graph)?;
         let qgroups = generate_quotient_groups(&nd_graph, sig);
-
-        info!("Quotient group for scc: {:#?}, {:#?}", to_reprs, qgroups);
 
         let mut quoted_graph = nd_graph.quoetient_graph(&qgroups);
         assert!(quoted_graph.get_graph().node_count() == qgroups.len());
@@ -494,10 +408,131 @@ where
 
         let orig_sk_graph = SketchGraph {
             quotient_graph: quoted_graph,
-            default_label: self.identity_element(),
+            default_label: identity_element(self.lattice),
         };
 
-        let sk_graph = Rc::new(orig_sk_graph);
+        Ok(orig_sk_graph)
+    }
+
+    pub fn new(
+        lattice: &'a T,
+        type_lattice_elements: &'a HashSet<TypeVariable>,
+        add_new_var: &'a V,
+    ) -> SketchBuilder<'a, U, T, V> {
+        SketchBuilder {
+            lattice,
+            type_lattice_elements,
+            add_new_var,
+            element_type: PhantomData,
+        }
+    }
+}
+
+/// Refers to some type node in a sketch graph within a program
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+struct TypeLocation {
+    scc: Vec<Tid>,
+    target_path: NodeIndex,
+}
+
+/// Creates a structured and labeled sketch graph
+/// This algorithm creates polymorphic function types.
+/// Type information flows up to callers but not down to callees (callees wont be unified).
+/// The reachable subgraph of the callee is copied up to the caller. Callee nodes are labeled.
+pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
+    // Allows us to map any tid to the correct constraintset
+    scc_signatures: HashMap<Tid, Rc<ConstraintSet>>,
+    // Collects a shared sketchgraph representing the functions in the SCC
+    scc_repr: HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>,
+    cg: CallGraph,
+    tid_to_cg_idx: HashMap<Tid, NodeIndex>,
+    lattice: &'a T,
+    type_lattice_elements: HashSet<TypeVariable>,
+    /// Aliases some type nodes accross sccs to bind polymorphic parameters loc->loc
+    parameter_aliases: BTreeMap<TypeLocation, TypeLocation>,
+}
+
+struct SCCCopyingVariableAdder {}
+
+impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> SCCSketchsBuilder<'a, U, T>
+where
+    T: 'a,
+    U: Display,
+{
+    pub fn new(
+        cg: CallGraph,
+        scc_constraints: Vec<SCCConstraints>,
+        lattice: &'a T,
+        type_lattice_elements: HashSet<TypeVariable>,
+    ) -> SCCSketchsBuilder<'a, U, T> {
+        let scc_signatures = scc_constraints
+            .into_iter()
+            .map(|cons| {
+                let repr = Rc::new(cons.constraints);
+                cons.scc.into_iter().map(move |t| (t.clone(), repr.clone()))
+            })
+            .flatten()
+            .collect::<HashMap<_, _>>();
+
+        let cg_callers = cg
+            .node_indices()
+            .map(|idx| (cg[idx].clone(), idx))
+            .collect();
+
+        SCCSketchsBuilder {
+            scc_signatures,
+            scc_repr: HashMap::new(),
+            cg,
+            tid_to_cg_idx: cg_callers,
+            lattice,
+            type_lattice_elements,
+            parameter_aliases: BTreeMap::new(),
+        }
+    }
+
+    fn build_and_label_scc_sketch(&mut self, to_reprs: &Vec<Tid>) -> anyhow::Result<()> {
+        let sig = self
+            .scc_signatures
+            .get(&to_reprs[0])
+            .expect("scc should have a sig");
+
+        let is_internal_variable = to_reprs
+            .iter()
+            .map(|x| constraint_generation::tid_to_tvar(x))
+            .collect::<BTreeSet<_>>();
+
+        let add_new_var =
+            |var: &DerivedTypeVar,
+             grph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>|
+             -> anyhow::Result<()> {
+                if is_internal_variable.contains(var.get_base_variable())
+                || self.type_lattice_elements.contains(var.get_base_variable())
+                // TODO(Ian): evaluate this and where cs tags are inserted
+                || var.get_base_variable().get_cs_tag().is_none()
+                {
+                    insert_dtv(self.lattice, grph, var.clone());
+                } else {
+                    let ext = self
+                        .scc_repr
+                        .get(&var.get_base_variable().to_callee())
+                        .ok_or(anyhow::anyhow!(
+                            "An external variable must have a representation already built {}",
+                            var.get_base_variable().to_callee().to_string()
+                        ))?;
+
+                    if matches!(ext.copy_reachable_subgraph_into(var, grph), None) {
+                        // The target graph doesnt have any constraints on the target variable.
+                        insert_dtv(self.lattice, grph, var.clone());
+                    }
+                }
+
+                Ok(())
+            };
+        let bldr: SketchBuilder<U, T, _> =
+            SketchBuilder::new(self.lattice, &self.type_lattice_elements, &add_new_var);
+
+        let orig_graph = bldr.build_and_label_constraints(&sig)?;
+        let sk_graph = Rc::new(orig_graph);
 
         for repr in to_reprs.iter() {
             self.scc_repr
@@ -626,7 +661,7 @@ where
         final_graph.remove_nodes_unreachable_from_label();
         Ok(SketchGraph {
             quotient_graph: final_graph,
-            default_label: self.identity_element(),
+            default_label: identity_element(self.lattice),
         })
     }
 
@@ -1421,7 +1456,7 @@ mod test {
         },
     };
 
-    use super::SketchGraphBuilder;
+    use super::SCCSketchsBuilder;
 
     #[test]
     fn test_simple_equivalence() {
@@ -1546,7 +1581,7 @@ mod test {
         cg.add_edge(c2_node, alias_node, ());
         cg.add_edge(alias_node, id_node, ());
 
-        let mut skb = SketchGraphBuilder::new(
+        let mut skb = SCCSketchsBuilder::new(
             cg,
             vec![
                 SCCConstraints {
@@ -1681,7 +1716,7 @@ mod test {
         cg.add_edge(c1_node, id_node, ());
         cg.add_edge(c2_node, id_node, ());
 
-        let mut skb = SketchGraphBuilder::new(
+        let mut skb = SCCSketchsBuilder::new(
             cg,
             vec![
                 SCCConstraints {
@@ -1799,7 +1834,7 @@ mod test {
 
         cg.add_edge(caller_node, id_node, ());
 
-        let mut skb = SketchGraphBuilder::new(
+        let mut skb = SCCSketchsBuilder::new(
             cg,
             vec![
                 SCCConstraints {

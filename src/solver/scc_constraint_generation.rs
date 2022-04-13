@@ -80,6 +80,8 @@ where
                 );
 
                 let basic_cons = cont.generate_constraints(self.vman);
+                println!("Cons for: {:#?}", tid_filter);
+                println!("Basic cons: {}", basic_cons);
 
                 let mut fsa = FSA::new(&basic_cons, &self.rule_context)?;
 
