@@ -44,12 +44,14 @@ pub fn parse_type_variable_with_cs_tag(input: &str) -> IResult<&str, TypeVariabl
     map_res::<_, _, _, _, ParseIntError, _, _>(
         tuple((parse_identifier, tag(":"), digit1)),
         |(id, _, ctr): (&str, &str, &str)| {
-           
             // NOTE(Ian): This is a hack to allow creating tags in tests
             let mut fake_id = String::new();
             fake_id.push_str("fakeidforctrtags_");
             fake_id.push_str(ctr);
-            Ok(TypeVariable::with_tag(id.to_owned(), Tid::create(fake_id, ctr.to_owned())))
+            Ok(TypeVariable::with_tag(
+                id.to_owned(),
+                Tid::create(fake_id, ctr.to_owned()),
+            ))
         },
     )(input)
 }
@@ -578,18 +580,18 @@ impl Display for SubtypeConstraint {
 }
 
 /// A set of [SubtypeConstraint]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct ConstraintSet(BTreeSet<TyConstraint>);
 
 /// Constraints the representation type variable to the addition of two dynamic ty vars
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AddConstraint {
     /// lhs added type repr
-    lhs_ty: DerivedTypeVar,
+    pub lhs_ty: DerivedTypeVar,
     /// rhs added type var
-    rhs_ty: DerivedTypeVar,
+    pub rhs_ty: DerivedTypeVar,
     /// the type variable of the result
-    repr_ty: DerivedTypeVar,
+    pub repr_ty: DerivedTypeVar,
 }
 
 impl AddConstraint {

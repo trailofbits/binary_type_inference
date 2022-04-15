@@ -35,7 +35,8 @@ use crate::{
         constraint_graph::RuleContext,
         scc_constraint_generation::{self, SCCConstraints},
         type_lattice::{
-            CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLatticeElement,
+            CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLattice,
+            NamedLatticeElement,
         },
         type_sketch::{LatticeBounds, SCCSketchsBuilder, SketchGraph},
     },
@@ -347,16 +348,27 @@ impl InferenceJob {
         let cg = callgraph::Context::new(&self.proj).get_graph();
 
         let rule_context = self.get_rule_context();
-
-        scc_constraint_generation::Context::new(
+        let lattice_elems = self.get_lattice_elems().collect();
+        let mut context: scc_constraint_generation::Context<
+            _,
+            _,
+            _,
+            EnumeratedNamedLattice,
+            CustomLatticeElement,
+        > = scc_constraint_generation::Context::new(
             cg,
             &grph,
             node_ctxt,
             &self.proj.program.term.extern_symbols,
             rule_context,
             &mut self.vman,
-        )
-        .get_simplified_constraints()
+            &self.lattice,
+            lattice_elems,
+            self.lattice
+                .get_elem(&self.weakest_integral_type.get_name())
+                .expect("the weak integer type is always in the lattice"),
+        );
+        context.get_simplified_constraints()
     }
 
     pub fn get_labeled_sketch_graph(
