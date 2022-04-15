@@ -301,7 +301,7 @@ pub fn insert_dtv<T: NamedLattice<U>, U: NamedLatticeElement>(
     }
 }
 
-struct SketchBuilder<'a, U, T, V> {
+pub struct SketchBuilder<'a, U, T, V> {
     lattice: &'a T,
     type_lattice_elements: &'a HashSet<TypeVariable>,
     add_new_var: &'a V,
@@ -451,8 +451,6 @@ pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     /// Aliases some type nodes accross sccs to bind polymorphic parameters loc->loc
     parameter_aliases: BTreeMap<TypeLocation, TypeLocation>,
 }
-
-struct SCCCopyingVariableAdder {}
 
 impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> SCCSketchsBuilder<'a, U, T>
 where
