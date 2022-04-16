@@ -127,7 +127,7 @@ pub fn parse_derived_type_variable(input: &str) -> IResult<&str, DerivedTypeVar>
 }
 
 /// Parses a subtyping constraint "a.x <= b.y"
-pub fn parse_subtype_cons(input: &str) -> IResult<&str, SubtypeConstraint> {
+pub fn parse_subtype_cons(input: &str) -> IResult<&str, TyConstraint> {
     let parser = tuple((
         parse_derived_type_variable,
         space0,
@@ -135,7 +135,9 @@ pub fn parse_subtype_cons(input: &str) -> IResult<&str, SubtypeConstraint> {
         space0,
         parse_derived_type_variable,
     ));
-    map(parser, |(x, _, _, _, y)| SubtypeConstraint::new(x, y))(input)
+    map(parser, |(x, _, _, _, y)| {
+        TyConstraint::SubTy(SubtypeConstraint::new(x, y))
+    })(input)
 }
 
 /// Checks for the existence of some whitespace that delimits two parsers.
@@ -146,12 +148,30 @@ pub fn parse_whitespace_delim(input: &str) -> IResult<&str, &str> {
     )(input)
 }
 
+/// parse add constraint
+pub fn parse_add_cons(input: &str) -> IResult<&str, TyConstraint> {
+    map(
+        tuple((
+            tag("AddCons("),
+            parse_derived_type_variable,
+            tag(","),
+            parse_derived_type_variable,
+            tag(","),
+            parse_derived_type_variable,
+            tag(")"),
+        )),
+        |(_, dtv_lhs, _, dtv_rhs, _, dtv_res, _)| {
+            TyConstraint::AddCons(AddConstraint::new(dtv_lhs, dtv_rhs, dtv_res))
+        },
+    )(input)
+}
+
 /// Parses a set of subtyping constraints delimited by whitespace between the constraints.
 pub fn parse_constraint_set(input: &str) -> IResult<&str, ConstraintSet> {
-    map(
-        separated_list0(parse_whitespace_delim, parse_subtype_cons),
-        |x| ConstraintSet(BTreeSet::from_iter(x.into_iter().map(TyConstraint::SubTy))),
-    )(input.trim())
+    let parse_cons = alt((parse_add_cons, parse_subtype_cons));
+    map(separated_list0(parse_whitespace_delim, parse_cons), |x| {
+        ConstraintSet(BTreeSet::from_iter(x.into_iter()))
+    })(input.trim())
 }
 
 /// A static type variable with a name
@@ -693,6 +713,8 @@ impl DerefMut for ConstraintSet {
 
 #[cfg(test)]
 mod test {
+    use crate::constraints::TyConstraint;
+
     use super::{
         parse_derived_type_variable, parse_subtype_cons, DerivedTypeVar, FieldLabel,
         SubtypeConstraint, TypeVariable,
@@ -718,10 +740,10 @@ mod test {
         assert_eq!(
             Ok((
                 "",
-                SubtypeConstraint::new(
+                TyConstraint::SubTy(SubtypeConstraint::new(
                     DerivedTypeVar::new(TypeVariable::new("x".to_owned())),
                     DerivedTypeVar::new(TypeVariable::new("y".to_owned())),
-                )
+                ))
             )),
             parse_subtype_cons("x <= y"),
         );
@@ -734,10 +756,10 @@ mod test {
         assert_eq!(
             Ok((
                 "",
-                SubtypeConstraint::new(
+                TyConstraint::SubTy(SubtypeConstraint::new(
                     func,
                     DerivedTypeVar::new(TypeVariable::new("int".to_owned())),
-                )
+                ))
             )),
             parse_subtype_cons("sub_00001000.out <= int"),
         );
@@ -751,10 +773,10 @@ mod test {
         assert_eq!(
             Ok((
                 "",
-                SubtypeConstraint::new(
+                TyConstraint::SubTy(SubtypeConstraint::new(
                     DerivedTypeVar::new(TypeVariable::new("file_descriptor".to_owned())),
                     func,
-                )
+                ))
             )),
             parse_subtype_cons("file_descriptor <= sub_00001000.in_0"),
         );
