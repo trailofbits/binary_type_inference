@@ -33,7 +33,7 @@ use crate::{
     },
     solver::{
         constraint_graph::RuleContext,
-        scc_constraint_generation::{self, SCCConstraints},
+        scc_constraint_generation::{self, LatticeInfo, SCCConstraints},
         type_lattice::{
             CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLattice,
             NamedLatticeElement,
@@ -362,11 +362,13 @@ impl InferenceJob {
             &self.proj.program.term.extern_symbols,
             rule_context,
             &mut self.vman,
-            &self.lattice,
-            lattice_elems,
-            self.lattice
-                .get_elem(&self.weakest_integral_type.get_name())
-                .expect("the weak integer type is always in the lattice"),
+            LatticeInfo::new(
+                &self.lattice,
+                lattice_elems,
+                self.lattice
+                    .get_elem(&self.weakest_integral_type.get_name())
+                    .expect("the weak integer type is always in the lattice"),
+            ),
         );
         context.get_simplified_constraints()
     }

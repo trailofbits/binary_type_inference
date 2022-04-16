@@ -42,9 +42,7 @@ where
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
     rule_context: RuleContext,
     vman: &'b mut VariableManager,
-    lattice: &'c T,
-    type_lattice_elements: HashSet<TypeVariable>,
-    weakest_integral_type: U,
+    lattice_def: LatticeInfo<'c, T, U>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -54,29 +52,36 @@ pub struct SCCConstraints {
 }
 
 // There are only two types in the world :)
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum TypeLabels {
     Int,
     Pointer,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum PositionTy {
     LhsTy,
     RhsTy,
     ResTy,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum TypeSource {
+    PositionTy(PositionTy),
+    WeakInt,
+}
+
 #[derive(Clone)]
 struct LabelUpdate {
     pub affected_ty: PositionTy,
-    pub type_source: Vec<PositionTy>,
+    pub type_source: Vec<TypeSource>,
     pub new_label: TypeLabels,
 }
 
 struct InferenceRules<'a, U: Lattice + Clone> {
     labels: &'a mut HashMap<NodeIndex, TypeLabels>,
     sg: &'a SketchGraph<LatticeBounds<U>>,
+    weak_type_var: TypeVariable,
 }
 
 impl<'a, U> InferenceRules<'a, U>
@@ -109,12 +114,73 @@ where
         }
     }
 
+    fn get_affecting_type(&self, add_cons: &'a AddConstraint, pos: TypeSource) -> DerivedTypeVar {
+        match pos {
+            TypeSource::PositionTy(pty) => Self::access_by_pos(add_cons, pty).clone(),
+            TypeSource::WeakInt => DerivedTypeVar::new(self.weak_type_var.clone()),
+        }
+    }
+
     fn cons_to_label_update(&self, add_cons: &AddConstraint) -> Vec<LabelUpdate> {
         match self.add_constraint_to_pattern(add_cons) {
+            // i i I
             (Some(TypeLabels::Int), Some(TypeLabels::Int), None) => vec![LabelUpdate {
                 affected_ty: PositionTy::ResTy,
-                type_source: vec![PositionTy::LhsTy, { PositionTy::RhsTy }],
+                type_source: vec![
+                    TypeSource::PositionTy(PositionTy::LhsTy),
+                    TypeSource::PositionTy(PositionTy::RhsTy),
+                ],
                 new_label: TypeLabels::Int,
+            }],
+            // p i P
+            (Some(TypeLabels::Pointer), Some(TypeLabels::Int), None) => vec![LabelUpdate {
+                affected_ty: PositionTy::ResTy,
+                type_source: vec![TypeSource::PositionTy(PositionTy::LhsTy)],
+                new_label: TypeLabels::Pointer,
+            }],
+            // i p P
+            (Some(TypeLabels::Int), Some(TypeLabels::Pointer), None) => vec![LabelUpdate {
+                affected_ty: PositionTy::ResTy,
+                type_source: vec![TypeSource::PositionTy(PositionTy::RhsTy)],
+                new_label: TypeLabels::Pointer,
+            }],
+            // p I P
+            (Some(TypeLabels::Pointer), None, None) => vec![
+                LabelUpdate {
+                    affected_ty: PositionTy::ResTy,
+                    type_source: vec![TypeSource::PositionTy(PositionTy::LhsTy)],
+                    new_label: TypeLabels::Pointer,
+                },
+                LabelUpdate {
+                    affected_ty: PositionTy::RhsTy,
+                    type_source: vec![TypeSource::WeakInt],
+                    new_label: TypeLabels::Int,
+                },
+            ],
+            // P i p
+            (None, Some(TypeLabels::Int), Some(TypeLabels::Pointer)) => vec![LabelUpdate {
+                affected_ty: PositionTy::LhsTy,
+                type_source: vec![TypeSource::PositionTy(PositionTy::ResTy)],
+                new_label: TypeLabels::Pointer,
+            }],
+            // I p P
+            (None, Some(TypeLabels::Pointer), None) => vec![
+                LabelUpdate {
+                    affected_ty: PositionTy::LhsTy,
+                    type_source: vec![TypeSource::WeakInt],
+                    new_label: TypeLabels::Int,
+                },
+                LabelUpdate {
+                    affected_ty: PositionTy::ResTy,
+                    type_source: vec![TypeSource::PositionTy(PositionTy::RhsTy)],
+                    new_label: TypeLabels::Pointer,
+                },
+            ],
+            // i P p
+            (Some(TypeLabels::Int), None, Some(TypeLabels::Pointer)) => vec![LabelUpdate {
+                affected_ty: PositionTy::RhsTy,
+                type_source: vec![TypeSource::PositionTy(PositionTy::ResTy)],
+                new_label: TypeLabels::Pointer,
             }],
             _ => vec![],
         }
@@ -136,7 +202,7 @@ where
             .iter()
             .map(|src| SubtypeConstraint {
                 lhs: tgt_ty.clone(),
-                rhs: Self::access_by_pos(add_cons, *src).clone(),
+                rhs: self.get_affecting_type(add_cons, *src).clone(),
             })
             .collect()
     }
@@ -161,38 +227,31 @@ where
     }
 }
 
-impl<R, P, S, T, U> Context<'_, '_, '_, R, P, S, T, U>
-where
-    R: RegisterMapping,
-    P: PointsToMapping,
-    S: SubprocedureLocators,
-    U: NamedLatticeElement,
-    T: NamedLattice<U>,
-{
-    pub fn new<'a, 'b, 'c>(
-        cg: CallGraph,
-        graph: &'a Graph<'a>,
-        node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
-        extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
-        rule_context: RuleContext,
-        vman: &'b mut VariableManager,
+pub struct LatticeInfo<'c, T, U> {
+    lattice: &'c T,
+    type_lattice_elements: HashSet<TypeVariable>,
+    weakest_integral_type: U,
+}
+
+impl<'c, T, U> LatticeInfo<'c, T, U> {
+    pub fn new(
         lattice: &'c T,
         type_lattice_elements: HashSet<TypeVariable>,
         weakest_integral_type: U,
-    ) -> Context<'a, 'b, 'c, R, P, S, T, U> {
-        Context {
-            cg,
-            graph,
-            node_contexts,
-            extern_symbols,
-            rule_context,
-            vman,
+    ) -> LatticeInfo<'c, T, U> {
+        LatticeInfo {
             lattice,
             type_lattice_elements,
             weakest_integral_type,
         }
     }
+}
 
+impl<'c, T, U> LatticeInfo<'c, T, U>
+where
+    T: NamedLattice<U>,
+    U: NamedLatticeElement,
+{
     fn get_initial_labeling(
         &self,
         sg: &SketchGraph<LatticeBounds<U>>,
@@ -228,7 +287,7 @@ where
     }
 
     /// Constructs a new constraint set that infers wether an argument of an addition constraint is a pointer or an integer based on some inference rules.
-    fn infer_pointers(&self, orig_cs_set: &ConstraintSet) -> anyhow::Result<ConstraintSet> {
+    pub fn infer_pointers(&self, orig_cs_set: &ConstraintSet) -> anyhow::Result<ConstraintSet> {
         let mut next_cs_set = orig_cs_set.clone();
 
         let add_constraints = next_cs_set
@@ -251,10 +310,11 @@ where
                 })
                 .build_and_label_constraints(&next_cs_set)?;
             let mut base_labels = self.get_initial_labeling(&sg);
-
+            println!("{:?}", base_labels);
             let mut irules = InferenceRules {
                 labels: &mut base_labels,
                 sg: &sg,
+                weak_type_var: TypeVariable::new(self.weakest_integral_type.get_name().to_owned()),
             };
 
             for cons in irules.apply_add_constraints(&add_constraints) {
@@ -267,6 +327,35 @@ where
         } {}
 
         Ok(next_cs_set)
+    }
+}
+
+impl<R, P, S, T, U> Context<'_, '_, '_, R, P, S, T, U>
+where
+    R: RegisterMapping,
+    P: PointsToMapping,
+    S: SubprocedureLocators,
+    U: NamedLatticeElement,
+    T: NamedLattice<U>,
+{
+    pub fn new<'a, 'b, 'c>(
+        cg: CallGraph,
+        graph: &'a Graph<'a>,
+        node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
+        extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
+        rule_context: RuleContext,
+        vman: &'b mut VariableManager,
+        lattice: LatticeInfo<'c, T, U>,
+    ) -> Context<'a, 'b, 'c, R, P, S, T, U> {
+        Context {
+            cg,
+            graph,
+            node_contexts,
+            extern_symbols,
+            rule_context,
+            vman,
+            lattice_def: lattice,
+        }
     }
 
     pub fn get_simplified_constraints(&mut self) -> anyhow::Result<Vec<SCCConstraints>> {
@@ -289,7 +378,9 @@ where
                 println!("Cons for: {:#?}", tid_filter);
                 println!("Basic cons: {}", basic_cons);
 
-                let mut fsa = FSA::new(&basic_cons, &self.rule_context)?;
+                let resolved_cs_set = self.lattice_def.infer_pointers(&basic_cons)?;
+
+                let mut fsa = FSA::new(&resolved_cs_set, &self.rule_context)?;
 
                 fsa.simplify_graph(self.vman);
 
@@ -303,5 +394,61 @@ where
             .collect();
 
         maybe_scc
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use crate::{
+        constraints::{
+            parse_constraint_set, DerivedTypeVar, SubtypeConstraint, TyConstraint, TypeVariable,
+        },
+        solver::type_lattice::{LatticeDefinition, NamedLattice},
+    };
+
+    use super::LatticeInfo;
+
+    #[test]
+    fn check_constraint_pointer_specialization() {
+        let (_rem, cs_set) = parse_constraint_set(
+            "
+            x.load <= weakint
+            y <= weakint
+            AddCons(x,y,z),
+        ",
+        )
+        .expect("should parse cs_set");
+
+        let def = LatticeDefinition::new(
+            vec![
+                ("fd".to_owned(), "weakint".to_owned()),
+                ("ctr".to_owned(), "weakint".to_owned()),
+                ("weakint".to_owned(), "top".to_owned()),
+                ("bottom".to_owned(), "ctr".to_owned()),
+                ("bottom".to_owned(), "fd".to_owned()),
+            ],
+            "top".to_owned(),
+            "bottom".to_owned(),
+            "weakint".to_owned(),
+        );
+        let lattice = def.generate_lattice();
+        let elems: std::collections::HashSet<_> = lattice
+            .get_nds()
+            .into_iter()
+            .map(|(nm, _)| TypeVariable::new(nm.clone()))
+            .collect();
+        let weak_int = lattice
+            .get_elem("weakint")
+            .expect("should be part of lattice");
+        let new_set = LatticeInfo::new(&lattice, elems, weak_int)
+            .infer_pointers(&cs_set)
+            .expect("shouldnt error");
+        assert!(
+            new_set.contains(&TyConstraint::SubTy(SubtypeConstraint::new(
+                DerivedTypeVar::new(TypeVariable::new("z".to_owned())),
+                DerivedTypeVar::new(TypeVariable::new("x".to_owned()))
+            )))
+        );
     }
 }
