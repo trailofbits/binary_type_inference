@@ -310,7 +310,16 @@ where
                 })
                 .build_and_label_constraints(&next_cs_set)?;
             let mut base_labels = self.get_initial_labeling(&sg);
-            println!("{:?}", base_labels);
+
+            for (idx, _) in base_labels
+                .iter()
+                .filter(|x| matches!(x.1, TypeLabels::Int))
+            {
+                for it in sg.get_graph().get_group_for_node(*idx) {
+                    println!("Int {}", it);
+                }
+            }
+
             let mut irules = InferenceRules {
                 labels: &mut base_labels,
                 sg: &sg,
@@ -379,6 +388,13 @@ where
                 println!("Basic cons: {}", basic_cons);
 
                 let resolved_cs_set = self.lattice_def.infer_pointers(&basic_cons)?;
+
+                let diff = resolved_cs_set
+                    .difference(&basic_cons)
+                    .cloned()
+                    .collect::<BTreeSet<_>>();
+
+                println!("Diff {}", ConstraintSet::from(diff));
 
                 let mut fsa = FSA::new(&resolved_cs_set, &self.rule_context)?;
 
