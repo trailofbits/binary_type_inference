@@ -311,6 +311,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
         vman: &mut VariableManager,
     ) -> (DerivedTypeVar, ConstraintSet) {
         match op {
+            // TODO(Ian): Think about this case a bit more
+            BinOpType::IntMult => (
+                DerivedTypeVar::new(self.weakest_integral_type.clone()),
+                ConstraintSet::default(),
+            ),
             BinOpType::IntAdd => self.eval_add(lhs, rhs, defining_tvars_are_subtype_of_repr, vman),
             BinOpType::IntSub => self.eval_add(
                 lhs,
