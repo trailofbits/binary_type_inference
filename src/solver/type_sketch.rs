@@ -48,6 +48,7 @@ use super::scc_constraint_generation::SCCConstraints;
 use super::type_lattice::{
     CustomLatticeElement, LatticeDefinition, NamedLattice, NamedLatticeElement,
 };
+use std::convert::TryFrom;
 
 // an equivalence between eq nodes implies an equivalence between edge
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -1360,15 +1361,125 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
 }
 
 struct PointerTransform {
-    pub source_nodes: HashSet<NodeIndex>,
     pub pointer_node: NodeIndex,
     pub source_edges: Vec<(EdgeIndex, i64)>,
     pub target_field_edges: Vec<(EdgeIndex, Field)>,
 }
 
 impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
+    fn is_pointer(&self, idx: NodeIndex) -> bool {
+        self.quotient_graph
+            .get_graph()
+            .edges_directed(idx, Outgoing)
+            .all(|x| matches!(x.weight(), FieldLabel::Load | FieldLabel::Store))
+            && self.is_non_empty_node(idx)
+    }
+
+    fn is_non_empty_node(&self, idx: NodeIndex) -> bool {
+        self.quotient_graph
+            .get_graph()
+            .edges_directed(idx, Outgoing)
+            .next()
+            .is_some()
+    }
+
+    fn is_structure(&self, idx: NodeIndex) -> bool {
+        self.quotient_graph
+            .get_graph()
+            .edges_directed(idx, Outgoing)
+            .all(|x| matches!(x.weight(), FieldLabel::Field(_)))
+            && self.is_non_empty_node(idx)
+    }
+
+    fn all_children<F: FnMut(NodeIndex) -> bool>(&self, idx: NodeIndex, predicate: F) -> bool {
+        self.quotient_graph
+            .get_graph()
+            .neighbors(idx)
+            .all(predicate)
+    }
+
+    fn all_incoming_edges<F: FnMut(EdgeIndex) -> bool>(
+        &self,
+        idx: NodeIndex,
+        mut predicate: F,
+    ) -> bool {
+        self.quotient_graph
+            .get_graph()
+            .edges_directed(idx, Incoming)
+            .all(|x| predicate(x.id()))
+    }
+
+    fn field_edges(&self, nd_idx: NodeIndex) -> impl Iterator<Item = (EdgeIndex, Field)> + '_ {
+        self.quotient_graph
+            .get_graph()
+            .edges_directed(nd_idx, Outgoing)
+            .filter_map(|e| {
+                if let FieldLabel::Field(fld) = e.weight() {
+                    Some((e.id(), fld.clone()))
+                } else {
+                    None
+                }
+            })
+    }
+
+    fn node_to_pointer_transform(&self, nd_idx: NodeIndex) -> PointerTransform {
+        let source_edges = self
+            .quotient_graph
+            .get_graph()
+            .edges_directed(nd_idx, Incoming)
+            .map(|e| {
+                (
+                    e.id(),
+                    if let FieldLabel::Add(disp) = e.weight() {
+                        i64::try_from(*disp).expect("displacement too large")
+                    } else {
+                        unreachable!()
+                    },
+                )
+            })
+            .collect::<Vec<(EdgeIndex, i64)>>();
+
+        let target_field_edges: Vec<(EdgeIndex, Field)> = self
+            .quotient_graph
+            .get_graph()
+            .neighbors(nd_idx)
+            .map(|n| self.field_edges(n))
+            .flatten()
+            .collect();
+
+        PointerTransform {
+            pointer_node: nd_idx,
+            source_edges,
+            target_field_edges,
+        }
+    }
+
     fn find_pointer_simplification(&self) -> Option<PointerTransform> {
-        todo!()
+        // Conditions to collect a pointer node:
+        // The node has store and out edges.
+        // All reached nodes only have fields
+        // All incoming edges are adds
+        let mut pointers = self
+            .quotient_graph
+            .get_graph()
+            .node_indices()
+            .filter(|nd_idx| self.is_pointer(*nd_idx))
+            .filter(|nd_idx| self.all_children(*nd_idx, |x| self.is_structure(x)))
+            .filter(|nd_idx| {
+                self.all_incoming_edges(*nd_idx, |eid| {
+                    matches!(
+                        self.quotient_graph
+                            .get_graph()
+                            .edge_weight(eid)
+                            .expect("edge ref should be valid"),
+                        FieldLabel::Add(_)
+                    )
+                })
+            });
+
+        pointers
+            .next()
+            .map(|nd_idx| self.node_to_pointer_transform(nd_idx))
     }
 
     fn apply_pointer_transform(&mut self, pt: PointerTransform) {
@@ -1425,9 +1536,18 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         // 4
         let qgroups = generate_quotient_groups_for_initial_set(
             self.get_graph(),
-            pt.source_nodes
+            pt.source_edges
                 .iter()
-                .map(|src| (*src, pt.pointer_node))
+                .map(|(eidx, _)| {
+                    (
+                        self.quotient_graph
+                            .get_graph()
+                            .edge_endpoints(*eidx)
+                            .expect("Edge indices should be valid")
+                            .0,
+                        pt.pointer_node,
+                    )
+                })
                 .collect::<Vec<_>>()
                 .as_ref(),
         );
