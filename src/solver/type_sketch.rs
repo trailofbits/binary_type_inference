@@ -452,10 +452,12 @@ where
 
         self.label_by(&mut quoted_graph, sig);
 
-        let orig_sk_graph = SketchGraph {
+        let mut orig_sk_graph = SketchGraph {
             quotient_graph: quoted_graph,
             default_label: identity_element(self.lattice),
         };
+
+        orig_sk_graph.simplify_pointers();
 
         Ok(orig_sk_graph)
     }
@@ -1484,10 +1486,11 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
 
     fn apply_pointer_transform(&mut self, pt: PointerTransform) {
         // steps:
-        // 1. Compute new field edges by applying each displacement to the original field edges
-        // 2. remove source edges and target edges.
-        // 3. Insert computed new field edges which will be between the the loaded/stored node and field targets.
-        // 4. Quotient the graph with the additional starting relations that {pointer_node R x | x \in source_nodes}
+        // 1. Compute new field edges by applying each displacement to the original field edges.
+        // 2. Save initial unions so that removing edges doesnt invalidate the index
+        // 3. remove source edges and target edges.
+        // 4. Insert computed new field edges which will be between the the loaded/stored node and field targets.
+        // 5. Quotient the graph with the additional starting relations that {pointer_node R x | x \in source_nodes}
 
         // 1
         let new_edges: Vec<(NodeIndex, NodeIndex, Field)> = pt
@@ -1518,6 +1521,22 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
             .collect();
 
         // 2
+        let init_unions = pt
+            .source_edges
+            .iter()
+            .map(|(eidx, _)| {
+                (
+                    self.quotient_graph
+                        .get_graph()
+                        .edge_endpoints(*eidx)
+                        .expect("Edge indices should be valid")
+                        .0,
+                    pt.pointer_node,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        // 3
         pt.source_edges
             .iter()
             .map(|(idx, _)| idx)
@@ -1526,31 +1545,16 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
                 self.quotient_graph.get_graph_mut().remove_edge(*eidx);
             });
 
-        // 3
+        // 4
         for (src, dst, fld) in new_edges {
             self.quotient_graph
                 .get_graph_mut()
                 .add_edge(src, dst, FieldLabel::Field(fld));
         }
 
-        // 4
-        let qgroups = generate_quotient_groups_for_initial_set(
-            self.get_graph(),
-            pt.source_edges
-                .iter()
-                .map(|(eidx, _)| {
-                    (
-                        self.quotient_graph
-                            .get_graph()
-                            .edge_endpoints(*eidx)
-                            .expect("Edge indices should be valid")
-                            .0,
-                        pt.pointer_node,
-                    )
-                })
-                .collect::<Vec<_>>()
-                .as_ref(),
-        );
+        // 5
+        let qgroups =
+            generate_quotient_groups_for_initial_set(self.get_graph(), init_unions.as_ref());
 
         self.quotient_graph.quoetient_graph(&qgroups);
     }
