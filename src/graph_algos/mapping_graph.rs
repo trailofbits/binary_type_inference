@@ -401,7 +401,6 @@ impl<
         let mut group_to_new_node = HashMap::new();
 
         for (i, grp) in groups.iter().enumerate() {
-            println!("{}", i);
             if !grp.is_empty() {
                 let new_weight = grp
                     .iter()
