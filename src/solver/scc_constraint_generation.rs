@@ -402,6 +402,8 @@ where
 
                 let cons = fsa.walk_constraints();
 
+                println!("Final {}", cons);
+
                 Ok(SCCConstraints {
                     scc: Vec::from_iter(tid_filter.into_iter()),
                     constraints: cons,

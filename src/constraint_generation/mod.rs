@@ -312,6 +312,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
     ) -> (DerivedTypeVar, ConstraintSet) {
         match op {
             // TODO(Ian): Think about this case a bit more
+            // Should probably at a minimum propogate something to the operands
             BinOpType::IntMult => (
                 DerivedTypeVar::new(self.weakest_integral_type.clone()),
                 ConstraintSet::default(),
