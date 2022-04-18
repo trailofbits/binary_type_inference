@@ -437,7 +437,7 @@ where
             });
     }
 
-    pub fn build_and_label_constraints(
+    fn build_without_pointer_simplification(
         &self,
         sig: &ConstraintSet,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
@@ -452,10 +452,19 @@ where
 
         self.label_by(&mut quoted_graph, sig);
 
-        let mut orig_sk_graph = SketchGraph {
+        let orig_sk_graph = SketchGraph {
             quotient_graph: quoted_graph,
             default_label: identity_element(self.lattice),
         };
+
+        Ok(orig_sk_graph)
+    }
+
+    pub fn build_and_label_constraints(
+        &self,
+        sig: &ConstraintSet,
+    ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
+        let mut orig_sk_graph = self.build_without_pointer_simplification(sig)?;
 
         orig_sk_graph.simplify_pointers();
 
@@ -1362,10 +1371,11 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
     }
 }
 
+#[derive(Debug)]
 struct PointerTransform {
     pub pointer_node: NodeIndex,
-    pub source_edges: Vec<(EdgeIndex, i64)>,
-    pub target_field_edges: Vec<(EdgeIndex, Field)>,
+    pub source_edges: BTreeSet<(EdgeIndex, i64)>,
+    pub target_field_edges: BTreeSet<(EdgeIndex, Field)>,
 }
 
 impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
@@ -1439,9 +1449,9 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
                     },
                 )
             })
-            .collect::<Vec<(EdgeIndex, i64)>>();
+            .collect::<BTreeSet<(EdgeIndex, i64)>>();
 
-        let target_field_edges: Vec<(EdgeIndex, Field)> = self
+        let target_field_edges: BTreeSet<(EdgeIndex, Field)> = self
             .quotient_graph
             .get_graph()
             .neighbors(nd_idx)
@@ -1535,7 +1545,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
                 )
             })
             .collect::<Vec<_>>();
-
+        println!("{:#?}", init_unions);
         // 3
         pt.source_edges
             .iter()
@@ -1555,8 +1565,8 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         // 5
         let qgroups =
             generate_quotient_groups_for_initial_set(self.get_graph(), init_unions.as_ref());
-
-        self.quotient_graph.quoetient_graph(&qgroups);
+        println!("{:#?}", qgroups);
+        self.quotient_graph = self.quotient_graph.quoetient_graph(&qgroups);
     }
 
     fn simplify_pointers(&mut self) {
@@ -1698,13 +1708,14 @@ mod test {
             parse_constraint_set, parse_derived_type_variable, ConstraintSet, DerivedTypeVar,
             Field, FieldLabel, TypeVariable,
         },
+        graph_algos::mapping_graph::MappingGraph,
         solver::{
             scc_constraint_generation::SCCConstraints,
-            type_lattice::{LatticeDefinition, NamedLatticeElement},
+            type_lattice::{CustomLatticeElement, LatticeDefinition, NamedLatticeElement},
         },
     };
 
-    use super::SCCSketchsBuilder;
+    use super::{insert_dtv, LatticeBounds, SCCSketchsBuilder, SketchBuilder};
 
     #[test]
     fn test_simple_equivalence() {
@@ -2134,30 +2145,67 @@ mod test {
     }
 
     #[test]
-    fn test_double_pointer() {
-        // should reduce to one type
-        let (rem, test_set) = parse_constraint_set(
-            "
-            curr_target.load.σ64@0.+8 <= curr_target
-            target.load.σ64@8 <= curr_target.store.σ64@0
-        ",
-        )
-        .expect("Should parse constraints");
-        assert!(rem.len() == 0);
-        /*
-        let grph = SketchGraph::<()>::new(&test_set);
-
-        println!(
-            "{}",
-            Dot::new(
-                &grph
-                    .quotient_graph
-                    .map(|nd_id, _nd_weight| nd_id.index().to_string(), |_e, e2| e2)
-            )
+    fn test_pointer_simplification_lookup() {
+        let def = LatticeDefinition::new(
+            vec![
+                ("char".to_owned(), "top".to_owned()),
+                ("int".to_owned(), "top".to_owned()),
+                ("bottom".to_owned(), "char".to_owned()),
+                ("bottom".to_owned(), "int".to_owned()),
+            ],
+            "top".to_owned(),
+            "bottom".to_owned(),
+            "int".to_owned(),
         );
 
-        for (dtv, idx) in grph.dtv_to_group.iter() {
-            println!("Dtv: {} Group: {}", dtv, idx.index());
-        }*/
+        let lat = def.generate_lattice();
+        let nd_set = lat
+            .get_nds()
+            .iter()
+            .map(|x| TypeVariable::new(x.0.clone()))
+            .collect::<HashSet<TypeVariable>>();
+        let add_new_var = |dtv: &DerivedTypeVar,
+                           mpgrph: &mut MappingGraph<
+            LatticeBounds<CustomLatticeElement>,
+            DerivedTypeVar,
+            FieldLabel,
+        >| {
+            insert_dtv(&lat, mpgrph, dtv.clone());
+            Ok(())
+        };
+        let skb = SketchBuilder::new(&lat, &nd_set, &add_new_var);
+
+        let lookup_cons_set = parse_cons_set(
+            "
+        eleven.+40 <= twelve
+        twelve.load <= thirteen
+        twelve.store <= thirteen
+        thirteen.σ64@0  <= six
+        six.+40 <= twelve
+        six.load <= nine
+        nine.σ64@40 <= six
+        ",
+        );
+
+        let mut simplified_sketch = skb
+            .build_without_pointer_simplification(&lookup_cons_set)
+            .expect("Should be able to build");
+        println!("{}", simplified_sketch);
+        let pt = simplified_sketch.find_pointer_simplification();
+        println!("{:#?}", pt);
+
+        if let Some(pt) = pt {
+            simplified_sketch.apply_pointer_transform(pt);
+            println!("{}", simplified_sketch);
+
+            assert_eq!(
+                simplified_sketch
+                    .get_graph()
+                    .get_graph()
+                    .node_indices()
+                    .count(),
+                2,
+            );
+        }
     }
 }

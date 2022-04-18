@@ -12,6 +12,7 @@ use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     stable_graph::StableDiGraph,
     visit::{Dfs, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNodeReferences, Walker},
+    Directed,
     EdgeDirection::Outgoing,
 };
 
@@ -388,7 +389,7 @@ impl<
 
     /// Note it is invalid to pass this function an empty group
     pub fn quoetient_graph(&self, groups: &[BTreeSet<NodeIndex>]) -> MappingGraph<W, N, E> {
-        let mut nd: MappingGraph<W, BTreeSet<NodeIndex>, E> = MappingGraph::new();
+        let mut nd = StableDiGraph::new();
 
         let repr_mapping = groups
             .iter()
@@ -397,7 +398,10 @@ impl<
             .flatten()
             .collect::<HashMap<_, _>>();
 
-        for grp in groups.iter() {
+        let mut group_to_new_node = HashMap::new();
+
+        for (i, grp) in groups.iter().enumerate() {
+            println!("{}", i);
             if !grp.is_empty() {
                 let new_weight = grp
                     .iter()
@@ -405,30 +409,32 @@ impl<
                     .reduce(|fst, s| fst.operate(&s))
                     .expect("Group should be non empty");
 
-                let _new_node = nd.add_node(grp.clone(), new_weight);
+                let new_node_repr = nd.add_node(new_weight);
+                group_to_new_node.insert(i, new_node_repr);
             }
         }
 
+        let mut eset = HashSet::new();
         for edge in self.get_graph().edge_references() {
-            let repr_src = &groups[*repr_mapping.get(&edge.source()).unwrap()];
-            let repr_dst = &groups[*repr_mapping.get(&edge.target()).unwrap()];
-
-            let src_node = *nd
-                .get_node(repr_src)
-                .expect("All nodes should be added to the graph");
-            let dst_node = *nd
-                .get_node(repr_dst)
-                .expect("All nodes should be added to the graph");
-            nd.add_edge(src_node, dst_node, edge.weight().clone());
+            let repr_src = group_to_new_node
+                .get(repr_mapping.get(&edge.source()).unwrap())
+                .unwrap();
+            let repr_dst = group_to_new_node
+                .get(repr_mapping.get(&edge.target()).unwrap())
+                .unwrap();
+            let e = (*repr_src, *repr_dst, edge.weight().clone());
+            if !eset.contains(&e) {
+                nd.add_edge(e.0, e.1, e.2.clone());
+                eset.insert(e);
+            }
         }
 
         let new_mapping = self
             .nodes
             .iter()
             .map(|(orig_label, y)| {
-                let new_idx = nd
-                    .get_node(&groups[*repr_mapping.get(y).unwrap()])
-                    .expect("All nodes should be added to the graph");
+                let new_idx = group_to_new_node.get(repr_mapping.get(y).unwrap()).unwrap();
+
                 (orig_label.clone(), *new_idx)
             })
             .collect::<HashMap<_, _>>();
@@ -443,7 +449,7 @@ impl<
         });
 
         MappingGraph {
-            grph: nd.grph,
+            grph: nd,
             nodes: new_mapping,
             reprs_to_graph_node: new_rev_mapping,
         }
