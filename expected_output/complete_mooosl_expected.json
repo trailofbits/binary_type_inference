@@ -10,118 +10,9 @@
             {
                 "lhs": {
                     "var": {
-                        "name": "sub_001014fb"
+                        "name": "loop_breaker339"
                     },
-                    "labels": [
-                        {
-                            "In": 1
-                        }
-                    ]
-                },
-                "rhs": {
-                    "var": {
-                        "name": "sub_001013db",
-                        "cs_tag": {
-                            "address": "001014ff",
-                            "id": "blk_001014ff"
-                        }
-                    },
-                    "labels": [
-                        {
-                            "In": 0
-                        }
-                    ]
-                }
-            },
-            {
-                "lhs": {
-                    "var": {
-                        "name": "sub_001014fb"
-                    },
-                    "labels": [
-                        {
-                            "In": 2
-                        }
-                    ]
-                },
-                "rhs": {
-                    "var": {
-                        "name": "sub_001013db",
-                        "cs_tag": {
-                            "address": "001014ff",
-                            "id": "blk_001014ff"
-                        }
-                    },
-                    "labels": [
-                        {
-                            "In": 1
-                        }
-                    ]
-                }
-            },
-            {
-                "lhs": {
-                    "var": {
-                        "name": "sub_001014fb"
-                    },
-                    "labels": [
-                        {
-                            "In": 1
-                        }
-                    ]
-                },
-                "rhs": {
-                    "var": {
-                        "name": "sub_00101080",
-                        "cs_tag": {
-                            "address": "00101569",
-                            "id": "blk_00101569"
-                        }
-                    },
-                    "labels": [
-                        {
-                            "In": 0
-                        }
-                    ]
-                }
-            },
-            {
-                "lhs": {
-                    "var": {
-                        "name": "sub_001014fb"
-                    },
-                    "labels": [
-                        {
-                            "In": 2
-                        }
-                    ]
-                },
-                "rhs": {
-                    "var": {
-                        "name": "sub_00101080",
-                        "cs_tag": {
-                            "address": "00101569",
-                            "id": "blk_00101569"
-                        }
-                    },
-                    "labels": [
-                        {
-                            "In": 2
-                        }
-                    ]
-                }
-            },
-            {
-                "lhs": {
-                    "var": {
-                        "name": "sub_001014fb"
-                    },
-                    "labels": [
-                        {
-                            "In": 1
-                        },
-                        "Load"
-                    ]
+                    "labels": []
                 },
                 "rhs": {
                     "var": {
@@ -130,6 +21,202 @@
                     "labels": [
                         {
                             "Out": 0
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "loop_breaker339"
+                    },
+                    "labels": [
+                        "Load"
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "loop_breaker340"
+                    },
+                    "labels": []
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "loop_breaker339"
+                    },
+                    "labels": [
+                        "Load",
+                        {
+                            "Field": {
+                                "offset": 0,
+                                "size": 64
+                            }
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00101080",
+                        "cs_tag": {
+                            "address": "00101569",
+                            "id": "blk_00101569"
+                        }
+                    },
+                    "labels": [
+                        {
+                            "In": 1
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "loop_breaker340"
+                    },
+                    "labels": [
+                        {
+                            "Field": {
+                                "offset": 40,
+                                "size": 64
+                            }
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "loop_breaker339"
+                    },
+                    "labels": []
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        },
+                        "Load",
+                        {
+                            "Field": {
+                                "offset": 0,
+                                "size": 64
+                            }
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "loop_breaker339"
+                    },
+                    "labels": []
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 1
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00101080",
+                        "cs_tag": {
+                            "address": "00101569",
+                            "id": "blk_00101569"
+                        }
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 1
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_001013db",
+                        "cs_tag": {
+                            "address": "001014ff",
+                            "id": "blk_001014ff"
+                        }
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 2
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_00101080",
+                        "cs_tag": {
+                            "address": "00101569",
+                            "id": "blk_00101569"
+                        }
+                    },
+                    "labels": [
+                        {
+                            "In": 2
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001014fb"
+                    },
+                    "labels": [
+                        {
+                            "In": 2
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_001013db",
+                        "cs_tag": {
+                            "address": "001014ff",
+                            "id": "blk_001014ff"
+                        }
+                    },
+                    "labels": [
+                        {
+                            "In": 1
                         }
                     ]
                 }
