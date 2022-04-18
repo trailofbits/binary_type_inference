@@ -923,6 +923,8 @@ where
             ));
         }
 
+        orig_repr.simplify_pointers();
+
         self.replace_scc_repr(associated_scc_tids, orig_repr);
     }
 
@@ -1545,7 +1547,6 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
                 )
             })
             .collect::<Vec<_>>();
-        println!("{:#?}", init_unions);
         // 3
         pt.source_edges
             .iter()
@@ -1565,11 +1566,10 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         // 5
         let qgroups =
             generate_quotient_groups_for_initial_set(self.get_graph(), init_unions.as_ref());
-        println!("{:#?}", qgroups);
         self.quotient_graph = self.quotient_graph.quoetient_graph(&qgroups);
     }
 
-    fn simplify_pointers(&mut self) {
+    pub fn simplify_pointers(&mut self) {
         while let Some(pt) = self.find_pointer_simplification() {
             self.apply_pointer_transform(pt);
         }
