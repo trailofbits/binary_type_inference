@@ -122,28 +122,40 @@ impl<
 
         // Nodes are looked up by their original path. Since we always refine the original type we should be able to follow a path from the original
         // tvar in the refined tvar.
-        let edges_outside_subgraph = explore_paths(&self.grph, orig_var_idx)
-            .map(|(pth, reached_id)| {
-                let incoming_edges = self
-                    .get_graph()
-                    .edges_directed(reached_id, petgraph::EdgeDirection::Incoming);
+        let edges_outside_subgraph: Vec<(E, NodeIndex, Vec<E>)> =
+            explore_paths(&self.grph, orig_var_idx)
+                .map(|(pth, reached_id)| {
+                    let incoming_edges = self
+                        .get_graph()
+                        .edges_directed(reached_id, petgraph::EdgeDirection::Incoming);
 
-                incoming_edges
-                    .filter_map(|orig_e| {
-                        // TODO(Ian): saw a reflexive edge in the original graph... why?
-                        assert!(orig_e.source() != reached_id);
-                        if nodes.contains(&orig_e.source()) {
-                            //internal _edge
-                            None
-                        } else {
-                            Some((orig_e.weight().clone(), orig_e.source(), pth.clone()))
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .into_iter()
-            })
-            .flatten()
-            .collect::<Vec<_>>();
+                    incoming_edges
+                        .filter_map(|orig_e| {
+                            // TODO(Ian): saw a reflexive edge in the original graph... why?
+                            assert!(orig_e.source() != reached_id);
+                            if nodes.contains(&orig_e.source()) {
+                                //internal _edge
+                                None
+                            } else {
+                                Some((
+                                    orig_e.weight().clone(),
+                                    orig_e.source(),
+                                    pth.iter()
+                                        .map(|eidx| {
+                                            self.grph
+                                                .edge_weight(*eidx)
+                                                .expect("eid should be valid")
+                                                .clone()
+                                        })
+                                        .collect(),
+                                ))
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                })
+                .flatten()
+                .collect::<Vec<_>>();
 
         // remove reached nodes
         nodes.iter().for_each(|nd| {
@@ -203,11 +215,7 @@ impl<
                     *grph
                         .get_node(&key)
                         .expect("replacing graph should represent node being replaced"),
-                    nd_in_subgraph_pth.iter().map(|e_index| {
-                        grph.grph
-                            .edge_weight(*e_index)
-                            .expect("edge references should be valid")
-                    }),
+                    nd_in_subgraph_pth.iter(),
                 ) {
                     let new_idx = old_idx_to_new_idx_mapping
                         .get(&old_idx)

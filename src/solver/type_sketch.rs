@@ -7,8 +7,7 @@ use std::rc::Rc;
 use std::{collections::HashMap, hash::Hash};
 
 use alga::general::{
-    AbstractMagma, Additive, AdditiveMagma, Field, Identity, JoinSemilattice, Lattice,
-    MeetSemilattice,
+    AbstractMagma, Additive, AdditiveMagma, Identity, JoinSemilattice, Lattice, MeetSemilattice,
 };
 use anyhow::Context;
 use cwe_checker_lib::analysis::graph;
@@ -37,8 +36,9 @@ use EdgeDirection::Outgoing;
 use crate::analysis::callgraph::CallGraph;
 use crate::constraint_generation::{self, tid_to_tvar};
 use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, FieldLabel, TyConstraint, TypeVariable, Variance,
+    ConstraintSet, DerivedTypeVar, Field, FieldLabel, TyConstraint, TypeVariable, Variance,
 };
+use crate::ctypes::Union;
 use crate::graph_algos::mapping_graph::{self, MappingGraph};
 use crate::graph_algos::{explore_paths, find_node};
 
@@ -214,14 +214,36 @@ where
     uf
 }
 
-fn generate_quotient_groups<C>(
+fn create_union_find_for_graph_nodes<C>(
     grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
-    cons: &ConstraintSet,
+) -> UnionFind<usize>
+where
+    C: PartialEq,
+{
+    let uf = UnionFind::new(
+        grph.get_graph()
+            .node_indices()
+            .max()
+            .unwrap_or(NodeIndex::from(0))
+            .index()
+            + 1,
+    );
+    uf
+}
+
+fn generate_quotient_groups_for_initial_set<C>(
+    grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
+    initial_unions: &[(NodeIndex, NodeIndex)],
 ) -> Vec<BTreeSet<NodeIndex>>
 where
     C: std::cmp::PartialEq,
 {
-    let mut cons = constraint_quotients(grph, cons);
+    let mut cons = create_union_find_for_graph_nodes(grph);
+
+    for (src, dst) in initial_unions {
+        cons.union(src.index(), dst.index());
+    }
+
     info!("Constraint quotients {:#?}", cons.clone().into_labeling());
     info!("Node mapping {:#?}", grph.get_node_mapping());
     let mut edge_implications = get_edge_set(grph);
@@ -273,6 +295,29 @@ where
         )
         .into_values()
         .collect()
+}
+
+fn generate_quotient_groups<C>(
+    grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
+    cons: &ConstraintSet,
+) -> Vec<BTreeSet<NodeIndex>>
+where
+    C: std::cmp::PartialEq,
+{
+    let init_unions: Vec<(NodeIndex, NodeIndex)> = cons
+        .iter()
+        .filter_map(|c| {
+            if let TyConstraint::SubTy(sty) = c {
+                let lt_node = grph.get_node(&sty.lhs).unwrap();
+                let gt_node = grph.get_node(&sty.rhs).unwrap();
+                Some((*lt_node, *gt_node))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    generate_quotient_groups_for_initial_set(grph, &init_unions)
 }
 
 /// The identity operation described for Lattice bounds
@@ -1314,7 +1359,88 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
     }
 }
 
+struct PointerTransform {
+    pub source_nodes: HashSet<NodeIndex>,
+    pub pointer_node: NodeIndex,
+    pub source_edges: Vec<(EdgeIndex, i64)>,
+    pub target_field_edges: Vec<(EdgeIndex, Field)>,
+}
+
 impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
+    fn find_pointer_simplification(&self) -> Option<PointerTransform> {
+        todo!()
+    }
+
+    fn apply_pointer_transform(&mut self, pt: PointerTransform) {
+        // steps:
+        // 1. Compute new field edges by applying each displacement to the original field edges
+        // 2. remove source edges and target edges.
+        // 3. Insert computed new field edges which will be between the the loaded/stored node and field targets.
+        // 4. Quotient the graph with the additional starting relations that {pointer_node R x | x \in source_nodes}
+
+        // 1
+        let new_edges: Vec<(NodeIndex, NodeIndex, Field)> = pt
+            .target_field_edges
+            .iter()
+            .map(|(idx, field)| {
+                let (src, dst) = &self
+                    .get_graph()
+                    .get_graph()
+                    .edge_endpoints(*idx)
+                    .expect("edge indices should be valid");
+
+                pt.source_edges
+                    .iter()
+                    .map(|(_, disp)| {
+                        (
+                            *src,
+                            *dst,
+                            Field {
+                                offset: field.offset + disp,
+                                size: field.size,
+                            },
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect();
+
+        // 2
+        pt.source_edges
+            .iter()
+            .map(|(idx, _)| idx)
+            .chain(pt.target_field_edges.iter().map(|(idx, _)| idx))
+            .for_each(|eidx| {
+                self.quotient_graph.get_graph_mut().remove_edge(*eidx);
+            });
+
+        // 3
+        for (src, dst, fld) in new_edges {
+            self.quotient_graph
+                .get_graph_mut()
+                .add_edge(src, dst, FieldLabel::Field(fld));
+        }
+
+        // 4
+        let qgroups = generate_quotient_groups_for_initial_set(
+            self.get_graph(),
+            pt.source_nodes
+                .iter()
+                .map(|src| (*src, pt.pointer_node))
+                .collect::<Vec<_>>()
+                .as_ref(),
+        );
+
+        self.quotient_graph.quoetient_graph(&qgroups);
+    }
+
+    fn simplify_pointers(&mut self) {
+        while let Some(pt) = self.find_pointer_simplification() {
+            self.apply_pointer_transform(pt);
+        }
+    }
+
     fn add_idx_to(
         &self,
         from_base: &TypeVariable,
