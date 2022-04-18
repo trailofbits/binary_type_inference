@@ -1412,7 +1412,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
             .all(predicate)
     }
 
-    fn all_incoming_edges<F: FnMut(EdgeIndex) -> bool>(
+    fn any_incoming_edges<F: FnMut(EdgeIndex) -> bool>(
         &self,
         idx: NodeIndex,
         mut predicate: F,
@@ -1420,7 +1420,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         self.quotient_graph
             .get_graph()
             .edges_directed(idx, Incoming)
-            .all(|x| predicate(x.id()))
+            .any(|x| predicate(x.id()))
     }
 
     fn field_edges(&self, nd_idx: NodeIndex) -> impl Iterator<Item = (EdgeIndex, Field)> + '_ {
@@ -1441,15 +1441,15 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
             .quotient_graph
             .get_graph()
             .edges_directed(nd_idx, Incoming)
-            .map(|e| {
-                (
-                    e.id(),
-                    if let FieldLabel::Add(disp) = e.weight() {
-                        i64::try_from(*disp).expect("displacement too large")
-                    } else {
-                        unreachable!()
-                    },
-                )
+            .filter_map(|e| {
+                if let FieldLabel::Add(disp) = e.weight() {
+                    Some((
+                        e.id(),
+                        i64::try_from(*disp).expect("displacement too large"),
+                    ))
+                } else {
+                    None
+                }
             })
             .collect::<BTreeSet<(EdgeIndex, i64)>>();
 
@@ -1480,7 +1480,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
             .filter(|nd_idx| self.is_pointer(*nd_idx))
             .filter(|nd_idx| self.all_children(*nd_idx, |x| self.is_structure(x)))
             .filter(|nd_idx| {
-                self.all_incoming_edges(*nd_idx, |eid| {
+                self.any_incoming_edges(*nd_idx, |eid| {
                     matches!(
                         self.quotient_graph
                             .get_graph()
