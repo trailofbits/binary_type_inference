@@ -1,4 +1,5 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::cmp::Reverse;
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet};
 use std::fmt::{format, Display};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
@@ -486,6 +487,7 @@ where
 }
 
 /// Refers to some type node in a sketch graph within a program
+/// Can always find because sketch graphs are prefix closed
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct TypeLocation {
     scc: Vec<Tid>,
@@ -507,6 +509,13 @@ pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     type_lattice_elements: HashSet<TypeVariable>,
     /// Aliases some type nodes accross sccs to bind polymorphic parameters loc->loc
     parameter_aliases: BTreeMap<TypeLocation, TypeLocation>,
+}
+
+struct SketchSCCInfo {
+    /// the path to an entry of this scc
+    /// if all of these are covered by some other subsketch then the effects of this scc are covered
+    pub entry_paths: HashSet<im_rc::Vector<FieldLabel>>,
+    pub successors: HashSet<usize>,
 }
 
 impl<'a, U: NamedLatticeElement, T: NamedLattice<U>> SCCSketchsBuilder<'a, U, T>
@@ -754,6 +763,156 @@ where
         for tid in associated_scc_tids {
             let target_tvar = tid_to_tvar(tid);
             self.scc_repr.insert(target_tvar, shared.clone());
+        }
+    }
+
+    /// Takes  a setch and produces a mapping of scc info
+    fn sketch_to_scc_map(
+        subty: &Sketch<LatticeBounds<U>>,
+    ) -> anyhow::Result<HashMap<usize, SketchSCCInfo>> {
+        let subtyg = Graph::from(subty.get_graph().get_graph().clone());
+        let entry_idx = subtyg
+            .node_indices()
+            .filter(|idx| subtyg.edges_directed(*idx, Incoming).next().is_none())
+            .next()
+            .ok_or(anyhow::anyhow!("No entry in sketch"))?;
+
+        let nd_to_path = explore_paths(&subtyg, entry_idx)
+            .into_iter()
+            .map(|(pth, nd)| {
+                (
+                    nd,
+                    pth.into_iter()
+                        .map(|eid| subtyg.edge_weight(eid).unwrap().clone())
+                        .collect::<im_rc::Vector<FieldLabel>>(),
+                )
+            })
+            .collect::<HashMap<_, im_rc::Vector<FieldLabel>>>();
+
+        let subty_with_reaching_labels = subtyg.map(
+            |_, _| (),
+            |eid, eref| {
+                let (src, _) = subtyg.edge_endpoints(eid).expect("edge id should be valid");
+                let mut total_path = nd_to_path
+                    .get(&src)
+                    .expect("all nodes in graph should be reachable")
+                    .clone();
+                total_path.push_back(eref.clone());
+                total_path
+            },
+        );
+
+        let condensed = petgraph::algo::condensation(subty_with_reaching_labels, false);
+
+        let ordering = petgraph::algo::toposort(&condensed, None)
+            .map_err(|_| anyhow::anyhow!("cycle error"))
+            .with_context(|| {
+                "Constructing topological sort of condensed subty for sketch building"
+            })?;
+
+        let nd_to_scc_id = ordering
+            .iter()
+            .enumerate()
+            .map(|(i, ivs)| (*ivs, i))
+            .collect::<HashMap<_, _>>();
+
+        Ok(ordering
+            .into_iter()
+            .enumerate()
+            .map(|(i, idx)| {
+                (i, {
+                    let entrance_paths = condensed
+                        .edges_directed(idx, Incoming)
+                        .map(|eref| eref.weight().clone())
+                        .collect();
+                    let successors: HashSet<usize> = condensed
+                        .neighbors(idx)
+                        .map(|child_idx| {
+                            *nd_to_scc_id
+                                .get(&child_idx)
+                                .expect("all nodes should have an scc id")
+                        })
+                        .collect();
+                    SketchSCCInfo {
+                        entry_paths: entrance_paths,
+                        successors,
+                    }
+                })
+            })
+            .collect::<HashMap<_, _>>())
+    }
+
+    fn sketches_have_equivalent_path(
+        target_path: &[FieldLabel],
+        subty: &Sketch<LatticeBounds<U>>,
+        super_type: &Sketch<LatticeBounds<U>>,
+    ) -> bool {
+        match (
+            subty.get_subsketch_at_path(target_path),
+            super_type.get_subsketch_at_path(target_path),
+        ) {
+            (Some(c1), Some(c2)) => c1.is_structurally_equal(&c2),
+            _ => false,
+        }
+    }
+
+    /// Note:(Ian): only works on sketches where the lhs is a subtype (more precise than the super type)
+    fn find_shared_subgraphs(
+        subty: &Sketch<LatticeBounds<U>>,
+        super_type: &Sketch<LatticeBounds<U>>,
+    ) -> anyhow::Result<HashSet<im_rc::Vector<FieldLabel>>> {
+        // operates over the condensation of the types maybe? so then we can get a toplogical ordering and only replace what is required
+
+        // Steps:
+        // 1. topological ordering of the sub type with respect to its condensation
+        // 2. visit sccs in topo order.
+        // For each entry in the scc:
+        // find the the repr node in the subty if it exists.
+        // if it doesnt exist we are done with this scc because it cant be structurally equal to the subty
+        // otherwise check if the subsketch from the entry is structurally equal.
+        // If every entry is structurally equal add an aliases between each entry and it's representation
+        // We dont have to visit children
+
+        let scc_info = Self::sketch_to_scc_map(subty)?;
+
+        if scc_info.contains_key(&0) {
+            // min heap of sccs to visit
+            let mut pq: BinaryHeap<Reverse<usize>> = BinaryHeap::new();
+            let mut closed_list: HashSet<usize> = HashSet::new();
+            pq.push(Reverse(0));
+            let mut aliases: HashSet<im_rc::Vector<FieldLabel>> = HashSet::new();
+            while let Some(curr_scc_id) = pq.pop() {
+                if !closed_list.contains(&curr_scc_id.0) {
+                    closed_list.insert(curr_scc_id.0);
+                    let curr_scc_info = scc_info
+                        .get(&curr_scc_id.0)
+                        .expect("all sccs should be in scc_info");
+
+                    let all_entry_paths_are_represented =
+                        curr_scc_info.entry_paths.iter().all(|x| {
+                            Self::sketches_have_equivalent_path(
+                                x.iter().cloned().collect::<Vec<_>>().as_ref(),
+                                subty,
+                                super_type,
+                            )
+                        });
+
+                    if all_entry_paths_are_represented {
+                        for pth in curr_scc_info.entry_paths.iter() {
+                            aliases.insert(pth.clone());
+                        }
+                    } else {
+                        // push children sccs
+                        for child in curr_scc_info.successors.iter() {
+                            pq.push(Reverse(*child));
+                        }
+                    }
+                }
+            }
+
+            Ok(aliases)
+        } else {
+            Ok(HashSet::new())
         }
     }
 
@@ -1072,6 +1231,45 @@ pub struct Sketch<U: std::cmp::PartialEq> {
     quotient_graph: MappingGraph<U, DerivedTypeVar, FieldLabel>,
     representing: DerivedTypeVar,
     default_label: U,
+}
+
+impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
+    fn get_subsketch_at_path(&self, target_path: &[FieldLabel]) -> Option<Sketch<U>> {
+        find_node(
+            self.get_graph().get_graph(),
+            self.get_entry(),
+            target_path.iter(),
+        )
+        .and_then(|found_node| {
+            let subgraph = self.get_graph().get_reachable_subgraph(found_node);
+            // only the root should have no edges
+            let root = subgraph
+                .get_graph()
+                .node_indices()
+                .filter(|x| {
+                    subgraph
+                        .get_graph()
+                        .edges_directed(*x, Incoming)
+                        .next()
+                        .is_none()
+                })
+                .next();
+
+            root.map(|root| {
+                // TODO(Ian) this is so hacky but we only rely on entry computation for structural equality so this is ok ish.
+                let dummy_dtv = DerivedTypeVar::new(TypeVariable::new("dummy".to_owned()));
+                let mut new_mapping = HashMap::new();
+                new_mapping.insert(dummy_dtv.clone(), root);
+                let relab = subgraph.relable_representative_nodes(new_mapping);
+
+                Sketch {
+                    quotient_graph: relab,
+                    default_label: self.default_label.clone(),
+                    representing: dummy_dtv,
+                }
+            })
+        })
+    }
 }
 
 impl<U: std::cmp::PartialEq> Display for Sketch<U>
