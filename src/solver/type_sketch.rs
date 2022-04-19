@@ -466,7 +466,7 @@ where
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
         let mut orig_sk_graph = self.build_without_pointer_simplification(sig)?;
 
-        orig_sk_graph.simplify_pointers();
+        //orig_sk_graph.simplify_pointers();
 
         Ok(orig_sk_graph)
     }
@@ -587,6 +587,14 @@ where
             SketchBuilder::new(self.lattice, &self.type_lattice_elements, &add_new_var);
 
         let orig_graph = bldr.build_and_label_constraints(&sig)?;
+
+        println!("Sketch for {:#?}", to_reprs);
+        println!("{}", orig_graph);
+
+        for (k, v) in orig_graph.get_graph().get_node_mapping() {
+            println!("{}:{:?}", k, v);
+        }
+
         let sk_graph = Rc::new(orig_graph);
 
         for repr in to_reprs.iter() {
@@ -923,7 +931,7 @@ where
             ));
         }
 
-        orig_repr.simplify_pointers();
+        //        orig_repr.simplify_pointers();
 
         self.replace_scc_repr(associated_scc_tids, orig_repr);
     }
@@ -1711,7 +1719,10 @@ mod test {
         graph_algos::mapping_graph::MappingGraph,
         solver::{
             scc_constraint_generation::SCCConstraints,
-            type_lattice::{CustomLatticeElement, LatticeDefinition, NamedLatticeElement},
+            type_lattice::{
+                CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition,
+                NamedLatticeElement,
+            },
         },
     };
 
@@ -2144,8 +2155,7 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_pointer_simplification_lookup() {
+    fn generate_simple_test_lattice_and_elems() -> (EnumeratedNamedLattice, HashSet<TypeVariable>) {
         let def = LatticeDefinition::new(
             vec![
                 ("char".to_owned(), "top".to_owned()),
@@ -2164,6 +2174,12 @@ mod test {
             .iter()
             .map(|x| TypeVariable::new(x.0.clone()))
             .collect::<HashSet<TypeVariable>>();
+        (lat, nd_set)
+    }
+
+    #[test]
+    fn test_pointer_simplification_lookup() {
+        let (lat, nd_set) = generate_simple_test_lattice_and_elems();
         let add_new_var = |dtv: &DerivedTypeVar,
                            mpgrph: &mut MappingGraph<
             LatticeBounds<CustomLatticeElement>,
@@ -2206,6 +2222,80 @@ mod test {
                     .count(),
                 2,
             );
+        }
+    }
+
+    /*
+
+        digraph {
+        0 [ label = "0:[bottom,T]" ]
+        1 [ label = "1:[bottom,T]" ]
+        2 [ label = "2:[bottom,T]" ]
+        3 [ label = "3:[int,T]" ]
+        4 [ label = "4:[bottom,T]" ]
+        5 [ label = "5:[bottom,T]" ]
+        6 [ label = "6:[bottom,T]" ]
+        7 [ label = "7:[bottom,T]" ]
+        8 [ label = "8:[bottom,T]" ]
+        9 [ label = "9:[bottom,T]" ]
+        10 [ label = "10:[bottom,T]" ]
+        11 [ label = "11:[bottom,T]" ]
+        12 [ label = "12:[bottom,T]" ]
+        8 -> 11 [ label = "0:load" ]
+        11 -> 6 [ label = "1:σ64@0" ]
+        6 -> 8 [ label = "2:+40" ]
+        1 -> 3 [ label = "3:out" ]
+        5 -> 3 [ label = "4:in_2" ]
+        6 -> 0 [ label = "5:load" ]
+        0 -> 7 [ label = "6:σ64@0" ]
+        0 -> 6 [ label = "7:σ64@40" ]
+        5 -> 6 [ label = "8:out" ]
+        4 -> 6 [ label = "9:in_0" ]
+        12 -> 7 [ label = "10:in_0" ]
+        0 -> 2 [ label = "11:σ64@8" ]
+        9 -> 2 [ label = "12:in_0" ]
+        8 -> 11 [ label = "13:store" ]
+        10 -> 8 [ label = "14:in_0" ]
+    }
+        */
+
+    #[test]
+    fn test_pointer_simplifaction_delete() {
+        let (lat, nd_set) = generate_simple_test_lattice_and_elems();
+        let add_new_var = |dtv: &DerivedTypeVar,
+                           mpgrph: &mut MappingGraph<
+            LatticeBounds<CustomLatticeElement>,
+            DerivedTypeVar,
+            FieldLabel,
+        >| {
+            insert_dtv(&lat, mpgrph, dtv.clone());
+            Ok(())
+        };
+        let skb = SketchBuilder::new(&lat, &nd_set, &add_new_var);
+
+        let lookup_cons_set = parse_cons_set(
+            "
+        ten.in_0 <= eight
+        eight.store <= eleven
+        eight.load <= eleven
+        eleven.σ64@0 <= six
+        six.+40 <= eight 
+        six.load <= zero
+        zero.σ64@40 <= six
+        zero.σ64@0 <= seven
+        ",
+        );
+
+        let mut simplified_sketch = skb
+            .build_without_pointer_simplification(&lookup_cons_set)
+            .expect("Should be able to build");
+        println!("{}", simplified_sketch);
+        let pt = simplified_sketch.find_pointer_simplification();
+        println!("{:#?}", pt);
+
+        if let Some(pt) = pt {
+            simplified_sketch.apply_pointer_transform(pt);
+            println!("{}", simplified_sketch);
         }
     }
 }

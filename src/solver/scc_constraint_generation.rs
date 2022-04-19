@@ -401,6 +401,8 @@ where
                 fsa.simplify_graph(self.vman);
 
                 let cons = fsa.walk_constraints();
+                // forget add constraints at scc barriers
+                let cons = cons.forget_add_constraints();
 
                 println!("Final {}", cons);
 

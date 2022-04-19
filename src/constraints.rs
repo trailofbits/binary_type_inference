@@ -400,6 +400,12 @@ impl Display for DerivedTypeVar {
 }
 
 impl DerivedTypeVar {
+    pub fn has_add_field(&self) -> bool {
+        self.get_field_labels()
+            .iter()
+            .any(|x| matches!(x, FieldLabel::Add(_)))
+    }
+
     /// Creates a derived type variable with no field labels.
     pub fn new(base_var: TypeVariable) -> DerivedTypeVar {
         DerivedTypeVar {
@@ -602,6 +608,22 @@ impl Display for SubtypeConstraint {
 /// A set of [SubtypeConstraint]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct ConstraintSet(BTreeSet<TyConstraint>);
+
+impl ConstraintSet {
+    pub fn forget_add_constraints(self) -> ConstraintSet {
+        ConstraintSet(
+            self.0
+                .into_iter()
+                .filter(|cons| match cons {
+                    TyConstraint::AddCons(_) => false,
+                    TyConstraint::SubTy(sty) => {
+                        !sty.lhs.has_add_field() && !sty.lhs.has_add_field()
+                    }
+                })
+                .collect(),
+        )
+    }
+}
 
 /// Constraints the representation type variable to the addition of two dynamic ty vars
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
