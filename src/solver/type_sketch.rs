@@ -991,19 +991,47 @@ where
             .expect("If we replaced in a target dtv then it should exist in the new sketch");
         callsite_types
             .into_iter()
-            .filter_map(|(old_callsite_type, callsite_loc)| {
-                if call_site_type.is_structurally_equal(&old_callsite_type) {
-                    Some((
-                        callsite_loc,
-                        TypeLocation {
-                            scc: target_scc.clone(),
-                            target_path: *orig_loc,
-                        },
-                    ))
-                } else {
-                    None
-                }
+            .map(|(old_callsite_type, callsite_loc)| {
+                let aliases = Self::find_shared_subgraphs(&old_callsite_type, &call_site_type)
+                    .expect("should be able to compute aliases");
+
+                aliases
+                    .into_iter()
+                    .filter_map(|pth| {
+                        let maybe_representative_node = find_node(
+                            target_scc_repr.get_graph().get_graph(),
+                            *orig_loc,
+                            pth.iter(),
+                        );
+                        let repr_scc = target_scc.clone();
+
+                        let from_scc_repr = self.get_built_sketch_from_scc(&callsite_loc.scc);
+                        let maybe_from_node = find_node(
+                            from_scc_repr.get_graph().get_graph(),
+                            callsite_loc.target_path,
+                            pth.iter(),
+                        );
+                        let from_scc = callsite_loc.scc.clone();
+
+                        maybe_representative_node.and_then(|repr_node| {
+                            maybe_from_node.map(|from_node| {
+                                (
+                                    TypeLocation {
+                                        scc: from_scc,
+                                        target_path: from_node,
+                                    },
+                                    TypeLocation {
+                                        scc: repr_scc,
+                                        target_path: repr_node,
+                                    },
+                                )
+                            })
+                        })
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
             })
+            .flatten()
             .collect()
     }
 
