@@ -511,6 +511,7 @@ pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     parameter_aliases: BTreeMap<TypeLocation, TypeLocation>,
 }
 
+#[derive(Debug)]
 struct SketchSCCInfo {
     /// the path to an entry of this scc
     /// if all of these are covered by some other subsketch then the effects of this scc are covered
@@ -770,10 +771,22 @@ where
     fn sketch_to_scc_map(
         subty: &Sketch<LatticeBounds<U>>,
     ) -> anyhow::Result<HashMap<usize, SketchSCCInfo>> {
-        let subtyg = Graph::from(subty.get_graph().get_graph().clone());
+        let ent = subty.get_entry();
+
+        let subtyg = Graph::from(
+            subty
+                .get_graph()
+                .get_graph()
+                .map(|ndi, _| ndi, |_, e| e.clone()),
+        );
+
+        if subtyg.node_count() == 0 {
+            return Ok(HashMap::new());
+        }
+
         let entry_idx = subtyg
             .node_indices()
-            .filter(|idx| subtyg.edges_directed(*idx, Incoming).next().is_none())
+            .filter(|idx| *subtyg.node_weight(*idx).unwrap() == ent)
             .next()
             .ok_or(anyhow::anyhow!("No entry in sketch"))?;
 
@@ -802,7 +815,7 @@ where
             },
         );
 
-        let condensed = petgraph::algo::condensation(subty_with_reaching_labels, false);
+        let condensed = petgraph::algo::condensation(subty_with_reaching_labels, true);
 
         let ordering = petgraph::algo::toposort(&condensed, None)
             .map_err(|_| anyhow::anyhow!("cycle error"))
@@ -821,10 +834,16 @@ where
             .enumerate()
             .map(|(i, idx)| {
                 (i, {
-                    let entrance_paths = condensed
+                    let mut entrance_paths: HashSet<im_rc::Vector<FieldLabel>> = condensed
                         .edges_directed(idx, Incoming)
                         .map(|eref| eref.weight().clone())
                         .collect();
+
+                    if entrance_paths.is_empty() {
+                        // then we are the root
+                        entrance_paths.insert(im_rc::Vector::new());
+                    }
+
                     let successors: HashSet<usize> = condensed
                         .neighbors(idx)
                         .map(|child_idx| {
@@ -851,8 +870,14 @@ where
             subty.get_subsketch_at_path(target_path),
             super_type.get_subsketch_at_path(target_path),
         ) {
-            (Some(c1), Some(c2)) => c1.is_structurally_equal(&c2),
-            _ => false,
+            (Some(c1), Some(c2)) => {
+                println!("has subsketches");
+                c1.is_structurally_equal(&c2)
+            }
+            _ => {
+                println!("Uhoh no subsketch");
+                false
+            }
         }
     }
 
@@ -874,7 +899,7 @@ where
         // We dont have to visit children
 
         let scc_info = Self::sketch_to_scc_map(subty)?;
-
+        println!("{:#?}", scc_info);
         if scc_info.contains_key(&0) {
             // min heap of sccs to visit
             let mut pq: BinaryHeap<Reverse<usize>> = BinaryHeap::new();
@@ -882,12 +907,13 @@ where
             pq.push(Reverse(0));
             let mut aliases: HashSet<im_rc::Vector<FieldLabel>> = HashSet::new();
             while let Some(curr_scc_id) = pq.pop() {
+                println!("Working on {} ", curr_scc_id.0);
                 if !closed_list.contains(&curr_scc_id.0) {
                     closed_list.insert(curr_scc_id.0);
                     let curr_scc_info = scc_info
                         .get(&curr_scc_id.0)
                         .expect("all sccs should be in scc_info");
-
+                    println!("About to check entry path  {}", curr_scc_id.0);
                     let all_entry_paths_are_represented =
                         curr_scc_info.entry_paths.iter().all(|x| {
                             Self::sketches_have_equivalent_path(
@@ -992,6 +1018,7 @@ where
         callsite_types
             .into_iter()
             .map(|(old_callsite_type, callsite_loc)| {
+                println!("Working on subty: {}", old_callsite_type);
                 let aliases = Self::find_shared_subgraphs(&old_callsite_type, &call_site_type)
                     .expect("should be able to compute aliases");
 
