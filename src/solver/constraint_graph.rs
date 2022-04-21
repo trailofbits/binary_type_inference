@@ -512,6 +512,12 @@ pub struct FSA {
     cant_pop_nodes: BTreeMap<FiniteState, NodeIndex>,
 }
 
+impl Display for FSA {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", Dot::new(&self.grph))
+    }
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 /// A definition of an edge between two finite states, weighted by an [FSAEdge].
 pub struct EdgeDefinition {

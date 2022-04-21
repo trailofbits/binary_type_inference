@@ -78,6 +78,7 @@ pub struct InferenceJob {
     additional_constraints: BTreeMap<Tid, ConstraintSet>,
     interesting_tids: HashSet<Tid>,
     vman: VariableManager,
+    debug_dir: Option<String>,
 }
 
 pub trait InferenceParsing<T> {
@@ -355,7 +356,7 @@ impl InferenceJob {
             _,
             EnumeratedNamedLattice,
             CustomLatticeElement,
-        > = scc_constraint_generation::Context::new(
+        > = scc_constraint_generation::Context::new_debug(
             cg,
             &grph,
             node_ctxt,
@@ -369,6 +370,7 @@ impl InferenceJob {
                     .get_elem(&self.weakest_integral_type.get_name())
                     .expect("the weak integer type is always in the lattice"),
             ),
+            self.debug_dir.clone(),
         );
         context.get_simplified_constraints()
     }
@@ -432,6 +434,7 @@ impl InferenceJob {
 
     pub fn parse<T: InferenceParsing<AdditionalConstraint> + InferenceParsing<Tid>>(
         def: &JobDefinition,
+        debug_dir: Option<String>,
     ) -> anyhow::Result<InferenceJob> {
         let bin = Self::parse_binary(&def.binary_path).with_context(|| "Trying to parse binary")?;
         let proj = Self::parse_project(&def.ir_json_path, &bin)
@@ -452,6 +455,7 @@ impl InferenceJob {
             interesting_tids,
             weakest_integral_type,
             vman: VariableManager::new(),
+            debug_dir,
         })
     }
 }
