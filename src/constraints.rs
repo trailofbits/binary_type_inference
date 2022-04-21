@@ -455,12 +455,24 @@ impl DerivedTypeVar {
         &self.labels
     }
 
+    pub fn is_formal_dtv(&self) -> bool {
+        self.var.cs_tag.is_none()
+    }
+
+    pub fn refers_to_in_parameter(&self) -> bool {
+        self.labels.len() >= 1 && matches!(self.labels[0], FieldLabel::In(_))
+    }
+
+    pub fn refers_to_out_parameter(&self) -> bool {
+        self.labels.len() >= 1 && matches!(self.labels[0], FieldLabel::Out(_))
+    }
+
     pub fn is_in_parameter(&self) -> bool {
-        self.labels.len() == 1 && matches!(self.labels[0], FieldLabel::In(_))
+        self.labels.len() == 1 && self.refers_to_in_parameter()
     }
 
     pub fn is_out_parameter(&self) -> bool {
-        self.labels.len() == 1 && matches!(self.labels[0], FieldLabel::Out(_))
+        self.labels.len() == 1 && self.refers_to_out_parameter()
     }
 
     /// Gets the base type variable to which field labels are applied to create this derived type variable.

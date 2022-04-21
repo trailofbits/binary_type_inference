@@ -339,6 +339,47 @@ where
     }
 }
 
+fn get_formals_in(cs_set: &ConstraintSet) -> impl Iterator<Item = DerivedTypeVar> + '_ {
+    let covered = cs_set
+        .iter()
+        .filter_map(|cons| {
+            if let TyConstraint::SubTy(subty) = cons {
+                Some(subty)
+            } else {
+                None
+            }
+        })
+        .map(|subty| vec![subty.lhs.clone(), subty.rhs.clone()].into_iter())
+        .flatten()
+        .filter_map(|dtv| {
+            if (dtv.refers_to_in_parameter() || dtv.refers_to_out_parameter())
+                && dtv.is_formal_dtv()
+            {
+                Some(DerivedTypeVar::create_with_path(
+                    dtv.get_base_variable().clone(),
+                    vec![dtv.get_field_labels()[0].clone()],
+                ))
+            } else {
+                None
+            }
+        });
+
+    covered
+}
+
+fn insert_missed_formals(simplified_cs_set: &mut ConstraintSet, original_cs_set: &ConstraintSet) {
+    let mut covered = get_formals_in(simplified_cs_set).collect::<BTreeSet<_>>();
+    get_formals_in(original_cs_set).for_each(|dtv| {
+        if !covered.contains(&dtv) {
+            covered.insert(dtv.clone());
+            simplified_cs_set.insert(TyConstraint::SubTy(SubtypeConstraint::new(
+                dtv.clone(),
+                dtv,
+            )));
+        }
+    })
+}
+
 impl<R, P, S, T, U> Context<'_, '_, '_, R, P, S, T, U>
 where
     R: RegisterMapping,
@@ -402,8 +443,10 @@ where
 
                 let cons = fsa.walk_constraints();
                 // forget add constraints at scc barriers
-                let cons = cons.forget_add_constraints();
+                let mut cons = cons.forget_add_constraints();
 
+                // Adds var constraint simulations so if we know about parameters but werent able to relate them to interesting variables we still remember they exist
+                insert_missed_formals(&mut cons, &resolved_cs_set);
                 println!("Final {}", cons);
 
                 Ok(SCCConstraints {
