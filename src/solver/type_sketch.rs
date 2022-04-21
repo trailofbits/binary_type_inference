@@ -811,6 +811,8 @@ where
 
         let condensed = petgraph::algo::condensation(subty_with_reaching_labels, true);
 
+        let mp = condensed.map(|_, _| "", |_eidx, eweight| eweight.iter().join("."));
+        println!("SCC Condensation {}", Dot::new(&mp));
         let ordering = petgraph::algo::toposort(&condensed, None)
             .map_err(|_| anyhow::anyhow!("cycle error"))
             .with_context(|| {
@@ -885,7 +887,8 @@ where
         // otherwise check if the subsketch from the entry is structurally equal.
         // If every entry is structurally equal add an aliases between each entry and it's representation
         // We dont have to visit children
-
+        println!("Looking for shared structure subty {}", subty);
+        println!("Looking for shared structure super ty {}", super_type);
         let scc_info = Self::sketch_to_scc_map(subty)?;
         if scc_info.contains_key(&0) {
             // min heap of sccs to visit
@@ -920,7 +923,7 @@ where
                     }
                 }
             }
-
+            println!("{:#?}", aliases);
             Ok(aliases)
         } else {
             Ok(HashSet::new())
@@ -970,6 +973,8 @@ where
         scc_idx: NodeIndex,
     ) -> BTreeMap<TypeLocation, TypeLocation> {
         // There should only be one representation of a formal in an SCC
+
+        println!("Computing aliases for {}", target_dtv);
         assert_eq!(
             target_scc_sketch
                 .get_representing_sketch(target_dtv.clone())
@@ -1038,7 +1043,11 @@ where
         target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
         target_dtv: DerivedTypeVar,
         target_idx: NodeIndex,
-        merge_operator: &impl Fn(
+        type_merge_operator: &impl Fn(
+            &Sketch<LatticeBounds<U>>,
+            &Sketch<LatticeBounds<U>>,
+        ) -> Sketch<LatticeBounds<U>>,
+        refinement_operator: &impl Fn(
             &Sketch<LatticeBounds<U>>,
             &Sketch<LatticeBounds<U>>,
         ) -> Sketch<LatticeBounds<U>>,
@@ -1057,8 +1066,8 @@ where
         let mut call_site_type = callsite_types
             .iter()
             .map(|(sketch, _)| sketch.clone())
-            .reduce(|lhs, rhs| merge_operator(&lhs, &rhs))
-            .map(|merged| merged.intersect(orig_repr))
+            .reduce(|lhs, rhs| type_merge_operator(&lhs, &rhs))
+            .map(|merged| refinement_operator(&merged, orig_repr))
             .unwrap_or(orig_repr.clone());
 
         call_site_type.label_dtvs(&orig_repr);
@@ -1085,6 +1094,7 @@ where
             target_dtv,
             target_idx,
             &Sketch::intersect,
+            &Sketch::union,
         )
     }
 
@@ -1103,6 +1113,7 @@ where
             target_dtv,
             target_idx,
             &Sketch::union,
+            &Sketch::intersect,
         )
     }
 
@@ -1125,7 +1136,7 @@ where
                 target_idx,
             );
         }
-
+        /*
         let out_params = orig_repr.get_out_params();
         for dtv in out_params {
             self.refine_formal_out(
@@ -1135,7 +1146,7 @@ where
                 dtv,
                 target_idx,
             );
-        }
+        }*/
 
         orig_repr.simplify_pointers();
 

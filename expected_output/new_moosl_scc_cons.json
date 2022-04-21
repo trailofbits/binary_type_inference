@@ -114,7 +114,74 @@
                 "address": "001013db"
             }
         ],
-        "constraints": []
+        "constraints": [
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001013db"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_001013db"
+                    },
+                    "labels": [
+                        {
+                            "In": 0
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001013db"
+                    },
+                    "labels": [
+                        {
+                            "In": 1
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_001013db"
+                    },
+                    "labels": [
+                        {
+                            "In": 1
+                        }
+                    ]
+                }
+            },
+            {
+                "lhs": {
+                    "var": {
+                        "name": "sub_001013db"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        }
+                    ]
+                },
+                "rhs": {
+                    "var": {
+                        "name": "sub_001013db"
+                    },
+                    "labels": [
+                        {
+                            "Out": 0
+                        }
+                    ]
+                }
+            }
+        ]
     },
     {
         "scc": [
