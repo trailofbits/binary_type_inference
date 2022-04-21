@@ -118,10 +118,11 @@ fn main() -> anyhow::Result<()> {
         additional_constraints_file: additional_constraints_file.to_owned(),
     };
 
+    let dbg_dir = matches.value_of("debug_out_dir").map(|x| x.to_owned());
     let mut if_job = if matches.is_present("human_readable_input") {
-        InferenceJob::parse::<JsonDef>(&job_def)
+        InferenceJob::parse::<JsonDef>(&job_def, dbg_dir)
     } else {
-        InferenceJob::parse::<ProtobufDef>(&job_def)
+        InferenceJob::parse::<ProtobufDef>(&job_def, dbg_dir)
     }?;
 
     let (grph, ctypes) = if_job.infer_ctypes()?;

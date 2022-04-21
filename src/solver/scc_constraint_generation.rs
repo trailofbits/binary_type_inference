@@ -1,7 +1,9 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fmt::Display,
     iter::FromIterator,
     marker::PhantomData,
+    path::PathBuf,
     vec,
 };
 
@@ -10,6 +12,7 @@ use cwe_checker_lib::{
     analysis::graph::Graph,
     intermediate_representation::{ExternSymbol, Tid},
 };
+use itertools::Itertools;
 use petgraph::{dot::Dot, graph::NodeIndex, EdgeDirection::Outgoing};
 
 use super::{
@@ -28,6 +31,7 @@ use crate::{
     },
     pb_constraints::DerivedTypeVariable,
 };
+use std::io::Write;
 
 // TODO(ian): dont use the tid filter and instead lookup the set of target nodes to traverse or use intraproc graphs. This is ineffecient
 pub struct Context<'a, 'b, 'c, R, P, S, T, U>
@@ -43,6 +47,7 @@ where
     rule_context: RuleContext,
     vman: &'b mut VariableManager,
     lattice_def: LatticeInfo<'c, T, U>,
+    debug_dir: Option<String>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -311,15 +316,6 @@ where
                 .build_and_label_constraints(&next_cs_set)?;
             let mut base_labels = self.get_initial_labeling(&sg);
 
-            for (idx, _) in base_labels
-                .iter()
-                .filter(|x| matches!(x.1, TypeLabels::Int))
-            {
-                for it in sg.get_graph().get_group_for_node(*idx) {
-                    println!("Int {}", it);
-                }
-            }
-
             let mut irules = InferenceRules {
                 labels: &mut base_labels,
                 sg: &sg,
@@ -405,10 +401,54 @@ where
             rule_context,
             vman,
             lattice_def: lattice,
+            debug_dir: None,
         }
     }
 
+    pub fn new_debug<'a, 'b, 'c>(
+        cg: CallGraph,
+        graph: &'a Graph<'a>,
+        node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
+        extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
+        rule_context: RuleContext,
+        vman: &'b mut VariableManager,
+        lattice: LatticeInfo<'c, T, U>,
+        debug_dir: Option<String>,
+    ) -> Context<'a, 'b, 'c, R, P, S, T, U> {
+        Context {
+            cg,
+            graph,
+            node_contexts,
+            extern_symbols,
+            rule_context,
+            vman,
+            lattice_def: lattice,
+            debug_dir: debug_dir,
+        }
+    }
+
+    fn log_to_fname<V: Display>(
+        &self,
+        fname: &str,
+        dispalyable: &impl Fn() -> V,
+    ) -> anyhow::Result<()> {
+        if let Some(debug_dir) = &self.debug_dir {
+            let mut pth = PathBuf::from(debug_dir);
+            pth.push(fname);
+            let mut out_file = std::fs::File::create(pth)?;
+            write!(&mut out_file, "{}\n", dispalyable())?;
+        }
+        Ok(())
+    }
+
     pub fn get_simplified_constraints(&mut self) -> anyhow::Result<Vec<SCCConstraints>> {
+        self.log_to_fname("interesting_vars", &|| {
+            self.rule_context
+                .get_interesting()
+                .iter()
+                .map(|var| var.get_name())
+                .join("\n")
+        })?;
         let maybe_scc: anyhow::Result<Vec<SCCConstraints>> = petgraph::algo::tarjan_scc(&self.cg)
             .into_iter()
             .map(|scc| {
@@ -426,7 +466,7 @@ where
 
                 let basic_cons = cont.generate_constraints(self.vman);
                 println!("Cons for: {:#?}", tid_filter);
-                println!("Basic cons: {}", basic_cons);
+                //println!("Basic cons: {}", basic_cons);
 
                 let resolved_cs_set = self.lattice_def.infer_pointers(&basic_cons)?;
 
@@ -436,10 +476,29 @@ where
                     .collect::<BTreeSet<_>>();
 
                 println!("Diff {}", ConstraintSet::from(diff));
+                let repr_tid = tid_filter
+                    .iter()
+                    .next()
+                    .expect("every scc must have a node");
+
+                self.log_to_fname(
+                    &format!("{}_ptr_resolved_cons", repr_tid.get_str_repr()),
+                    &|| &resolved_cs_set,
+                )?;
 
                 let mut fsa = FSA::new(&resolved_cs_set, &self.rule_context)?;
 
+                self.log_to_fname(
+                    &format!("{}_fsa_unsimplified.dot", repr_tid.get_str_repr()),
+                    &|| &fsa,
+                )?;
+
                 fsa.simplify_graph(self.vman);
+
+                self.log_to_fname(
+                    &format!("{}_fsa_simplified.dot", repr_tid.get_str_repr()),
+                    &|| &fsa,
+                )?;
 
                 let cons = fsa.walk_constraints();
                 // forget add constraints at scc barriers

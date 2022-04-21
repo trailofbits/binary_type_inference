@@ -172,13 +172,11 @@ impl<
                     let weight = grph.get_graph().node_weight(target_idx).unwrap().clone();
                     self.grph.add_node(weight)
                 });
-            println!("{}", old_idx_to_new_idx_mapping.len());
             new
         };
         grph.get_graph()
             .node_indices()
             .map(|nd| {
-                println!("Looking at nd {}", nd.index());
                 let src = add_node(nd);
                 let mut tot = Vec::new();
                 for edge in grph.get_graph().edges_directed(nd, Outgoing) {
