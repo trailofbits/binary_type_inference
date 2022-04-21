@@ -870,14 +870,8 @@ where
             subty.get_subsketch_at_path(target_path),
             super_type.get_subsketch_at_path(target_path),
         ) {
-            (Some(c1), Some(c2)) => {
-                println!("has subsketches");
-                c1.is_structurally_equal(&c2)
-            }
-            _ => {
-                println!("Uhoh no subsketch");
-                false
-            }
+            (Some(c1), Some(c2)) => c1.is_structurally_equal(&c2),
+            _ => false,
         }
     }
 
@@ -1499,11 +1493,13 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         let lhs = self.construct_dfa(&alphabet);
         let rhs = other.construct_dfa(&alphabet);
 
-        // TODO(Ian): do AsRef stuff here to avoid this much explicit referencing
-        dfa_operations::is_empty_language(&dfa_operations::union(
+        let cex_lang = dfa_operations::union(
             &dfa_operations::intersection(&lhs, &complement(&rhs)),
             &dfa_operations::intersection(&complement(&lhs), &rhs),
-        ))
+        );
+
+        // TODO(Ian): do AsRef stuff here to avoid this much explicit referencing
+        dfa_operations::is_empty_language(&cex_lang)
     }
 
     fn binop_sketch<D: DFA<FieldLabel>>(
@@ -1961,7 +1957,12 @@ mod test {
     use std::collections::HashSet;
 
     use cwe_checker_lib::intermediate_representation::Tid;
-    use petgraph::{dot::Dot, graph::DiGraph, visit::EdgeRef};
+    use petgraph::{
+        dot::Dot,
+        graph::DiGraph,
+        visit::{EdgeRef, IntoEdgesDirected},
+        EdgeDirection::Outgoing,
+    };
 
     use crate::{
         analysis::callgraph::CallGraph,
@@ -2305,6 +2306,162 @@ mod test {
         // So ok since this in an out param we get a type error since int and char arent compatible we must return a more specific type.
         assert_eq!(wt.upper_bound.get_name(), "bottom");
         assert_eq!(wt.lower_bound.get_name(), "bottom");
+    }
+
+    #[test]
+    fn test_simple_subgraph_equiv() {
+        init();
+        let ids_scc = parse_cons_set(
+            "
+        sub_id.in_0 <= sub_id.out
+        ",
+        );
+
+        let ids_tid = Tid::create("sub_id".to_owned(), "0x1000".to_owned());
+        //σ{}@{}
+        let caller1_scc = parse_cons_set(
+            "
+        sub_caller1.in_0.load.load <= int 
+        bottom <= sub_caller1.in_0.store
+        sub_caller1.in_0 <= sub_id:0.in_0 
+        ",
+        );
+
+        let caller2_scc = parse_cons_set(
+            "
+        sub_caller2.in_0.load.load <= int 
+        sub_caller2.in_0 <= sub_id:1.in_0 
+        ",
+        );
+
+        let caller1_tid = Tid::create("sub_caller1".to_owned(), "0x2000".to_owned());
+        let caller2_tid = Tid::create("sub_caller2".to_owned(), "0x3000".to_owned());
+
+        let def = LatticeDefinition::new(
+            vec![
+                ("char".to_owned(), "top".to_owned()),
+                ("int".to_owned(), "top".to_owned()),
+                ("bottom".to_owned(), "char".to_owned()),
+                ("bottom".to_owned(), "int".to_owned()),
+            ],
+            "top".to_owned(),
+            "bottom".to_owned(),
+            "int".to_owned(),
+        );
+
+        let lat = def.generate_lattice();
+        let nd_set = lat
+            .get_nds()
+            .iter()
+            .map(|x| TypeVariable::new(x.0.clone()))
+            .collect::<HashSet<TypeVariable>>();
+
+        let mut cg: CallGraph = DiGraph::new();
+
+        let id_node = cg.add_node(ids_tid.clone());
+        let caller1_node = cg.add_node(caller1_tid.clone());
+        let caller2_node = cg.add_node(caller2_tid.clone());
+
+        cg.add_edge(caller1_node, id_node, ());
+        cg.add_edge(caller2_node, id_node, ());
+
+        let mut skb = SCCSketchsBuilder::new(
+            cg,
+            vec![
+                SCCConstraints {
+                    constraints: ids_scc,
+                    scc: vec![ids_tid.clone()],
+                },
+                SCCConstraints {
+                    constraints: caller1_scc,
+                    scc: vec![caller1_tid.clone()],
+                },
+                SCCConstraints {
+                    constraints: caller2_scc,
+                    scc: vec![caller2_tid.clone()],
+                },
+            ],
+            &lat,
+            nd_set,
+        );
+
+        skb.build().expect("able to build sketches");
+
+        let globs = skb
+            .build_global_type_graph()
+            .expect("should be able to get global graph");
+
+        let mapping = globs.get_graph().get_node_mapping();
+
+        let repr2 = *mapping
+            .get(&DerivedTypeVar::new(TypeVariable::new(
+                "sub_caller2".to_owned(),
+            )))
+            .expect("should repr caller 2");
+
+        assert_eq!(
+            globs
+                .get_graph()
+                .get_graph()
+                .edges_directed(repr2, Outgoing)
+                .count(),
+            1
+        );
+
+        let eref = globs
+            .get_graph()
+            .get_graph()
+            .edges_directed(repr2, Outgoing)
+            .next()
+            .unwrap();
+
+        assert_eq!(eref.weight(), &FieldLabel::In(0));
+
+        let ptr = eref.target();
+
+        assert_eq!(
+            globs
+                .get_graph()
+                .get_graph()
+                .edges_directed(ptr, Outgoing)
+                .count(),
+            1
+        );
+
+        let eref = globs
+            .get_graph()
+            .get_graph()
+            .edges_directed(ptr, Outgoing)
+            .next()
+            .unwrap();
+
+        assert_eq!(eref.weight(), &FieldLabel::Load);
+
+        let next = eref.target();
+
+        assert_eq!(
+            globs
+                .get_graph()
+                .get_graph()
+                .edges_directed(next, Outgoing)
+                .count(),
+            1
+        );
+
+        let next_eref = globs
+            .get_graph()
+            .get_graph()
+            .edges_directed(next, Outgoing)
+            .next()
+            .unwrap();
+
+        assert_eq!(next_eref.weight(), &FieldLabel::Load);
+        assert_eq!(
+            globs.get_graph().get_graph()[next_eref.target()]
+                .upper_bound
+                .get_name(),
+            "int"
+        );
     }
 
     #[test]
