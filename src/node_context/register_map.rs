@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use std::fmt::Display;
 use std::ops::Deref;
 
 use cwe_checker_lib::abstract_domain::DomainMap;
@@ -15,6 +16,7 @@ use crate::constraint_generation::{self, NodeContextMapping, RegisterMapping};
 use crate::constraints::{
     ConstraintSet, DerivedTypeVar, SubtypeConstraint, TyConstraint, TypeVariable,
 };
+use crate::util::FileDebugLogger;
 use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, pointer_inference};
 use cwe_checker_lib::intermediate_representation::Def;
 
@@ -22,6 +24,15 @@ use cwe_checker_lib::intermediate_representation::Def;
 #[derive(Clone)]
 pub struct RegisterContext {
     mapping: BTreeMap<Variable, TermSet>,
+}
+
+impl Display for RegisterContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (v, tset) in self.mapping.iter() {
+            write!(f, "{}: {}", v.name, tset)?;
+        }
+        Ok(())
+    }
 }
 
 impl RegisterContext {
@@ -145,14 +156,7 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
 
 #[cfg(test)]
 mod test {
-    use std::path::{Path, PathBuf};
 
-    use cwe_checker_lib::intermediate_representation::{ByteSize, Tid, Variable};
-    use petgraph::visit::IntoNodeReferences;
-
-    use crate::{
-        analysis::reaching_definitions::Definition, constraint_generation::RegisterMapping,
-    };
     /*
     use super::run_analysis;
 

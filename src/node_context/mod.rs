@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::format};
 
 use cwe_checker_lib::{
     analysis::{graph::Graph, pointer_inference::Config},
@@ -10,6 +10,7 @@ use petgraph::graph::NodeIndex;
 use crate::{
     constraint_generation::{NodeContext, PointsToMapping, RegisterMapping, SubprocedureLocators},
     constraints::TypeVariable,
+    util::FileDebugLogger,
 };
 
 /// Wraps the cwe_checker points to analysis to generate type variables related to stores and loads based on the [cwe_checker_lib::abstract_domain::AbstractIdentifier].
@@ -60,8 +61,24 @@ pub fn create_default_context(
     config: Config,
     rt_mem: &RuntimeMemoryImage,
     weakest_integral_type: TypeVariable,
+    debug_dir: FileDebugLogger,
 ) -> Result<HashMap<NodeIndex, NodeContext<RegisterContext, PointsToContext, ProcedureContext>>> {
     let reg_context = register_map::run_analysis(proj, graph);
+
+    for nd_idx in graph.node_indices() {
+        let nd = &graph[nd_idx];
+        if let cwe_checker_lib::analysis::graph::Node::BlkStart(blk_term, sub_term) = nd {
+            if sub_term.term.blocks[0].tid == blk_term.tid {
+                // entry block
+                if let Some(defs) = reg_context.get(&nd_idx) {
+                    debug_dir.log_to_fname(
+                        &format!("reg_defs_entry_{}", sub_term.tid.get_str_repr()),
+                        &|| defs,
+                    )?;
+                }
+            }
+        }
+    }
 
     let points_to_context = points_to::run_analysis(proj, config, graph, rt_mem)?;
 
