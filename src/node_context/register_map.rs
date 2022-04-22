@@ -29,7 +29,7 @@ pub struct RegisterContext {
 impl Display for RegisterContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (v, tset) in self.mapping.iter() {
-            write!(f, "{}: {}", v.name, tset)?;
+            write!(f, "{}: {}\n", v.name, tset)?;
         }
         Ok(())
     }
@@ -97,7 +97,7 @@ impl RegisterMapping for RegisterContext {
 
 fn generate_fresh_definition(proj: &Project, curr_id: &mut usize) -> BTreeMap<Variable, TermSet> {
     let mut bottom_btree = BTreeMap::new();
-    for reg in proj.register_list.iter() {
+    for reg in proj.register_set.iter() {
         let mut st = TermSet::new();
         st.insert(Definition::EntryFresh(*curr_id));
         bottom_btree.insert(reg.clone(), st);
@@ -114,7 +114,7 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
     let mut computation = forward_interprocedural_fixpoint::create_computation(cont, None);
 
     let entry_sub_to_entry_node_map =
-        pointer_inference::compute_entry_function_to_entry_node_map(proj, graph);
+        cwe_checker_lib::analysis::graph::get_entry_nodes_of_subs(graph);
 
     let speculative_points = graph
         .node_indices()

@@ -35,12 +35,12 @@ pub fn get_intermediate_representation_for_reader(
 
 /// Maps procedure type variables to tids
 pub fn procedure_type_variable_map(proj: &Project) -> HashMap<TypeVariable, Tid> {
-    let tids = proj
-        .program
-        .term
-        .subs
-        .iter()
-        .map(|sub| (constraint_generation::term_to_tvar(sub), sub.tid.clone()));
+    let tids = proj.program.term.subs.iter().map(|sub| {
+        (
+            constraint_generation::term_to_tvar(sub.1),
+            sub.1.tid.clone(),
+        )
+    });
 
     let extern_tids = proj
         .program

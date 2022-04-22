@@ -4,6 +4,7 @@ use cwe_checker_lib::{
     analysis::{graph::Graph, pointer_inference::Config},
     intermediate_representation::Project,
     utils::binary::RuntimeMemoryImage,
+    AnalysisResults,
 };
 use petgraph::graph::NodeIndex;
 
@@ -55,18 +56,16 @@ pub fn make_node_contexts<R: RegisterMapping, P: PointsToMapping, S: Subprocedur
 }
 
 /// Creates a default context with the default analyses [register_map], [points_to], and [subproc_loc]
-pub fn create_default_context(
-    proj: &Project,
-    graph: &Graph,
+pub fn create_default_context<'a>(
+    proj: &'a AnalysisResults<'a>,
     config: Config,
-    rt_mem: &RuntimeMemoryImage,
     weakest_integral_type: TypeVariable,
     debug_dir: FileDebugLogger,
 ) -> Result<HashMap<NodeIndex, NodeContext<RegisterContext, PointsToContext, ProcedureContext>>> {
-    let reg_context = register_map::run_analysis(proj, graph);
+    let reg_context = register_map::run_analysis(proj.project, proj.control_flow_graph);
 
-    for nd_idx in graph.node_indices() {
-        let nd = &graph[nd_idx];
+    for nd_idx in proj.control_flow_graph.node_indices() {
+        let nd = &proj.control_flow_graph[nd_idx];
         if let cwe_checker_lib::analysis::graph::Node::BlkStart(blk_term, sub_term) = nd {
             if sub_term.term.blocks[0].tid == blk_term.tid {
                 // entry block
@@ -80,12 +79,13 @@ pub fn create_default_context(
         }
     }
 
-    let points_to_context = points_to::run_analysis(proj, config, graph, rt_mem)?;
+    let points_to_context = points_to::run_analysis(proj, config)?;
 
     let proc_handler = ProcedureContext {
-        stack_pointer: proj.stack_pointer_register.clone(),
+        stack_pointer: proj.project.stack_pointer_register.clone(),
     };
-    let proc_context: HashMap<NodeIndex, ProcedureContext> = graph
+    let proc_context: HashMap<NodeIndex, ProcedureContext> = proj
+        .control_flow_graph
         .node_indices()
         .map(|idx| (idx, proc_handler.clone()))
         .collect();
@@ -94,7 +94,7 @@ pub fn create_default_context(
         reg_context,
         points_to_context,
         proc_context,
-        graph.node_indices(),
+        proj.control_flow_graph.node_indices(),
         weakest_integral_type,
     ))
 }

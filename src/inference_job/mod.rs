@@ -14,6 +14,7 @@ use cwe_checker_lib::{
     },
     intermediate_representation::{Project, Tid},
     utils::binary::RuntimeMemoryImage,
+    AnalysisResults,
 };
 use log::info;
 use petgraph::{dot::Dot, graph::NodeIndex};
@@ -273,9 +274,9 @@ impl InferenceJob {
     > {
         let rt_mem = Self::get_runtime_image(&self.proj, &self.binary_bytes)?;
 
+        let analysis_results = AnalysisResults::new(&self.binary_bytes, &rt_mem, graph, &self.proj);
         let nd_context = crate::node_context::create_default_context(
-            &self.proj,
-            &graph,
+            &analysis_results,
             Config {
                 allocation_symbols: vec![
                     "malloc".to_owned(),
@@ -285,7 +286,6 @@ impl InferenceJob {
                 ],
                 deallocation_symbols: vec!["free".to_owned()],
             },
-            &rt_mem,
             self.weakest_integral_type.clone(),
             self.debug_dir.clone(),
         )?;
