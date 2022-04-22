@@ -275,6 +275,13 @@ impl InferenceJob {
         let rt_mem = Self::get_runtime_image(&self.proj, &self.binary_bytes)?;
 
         let analysis_results = AnalysisResults::new(&self.binary_bytes, &rt_mem, graph, &self.proj);
+
+        let (res, logs) = analysis_results.compute_function_signatures();
+        logs.iter()
+            .for_each(|msg| crate::util::log_cwe_message(msg));
+
+        let analysis_results = analysis_results.with_function_signatures(Some(&res));
+
         let nd_context = crate::node_context::create_default_context(
             &analysis_results,
             Config {
