@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     pub fn test_get_ir_for_moosl() {
-        let moosljson = test_utils::open_test_file("mooosl.json");
+        let moosljson = test_utils::open_test_file("new_moosl.json");
         let mooosl_bin = test_utils::test_file_to_bytes("mooosl");
 
         let ir_res = super::get_intermediate_representation_for_reader(moosljson, &mooosl_bin[..]);
