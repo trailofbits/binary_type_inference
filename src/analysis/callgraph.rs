@@ -46,7 +46,7 @@ impl Context<'_> {
             .term
             .subs
             .iter()
-            .map(|x| (x.tid.clone(), grph.add_node(x.tid.clone())))
+            .map(|x| (x.1.tid.clone(), grph.add_node(x.1.tid.clone())))
             .collect();
 
         self.proj
@@ -59,9 +59,9 @@ impl Context<'_> {
             });
 
         for sub in self.proj.program.term.subs.iter() {
-            let start_nd = proj.get(&sub.tid).unwrap();
+            let start_nd = proj.get(&sub.1.tid).unwrap();
 
-            Self::get_callees(&sub.term).into_iter().for_each(|dst| {
+            Self::get_callees(&sub.1.term).into_iter().for_each(|dst| {
                 if let Some(dst_node) = proj.get(&dst) {
                     grph.add_edge(*start_nd, *dst_node, ());
                 }

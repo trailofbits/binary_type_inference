@@ -61,7 +61,9 @@ impl Context<'_> {
                             .any(|t| matches!(t, &Definition::ActualRet(_, _)))
                     })
                     .map(|(v, _)| Arg::Register {
-                        var: v.clone(),
+                        expr: cwe_checker_lib::intermediate_representation::Expression::Var(
+                            v.clone(),
+                        ),
                         // TODO(ian): copy over datatype
                         data_type: None,
                     })
@@ -87,7 +89,7 @@ impl Context<'_> {
 
     fn collect_returns(&self) -> HashMap<Tid, Vec<Arg>> {
         let mut tot = HashMap::new();
-        for func in self.ir.program.term.subs.iter() {
+        for (_, func) in self.ir.program.term.subs.iter() {
             if func.term.formal_rets.is_empty() {
                 tot.insert(func.tid.clone(), self.generate_returns_for_sub(func));
             }
@@ -98,7 +100,7 @@ impl Context<'_> {
 
     pub fn apply_psuedo_returns(&mut self) {
         let m = self.collect_returns();
-        for sub in self.ir.program.term.subs.iter_mut() {
+        for (_, sub) in self.ir.program.term.subs.iter_mut() {
             if let Some(new_rets) = m.get(&sub.tid) {
                 sub.term.formal_rets = new_rets.clone();
             }

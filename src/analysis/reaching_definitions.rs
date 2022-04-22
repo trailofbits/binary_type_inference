@@ -121,7 +121,7 @@ fn apply_definition_of_variable(
 impl<'a> Context<'a> {
     fn get_function_returns(&self, jmp: &Jmp) -> Vec<Arg> {
         if let Jmp::Call { target, .. } = jmp {
-            for sub in self.project.program.term.subs.iter() {
+            for (_, sub) in self.project.program.term.subs.iter() {
                 if sub.tid == *target {
                     return sub.term.formal_rets.clone();
                 }
@@ -183,13 +183,15 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
             // required but still good to have
             for (idx, arg) in extern_symb.return_values.iter().enumerate() {
                 match arg {
-                    Arg::Register { var, data_type: _ } => {
-                        apply_definition_of_variable(
-                            &mut new_value,
-                            var.clone(),
-                            call.tid.clone(),
-                            |x| Definition::ActualRet(x, idx),
-                        );
+                    Arg::Register { expr, data_type: _ } => {
+                        if let Expression::Var(var) = expr {
+                            apply_definition_of_variable(
+                                &mut new_value,
+                                var.clone(),
+                                call.tid.clone(),
+                                |x| Definition::ActualRet(x, idx),
+                            );
+                        }
                     }
                     Arg::Stack { .. } => (),
                 }
@@ -220,6 +222,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         value: &Self::Value,
         _call: &Term<Jmp>,
         _target: &Node<'_>,
+        _cc: &Option<String>,
     ) -> Option<Self::Value> {
         Some(value.clone())
     }
@@ -230,6 +233,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         _value_before_call: Option<&Self::Value>,
         call_term: &Term<Jmp>,
         _return_term: &Term<Jmp>,
+        _cc: &Option<String>,
     ) -> Option<Self::Value> {
         let mut new_value = value
             .cloned()
@@ -241,16 +245,19 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
             .enumerate()
         {
             match arg {
-                Arg::Register { var, .. } => {
+                Arg::Register { expr, .. } => {
                     if idx != 0 {
                         error!("For call: {:?} multiple formal returns", call_term);
                     }
-                    apply_definition_of_variable(
-                        &mut new_value,
-                        var.clone(),
-                        call_term.tid.clone(),
-                        |x| Definition::ActualRet(x, idx),
-                    );
+
+                    if let Expression::Var(var) = expr {
+                        apply_definition_of_variable(
+                            &mut new_value,
+                            var.clone(),
+                            call_term.tid.clone(),
+                            |x| Definition::ActualRet(x, idx),
+                        );
+                    }
                 }
                 Arg::Stack { .. } => (), // These type vars are managed by the points-to analysis
             }

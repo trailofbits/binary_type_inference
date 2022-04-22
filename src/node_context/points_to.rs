@@ -10,6 +10,7 @@ use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
 use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Project, Variable};
+use cwe_checker_lib::AnalysisResults;
 
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
 use log::warn;
@@ -139,16 +140,15 @@ impl PointsToMapping for PointsToContext {
 
 /// Runs analysis on the project to generate a [PointsToMapping]
 pub fn run_analysis<'a>(
-    proj: &'a Project,
+    analysis_results: &'a AnalysisResults<'a>,
     config: pointer_inference::Config,
-    cfg: &'a Graph<'a>,
-    rt_mem: &'a RuntimeMemoryImage,
 ) -> Result<HashMap<NodeIndex, PointsToContext>> {
-    let pointer_res = pointer_inference::run(proj, rt_mem, cfg, config, false, false);
+    let pointer_res = pointer_inference::run(analysis_results, config, false, false);
 
-    let rt_mem = Arc::new(rt_mem.clone());
+    let rt_mem = Arc::new(analysis_results.runtime_memory_image.clone());
 
-    let state_mapping: HashMap<NodeIndex, PointerState> = cfg
+    let state_mapping: HashMap<NodeIndex, PointerState> = analysis_results
+        .control_flow_graph
         .node_indices()
         .filter_map(|idx| {
             pointer_res.get_node_value(idx).and_then(|nv| match nv {
@@ -187,7 +187,7 @@ pub fn run_analysis<'a>(
         .map(|(idx, ps)| {
             (
                 idx,
-                PointsToContext::new(ps, proj.stack_pointer_register.clone()),
+                PointsToContext::new(ps, analysis_results.project.stack_pointer_register.clone()),
             )
         })
         .collect())
