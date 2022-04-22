@@ -1726,6 +1726,7 @@
                 }
               }
             ],
+            "calling_convention": "__cdecl",
             "formals": [
               {
                 "location": {
@@ -6721,6 +6722,7 @@
       "return_register": [
         "EAX"
       ],
+      "float_return_register": [],
       "unaffected_register": [
         "EBX",
         "ECX",
@@ -6740,8 +6742,10 @@
       "integer_parameter_register": [],
       "float_parameter_register": [],
       "return_register": [
-        "ST0",
         "EAX"
+      ],
+      "float_return_register": [
+        "ST0"
       ],
       "unaffected_register": [
         "ESP",
@@ -6764,6 +6768,7 @@
       "return_register": [
         "ST0"
       ],
+      "float_return_register": [],
       "unaffected_register": [
         "ESP",
         "EBP",
@@ -6781,8 +6786,10 @@
       "integer_parameter_register": [],
       "float_parameter_register": [],
       "return_register": [
-        "ST0",
         "EAX"
+      ],
+      "float_return_register": [
+        "ST0"
       ],
       "unaffected_register": [
         "ESP",
@@ -6805,8 +6812,10 @@
       ],
       "float_parameter_register": [],
       "return_register": [
-        "ST0",
         "EAX"
+      ],
+      "float_return_register": [
+        "ST0"
       ],
       "unaffected_register": [
         "ESP",
@@ -6830,8 +6839,10 @@
       ],
       "float_parameter_register": [],
       "return_register": [
-        "ST0",
         "EAX"
+      ],
+      "float_return_register": [
+        "ST0"
       ],
       "unaffected_register": [
         "ESP",
@@ -6856,8 +6867,10 @@
       ],
       "float_parameter_register": [],
       "return_register": [
-        "ST0",
         "EAX"
+      ],
+      "float_return_register": [
+        "ST0"
       ],
       "unaffected_register": [
         "ESP",
