@@ -2380,8 +2380,8 @@ mod test {
         let nidx = e.target();
 
         let wt = &sg_id.as_ref().quotient_graph.get_graph()[nidx];
-        // So ok since this in an out param we get a type error since int and char arent compatible we must return a more specific type.
-        assert_eq!(wt.upper_bound.get_name(), "bottom");
+
+        assert_eq!(wt.upper_bound.get_name(), "bytetype");
         assert_eq!(wt.lower_bound.get_name(), "bottom");
     }
 
