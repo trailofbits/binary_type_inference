@@ -8,10 +8,13 @@ use cwe_checker_lib::{
     },
 };
 use log::error;
-use std::ops::{Deref, DerefMut};
 use std::{
     collections::{BTreeMap, BTreeSet},
     vec,
+};
+use std::{
+    fmt::Display,
+    ops::{Deref, DerefMut},
 };
 
 pub struct Context<'a> {
@@ -43,8 +46,30 @@ pub enum Definition {
     ActualRet(Tid, usize),
 }
 
+impl Display for Definition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Definition::EntryFresh(tag) => write!(f, "fake_entry_def_{}", tag),
+            Definition::Normal(term) => write!(f, "term_def_{}", term.get_str_repr()),
+            Definition::ActualRet(term, idx) => {
+                write!(f, "actual_ret_{}_{}", term.get_str_repr(), idx)
+            }
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub struct TermSet(pub BTreeSet<Definition>);
+
+impl Display for TermSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{")?;
+        for t in self.0.iter() {
+            write!(f, "{}, ", t)?;
+        }
+        write!(f, "}}")
+    }
+}
 
 impl AbstractDomain for TermSet {
     fn merge(&self, other: &Self) -> Self {

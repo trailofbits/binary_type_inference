@@ -4,7 +4,7 @@ use cwe_checker_lib::{
     utils::log::{LogLevel, LogMessage},
 };
 use log::{debug, error, info};
-use std::{collections::HashMap, io::Read};
+use std::{collections::HashMap, fmt::Display, io::Read, path::PathBuf};
 
 use crate::{constraint_generation, constraints::TypeVariable};
 
@@ -50,6 +50,37 @@ pub fn procedure_type_variable_map(proj: &Project) -> HashMap<TypeVariable, Tid>
         .map(|(tid, _)| (constraint_generation::tid_to_tvar(tid), tid.clone()));
 
     tids.chain(extern_tids).collect()
+}
+
+use std::rc::Rc;
+
+#[derive(Clone)]
+pub struct FileDebugLogger {
+    debug_dir: Rc<Option<String>>,
+}
+
+use std::io::Write;
+
+impl FileDebugLogger {
+    pub fn new(debug_dir: Option<String>) -> FileDebugLogger {
+        FileDebugLogger {
+            debug_dir: Rc::new(debug_dir),
+        }
+    }
+
+    pub fn log_to_fname<V: Display>(
+        &self,
+        fname: &str,
+        dispalyable: &impl Fn() -> V,
+    ) -> anyhow::Result<()> {
+        if let Some(debug_dir) = self.debug_dir.as_ref() {
+            let mut pth = PathBuf::from(debug_dir);
+            pth.push(fname);
+            let mut out_file = std::fs::File::create(pth)?;
+            write!(&mut out_file, "{}\n", dispalyable())?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

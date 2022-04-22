@@ -196,7 +196,9 @@ mod tests {
 
     fn run_test_case(tc: TestCase) {
         init();
-        let mut job = InferenceJob::parse::<JsonDef>(&tc.job_def, None).unwrap();
+        let mut job =
+            InferenceJob::parse::<JsonDef>(&tc.job_def, std::env::var("BTI_DEBUG_DIR").ok())
+                .unwrap();
         job.recover_additional_shared_returns();
 
         let expected_values = ExpectedOutputs::try_from(tc.expected_outputs)

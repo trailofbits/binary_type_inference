@@ -30,6 +30,7 @@ use crate::{
         TypeVariable, VariableManager,
     },
     pb_constraints::DerivedTypeVariable,
+    util::FileDebugLogger,
 };
 use std::io::Write;
 
@@ -47,7 +48,7 @@ where
     rule_context: RuleContext,
     vman: &'b mut VariableManager,
     lattice_def: LatticeInfo<'c, T, U>,
-    debug_dir: Option<String>,
+    debug_dir: FileDebugLogger,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -392,6 +393,7 @@ where
         rule_context: RuleContext,
         vman: &'b mut VariableManager,
         lattice: LatticeInfo<'c, T, U>,
+        debug_dir: FileDebugLogger,
     ) -> Context<'a, 'b, 'c, R, P, S, T, U> {
         Context {
             cg,
@@ -401,48 +403,12 @@ where
             rule_context,
             vman,
             lattice_def: lattice,
-            debug_dir: None,
+            debug_dir,
         }
-    }
-
-    pub fn new_debug<'a, 'b, 'c>(
-        cg: CallGraph,
-        graph: &'a Graph<'a>,
-        node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
-        extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
-        rule_context: RuleContext,
-        vman: &'b mut VariableManager,
-        lattice: LatticeInfo<'c, T, U>,
-        debug_dir: Option<String>,
-    ) -> Context<'a, 'b, 'c, R, P, S, T, U> {
-        Context {
-            cg,
-            graph,
-            node_contexts,
-            extern_symbols,
-            rule_context,
-            vman,
-            lattice_def: lattice,
-            debug_dir: debug_dir,
-        }
-    }
-
-    fn log_to_fname<V: Display>(
-        &self,
-        fname: &str,
-        dispalyable: &impl Fn() -> V,
-    ) -> anyhow::Result<()> {
-        if let Some(debug_dir) = &self.debug_dir {
-            let mut pth = PathBuf::from(debug_dir);
-            pth.push(fname);
-            let mut out_file = std::fs::File::create(pth)?;
-            write!(&mut out_file, "{}\n", dispalyable())?;
-        }
-        Ok(())
     }
 
     pub fn get_simplified_constraints(&mut self) -> anyhow::Result<Vec<SCCConstraints>> {
-        self.log_to_fname("interesting_vars", &|| {
+        self.debug_dir.log_to_fname("interesting_vars", &|| {
             self.rule_context
                 .get_interesting()
                 .iter()
@@ -481,21 +447,21 @@ where
                     .next()
                     .expect("every scc must have a node");
 
-                self.log_to_fname(
+                self.debug_dir.log_to_fname(
                     &format!("{}_ptr_resolved_cons", repr_tid.get_str_repr()),
                     &|| &resolved_cs_set,
                 )?;
 
                 let mut fsa = FSA::new(&resolved_cs_set, &self.rule_context)?;
 
-                self.log_to_fname(
+                self.debug_dir.log_to_fname(
                     &format!("{}_fsa_unsimplified.dot", repr_tid.get_str_repr()),
                     &|| &fsa,
                 )?;
 
                 fsa.simplify_graph(self.vman);
 
-                self.log_to_fname(
+                self.debug_dir.log_to_fname(
                     &format!("{}_fsa_simplified.dot", repr_tid.get_str_repr()),
                     &|| &fsa,
                 )?;

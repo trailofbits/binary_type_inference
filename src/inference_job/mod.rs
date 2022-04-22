@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
+    fs::File,
     iter::FromIterator,
     path::PathBuf,
 };
@@ -40,6 +41,7 @@ use crate::{
         },
         type_sketch::{LatticeBounds, SCCSketchsBuilder, SketchGraph},
     },
+    util::FileDebugLogger,
 };
 use crate::{ctypes, pb_constraints};
 use byteorder::{BigEndian, ReadBytesExt};
@@ -78,7 +80,7 @@ pub struct InferenceJob {
     additional_constraints: BTreeMap<Tid, ConstraintSet>,
     interesting_tids: HashSet<Tid>,
     vman: VariableManager,
-    debug_dir: Option<String>,
+    debug_dir: FileDebugLogger,
 }
 
 pub trait InferenceParsing<T> {
@@ -285,6 +287,7 @@ impl InferenceJob {
             },
             &rt_mem,
             self.weakest_integral_type.clone(),
+            self.debug_dir.clone(),
         )?;
 
         Ok(nd_context)
@@ -356,7 +359,7 @@ impl InferenceJob {
             _,
             EnumeratedNamedLattice,
             CustomLatticeElement,
-        > = scc_constraint_generation::Context::new_debug(
+        > = scc_constraint_generation::Context::new(
             cg,
             &grph,
             node_ctxt,
@@ -455,7 +458,7 @@ impl InferenceJob {
             interesting_tids,
             weakest_integral_type,
             vman: VariableManager::new(),
-            debug_dir,
+            debug_dir: FileDebugLogger::new(debug_dir),
         })
     }
 }
