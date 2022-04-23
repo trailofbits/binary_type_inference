@@ -1726,7 +1726,6 @@
                 }
               }
             ],
-            "calling_convention": "__cdecl",
             "formals": [
               {
                 "location": {
