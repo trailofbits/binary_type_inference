@@ -11,6 +11,7 @@ use cwe_checker_lib::{
     utils::binary::RuntimeMemoryImage,
     AnalysisResults,
 };
+use log::info;
 use petgraph::graph::NodeIndex;
 
 use crate::{
@@ -111,9 +112,10 @@ impl ConstantResolver for GhidraConstantResolver {
         vman: &mut crate::constraints::VariableManager,
     ) -> crate::constraints::DerivedTypeVar {
         DerivedTypeVar::new(if let Ok(tgt) = target.try_to_u64() {
+            info!("Resolving constant {:#x}", tgt);
             self.global_map
                 .get(&tgt)
-                .map(|t| tid_to_tvar(t))
+                .map(|t| TypeVariable::new_global(t.get_str_repr().to_owned()))
                 .unwrap_or_else(|| vman.fresh())
         } else {
             vman.fresh()

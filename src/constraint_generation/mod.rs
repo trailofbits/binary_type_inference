@@ -326,6 +326,13 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         }
     }
 
+    fn is_constant_one(expr: &Expression) -> bool {
+        match expr {
+            Expression::Const(ap) => ap.is_one(),
+            _ => false,
+        }
+    }
+
     fn evaluate_binop(
         &self,
         op: &BinOpType,
@@ -337,10 +344,18 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         match op {
             // TODO(Ian): Think about this case a bit more
             // Should probably at a minimum propogate something to the operands
-            BinOpType::IntMult => (
-                DerivedTypeVar::new(self.weakest_integral_type.clone()),
-                ConstraintSet::default(),
-            ),
+            BinOpType::IntMult => {
+                if Self::is_constant_one(lhs) {
+                    self.evaluate_expression(rhs, defining_tvars_are_subtype_of_repr, vman)
+                } else if Self::is_constant_one(rhs) {
+                    self.evaluate_expression(lhs, defining_tvars_are_subtype_of_repr, vman)
+                } else {
+                    (
+                        DerivedTypeVar::new(self.weakest_integral_type.clone()),
+                        ConstraintSet::default(),
+                    )
+                }
+            }
             BinOpType::IntAdd => self.eval_add(lhs, rhs, defining_tvars_are_subtype_of_repr, vman),
             BinOpType::IntSub => self.eval_add(
                 lhs,

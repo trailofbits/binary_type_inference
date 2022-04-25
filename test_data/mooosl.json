@@ -220,6 +220,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -1020,6 +1021,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -1553,6 +1555,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -2329,6 +2332,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -5394,6 +5398,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -6537,6 +6542,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -6646,6 +6652,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -11603,6 +11610,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -13629,6 +13637,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -15406,6 +15415,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -17180,6 +17190,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -19994,6 +20005,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -22886,6 +22898,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -23797,6 +23810,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -28008,6 +28022,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -31741,6 +31756,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -35172,6 +35188,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -41813,6 +41830,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -46519,6 +46537,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -46780,6 +46799,7 @@
                 }
               }
             ],
+            "calling_convention": "__stdcall",
             "formals": [
               {
                 "var": {
@@ -47262,7 +47282,396 @@
           "address": "001011a0"
         }
       ],
-      "image_base": "00100000"
+      "image_base": "00100000",
+      "global_variables": [
+        {
+          "tid": {
+            "id": "glb_00103f70_PTR_00103f70",
+            "address": "00103f70"
+          },
+          "term": {
+            "base_address": "00103f70"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00103d98__DYNAMIC",
+            "address": "00103d98"
+          },
+          "term": {
+            "base_address": "00103d98"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00101928__fini",
+            "address": "00101928"
+          },
+          "term": {
+            "base_address": "00101928"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00101000__init",
+            "address": "00101000"
+          },
+          "term": {
+            "base_address": "00101000"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00101841_FUN_00101841",
+            "address": "00101841"
+          },
+          "term": {
+            "base_address": "00101841"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00103ff0_PTR__ITM_deregisterTMCloneTable_00103ff0",
+            "address": "00103ff0"
+          },
+          "term": {
+            "base_address": "00103ff0"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010d048__ITM_deregisterTMCloneTable",
+            "address": "0010d048"
+          },
+          "term": {
+            "base_address": "0010d048"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00103fe8_PTR__ITM_registerTMCloneTable_00103fe8",
+            "address": "00103fe8"
+          },
+          "term": {
+            "base_address": "00103fe8"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010d030__ITM_registerTMCloneTable",
+            "address": "0010d030"
+          },
+          "term": {
+            "base_address": "0010d030"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104020_DAT_00104020",
+            "address": "00104020"
+          },
+          "term": {
+            "base_address": "00104020"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00103fe0_PTR___cxa_finalize_00103fe0",
+            "address": "00103fe0"
+          },
+          "term": {
+            "base_address": "00103fe0"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104000_PTR_LOOP_00104000",
+            "address": "00104000"
+          },
+          "term": {
+            "base_address": "00104000"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104020_DAT_00104020",
+            "address": "00104020"
+          },
+          "term": {
+            "base_address": "00104020"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102000_s_key_size:_00102000",
+            "address": "00102000"
+          },
+          "term": {
+            "base_address": "00102000"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010200b_s_key_content:_0010200b",
+            "address": "0010200b"
+          },
+          "term": {
+            "base_address": "0010200b"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102019_s_value_size:_00102019",
+            "address": "00102019"
+          },
+          "term": {
+            "base_address": "00102019"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102026_s_value_content:_00102026",
+            "address": "00102026"
+          },
+          "term": {
+            "base_address": "00102026"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102036_s_%#lx:_00102036",
+            "address": "00102036"
+          },
+          "term": {
+            "base_address": "00102036"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010203c_DAT_0010203c",
+            "address": "0010203c"
+          },
+          "term": {
+            "base_address": "0010203c"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102041_DAT_00102041",
+            "address": "00102041"
+          },
+          "term": {
+            "base_address": "00102041"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102042_s_1:_store_00102042",
+            "address": "00102042"
+          },
+          "term": {
+            "base_address": "00102042"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010204b_s_2:_query_0010204b",
+            "address": "0010204b"
+          },
+          "term": {
+            "base_address": "0010204b"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102054_s_3:_delete_00102054",
+            "address": "00102054"
+          },
+          "term": {
+            "base_address": "00102054"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010205e_s_4:_exit_0010205e",
+            "address": "0010205e"
+          },
+          "term": {
+            "base_address": "0010205e"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102066_s_option:_00102066",
+            "address": "00102066"
+          },
+          "term": {
+            "base_address": "00102066"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104040_DAT_00104040",
+            "address": "00104040"
+          },
+          "term": {
+            "base_address": "00104040"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104040_DAT_00104040",
+            "address": "00104040"
+          },
+          "term": {
+            "base_address": "00104040"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104040_DAT_00104040",
+            "address": "00104040"
+          },
+          "term": {
+            "base_address": "00104040"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104040_DAT_00104040",
+            "address": "00104040"
+          },
+          "term": {
+            "base_address": "00104040"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104040_DAT_00104040",
+            "address": "00104040"
+          },
+          "term": {
+            "base_address": "00104040"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104040_DAT_00104040",
+            "address": "00104040"
+          },
+          "term": {
+            "base_address": "00104040"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010206f_DAT_0010206f",
+            "address": "0010206f"
+          },
+          "term": {
+            "base_address": "0010206f"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102072_DAT_00102072",
+            "address": "00102072"
+          },
+          "term": {
+            "base_address": "00102072"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010206f_DAT_0010206f",
+            "address": "0010206f"
+          },
+          "term": {
+            "base_address": "0010206f"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102072_DAT_00102072",
+            "address": "00102072"
+          },
+          "term": {
+            "base_address": "00102072"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00104040_DAT_00104040",
+            "address": "00104040"
+          },
+          "term": {
+            "base_address": "00104040"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010206f_DAT_0010206f",
+            "address": "0010206f"
+          },
+          "term": {
+            "base_address": "0010206f"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00103fd8_PTR_stdout_00103fd8",
+            "address": "00103fd8"
+          },
+          "term": {
+            "base_address": "00103fd8"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010d008_stdout",
+            "address": "0010d008"
+          },
+          "term": {
+            "base_address": "0010d008"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00103ff8_PTR_stderr_00103ff8",
+            "address": "00103ff8"
+          },
+          "term": {
+            "base_address": "00103ff8"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010d050_stderr",
+            "address": "0010d050"
+          },
+          "term": {
+            "base_address": "0010d050"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_00102076_DAT_00102076",
+            "address": "00102076"
+          },
+          "term": {
+            "base_address": "00102076"
+          }
+        },
+        {
+          "tid": {
+            "id": "glb_0010207a_s_invalid_0010207a",
+            "address": "0010207a"
+          },
+          "term": {
+            "base_address": "0010207a"
+          }
+        }
+      ]
     }
   },
   "stack_pointer_register": {
@@ -52545,8 +52954,10 @@
         "XMM3_Qa"
       ],
       "return_register": [
-        "XMM0_Qa",
         "RAX"
+      ],
+      "float_return_register": [
+        "XMM0_Qa"
       ],
       "unaffected_register": [
         "RBX",
@@ -52579,6 +52990,7 @@
       "return_register": [
         "RAX"
       ],
+      "float_return_register": [],
       "unaffected_register": [
         "RBX",
         "RDX",
@@ -52621,8 +53033,10 @@
         "XMM7_Qa"
       ],
       "return_register": [
-        "XMM0_Qa",
         "RAX"
+      ],
+      "float_return_register": [
+        "XMM0_Qa"
       ],
       "unaffected_register": [
         "RBX",

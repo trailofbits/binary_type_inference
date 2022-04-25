@@ -438,23 +438,49 @@ where
 
                 let resolved_cs_set = self.lattice_def.infer_pointers(&basic_cons)?;
 
-                let diff = resolved_cs_set
-                    .difference(&basic_cons)
-                    .cloned()
-                    .collect::<BTreeSet<_>>();
+                let diff = ConstraintSet::from(
+                    resolved_cs_set
+                        .difference(&basic_cons)
+                        .cloned()
+                        .collect::<BTreeSet<_>>(),
+                );
 
-                println!("Diff {}", ConstraintSet::from(diff));
                 let repr_tid = tid_filter
                     .iter()
                     .next()
                     .expect("every scc must have a node");
+
+                self.debug_dir
+                    .log_to_fname(&format!("{}_ptr_diff", repr_tid.get_str_repr()), &|| &diff)?;
 
                 self.debug_dir.log_to_fname(
                     &format!("{}_ptr_resolved_cons", repr_tid.get_str_repr()),
                     &|| &resolved_cs_set,
                 )?;
 
-                let mut fsa = FSA::new(&resolved_cs_set, &self.rule_context)?;
+                let mut new_rcontext = self.rule_context.clone();
+
+                // TODO(Ian): I dislike this collaboration but constraint generation is when we discover which globals we are going to need. Ideally when we lift constraint
+                // generation out we can seperate this out.
+                resolved_cs_set
+                    .variables()
+                    .filter(|x| x.get_base_variable().is_global())
+                    .for_each(|global| {
+                        new_rcontext.insert_variable(global.get_base_variable().clone())
+                    });
+
+                self.debug_dir.log_to_fname(
+                    &format!("{}_modified_interesting_vars", repr_tid.get_str_repr()),
+                    &|| {
+                        new_rcontext
+                            .get_interesting()
+                            .iter()
+                            .map(|var| var.get_name())
+                            .join("\n")
+                    },
+                )?;
+
+                let mut fsa = FSA::new(&resolved_cs_set, &new_rcontext)?;
 
                 self.debug_dir.log_to_fname(
                     &format!("{}_fsa_unsimplified.dot", repr_tid.get_str_repr()),

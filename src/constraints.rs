@@ -179,6 +179,7 @@ pub fn parse_constraint_set(input: &str) -> IResult<&str, ConstraintSet> {
 pub struct TypeVariable {
     name: String,
     cs_tag: Option<Tid>,
+    is_global: bool,
 }
 
 impl TypeVariable {
@@ -186,7 +187,20 @@ impl TypeVariable {
         TypeVariable {
             name,
             cs_tag: Some(cs_tag),
+            is_global: false,
         }
+    }
+
+    pub fn new_global(name: String) -> TypeVariable {
+        TypeVariable {
+            name,
+            cs_tag: None,
+            is_global: true,
+        }
+    }
+
+    pub fn is_global(&self) -> bool {
+        self.is_global
     }
 
     pub fn get_tag(&self) -> &Option<Tid> {
@@ -194,7 +208,11 @@ impl TypeVariable {
     }
 
     pub fn to_callee(&self) -> TypeVariable {
-        TypeVariable::new(self.name.clone())
+        TypeVariable {
+            is_global: self.is_global,
+            name: self.name.clone(),
+            cs_tag: None,
+        }
     }
 
     pub fn get_cs_tag(&self) -> &Option<Tid> {
@@ -204,7 +222,11 @@ impl TypeVariable {
     /// Create a new type variable with the given name
     pub fn new(name: String) -> TypeVariable {
         //TODO(ian): Maybe we should check the validity of the name here.
-        TypeVariable { name, cs_tag: None }
+        TypeVariable {
+            name,
+            cs_tag: None,
+            is_global: false,
+        }
     }
 
     /// Gets the string of the identifier for this type variable.
@@ -634,6 +656,18 @@ impl ConstraintSet {
                 })
                 .collect(),
         )
+    }
+
+    pub fn variables(&self) -> impl Iterator<Item = &DerivedTypeVar> {
+        self.0
+            .iter()
+            .map(|cons| match cons {
+                TyConstraint::SubTy(sty) => vec![&sty.lhs, &sty.rhs].into_iter(),
+                TyConstraint::AddCons(add_cons) => {
+                    vec![&add_cons.lhs_ty, &add_cons.rhs_ty, &add_cons.repr_ty].into_iter()
+                }
+            })
+            .flatten()
     }
 }
 
