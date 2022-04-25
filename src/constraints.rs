@@ -179,6 +179,7 @@ pub fn parse_constraint_set(input: &str) -> IResult<&str, ConstraintSet> {
 pub struct TypeVariable {
     name: String,
     cs_tag: Option<Tid>,
+    #[serde(default)]
     is_global: bool,
 }
 
