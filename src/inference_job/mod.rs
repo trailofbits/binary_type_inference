@@ -401,6 +401,7 @@ impl InferenceJob {
             scc_constraints,
             &self.lattice,
             self.get_lattice_elems().collect(),
+            self.debug_dir.clone(),
         );
 
         bldr.build()?;

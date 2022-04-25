@@ -43,6 +43,7 @@ use crate::ctypes::Union;
 use crate::graph_algos::mapping_graph::{self, MappingGraph};
 use crate::graph_algos::{explore_paths, find_node};
 use crate::pb_constraints::DerivedTypeVariable;
+use crate::util::FileDebugLogger;
 
 use super::constraint_graph::TypeVarNode;
 use super::dfa_operations::{self, complement, union, Alphabet, ExplicitDFA, Indices, DFA};
@@ -510,6 +511,8 @@ pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     type_lattice_elements: HashSet<TypeVariable>,
     /// Aliases some type nodes accross sccs to bind polymorphic parameters loc->loc
     parameter_aliases: BTreeMap<TypeLocation, TypeLocation>,
+
+    debug_dir: FileDebugLogger,
 }
 
 #[derive(Debug)]
@@ -530,6 +533,7 @@ where
         scc_constraints: Vec<SCCConstraints>,
         lattice: &'a T,
         type_lattice_elements: HashSet<TypeVariable>,
+        debug_dir: FileDebugLogger,
     ) -> SCCSketchsBuilder<'a, U, T> {
         let scc_signatures = scc_constraints
             .into_iter()
@@ -553,6 +557,7 @@ where
             lattice,
             type_lattice_elements,
             parameter_aliases: BTreeMap::new(),
+            debug_dir,
         }
     }
 
@@ -617,6 +622,30 @@ where
             .map(|sorted| (condensed, sorted))
     }
 
+    fn display_sketches(&self, event_time: &str) -> anyhow::Result<()> {
+        println!("displaying sketches");
+        for (var, repr) in self.scc_repr.iter() {
+            println!("attempting to log");
+            self.debug_dir.log_to_fname(
+                &format!("{}_sketch_{}", event_time, var.get_name()),
+                &|| repr,
+            )?;
+
+            self.debug_dir.log_to_fname(
+                &format!("{}_mapping_{}", event_time, var.get_name()),
+                &|| {
+                    repr.quotient_graph
+                        .get_node_mapping()
+                        .iter()
+                        .map(|(nd, idx)| format!("{}:{}", nd, idx.index()))
+                        .join("\n")
+                },
+            )?;
+        }
+
+        Ok(())
+    }
+
     pub fn build(&mut self) -> anyhow::Result<()> {
         let (condensed, mut sorted) = self.get_topo_order_for_cg()?;
         sorted.reverse();
@@ -631,6 +660,8 @@ where
 
         self.bind_polymorphic_types()?;
         self.collect_aliases()?;
+        self.display_sketches("after_polybind")?;
+        self.collect_global_instantiations()?;
         Ok(())
     }
 
@@ -1201,6 +1232,41 @@ where
         ordering.iter().for_each(|(ccg, target_scc_idx, scc_tids)| {
             self.refine_formals(ccg, scc_tids, target_scc_idx)
         });
+        Ok(())
+    }
+
+    fn insert_global_sketches(
+        global_sketches: &mut HashMap<TypeVariable, Sketch<LatticeBounds<U>>>,
+        sg: &SketchGraph<LatticeBounds<U>>,
+    ) {
+        sg.quotient_graph
+            .get_node_mapping()
+            .iter()
+            .for_each(|(dtv, idx)| {
+                if dtv.get_field_labels().len() == 0 && dtv.get_base_variable().is_global() {
+                    let sks = sg.get_representing_sketch(dtv.clone());
+                    assert!(sks.len() == 1);
+                    let (_, skg) = &sks[0];
+                    let curr_sketch = global_sketches
+                        .entry(dtv.get_base_variable().clone())
+                        .or_insert_with(|| skg.clone());
+                    *curr_sketch = curr_sketch.intersect(&skg)
+                }
+            });
+    }
+
+    pub fn collect_global_instantiations(&self) -> anyhow::Result<()> {
+        let mut global_sketches: HashMap<TypeVariable, Sketch<LatticeBounds<U>>> = HashMap::new();
+
+        self.scc_repr.iter().for_each(|(_, sg)| {
+            Self::insert_global_sketches(&mut global_sketches, sg);
+        });
+
+        for (tv, sketch) in global_sketches.iter() {
+            self.debug_dir
+                .log_to_fname(&format!("global_var_sketch_{}", &tv.get_name()), &|| sketch)?;
+        }
+
         Ok(())
     }
 }
@@ -2055,6 +2121,7 @@ mod test {
                 NamedLatticeElement,
             },
         },
+        util::FileDebugLogger,
     };
 
     use super::{insert_dtv, LatticeBounds, SCCSketchsBuilder, SketchBuilder};
@@ -2204,6 +2271,7 @@ mod test {
             ],
             &lat,
             nd_set,
+            FileDebugLogger::default(),
         );
 
         skb.build().expect("Should succeed in building sketch");
@@ -2335,6 +2403,7 @@ mod test {
             ],
             &lat,
             nd_set,
+            FileDebugLogger::default(),
         );
 
         skb.build().expect("Should succeed in building sketch");
@@ -2460,6 +2529,7 @@ mod test {
             ],
             &lat,
             nd_set,
+            FileDebugLogger::default(),
         );
 
         skb.build().expect("able to build sketches");
@@ -2607,6 +2677,7 @@ mod test {
             ],
             &lat,
             nd_set,
+            FileDebugLogger::default(),
         );
 
         skb.build().expect("Should succeed in building sketch");

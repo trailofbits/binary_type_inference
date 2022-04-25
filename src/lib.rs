@@ -408,8 +408,7 @@ mod tests {
             .set_ir_json_path("mooosl.json".to_owned())
             .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
             .set_lattice_json("mooosl_test_lattice.json".to_owned())
-            .set_interesting_tids_file("full_mooosl_tid_list.json".to_owned())
-            .set_expec_constraint_gen("mooosl_scc_cons.json".to_owned());
+            .set_interesting_tids_file("full_mooosl_tid_list.json".to_owned());
         run_test_case(bldr.build());
     }
 }
