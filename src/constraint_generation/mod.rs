@@ -112,6 +112,14 @@ pub trait SubprocedureLocators: NodeContextMapping {
     ) -> BTreeSet<ArgTvar>;
 }
 
+pub trait ConstantResolver: NodeContextMapping {
+    fn resolve_constant_to_variable(
+        &self,
+        target: &Bitvector,
+        vman: &mut VariableManager,
+    ) -> DerivedTypeVar;
+}
+
 // TODO(ian): this should have some sort of function on it that takes a lambda and basically joins constraints together to acess the derived type variable or something to prevent
 // issues where constraints are forgetten, this is perhaps a functor tbh
 struct BaseValueDomain {
@@ -210,31 +218,47 @@ pub fn simplify_path(orig: &DerivedTypeVar) -> DerivedTypeVar {
 /// The PointsToMapping determines the set of a type variables a load or store points to in order to generate constraints.
 /// Finally the SubprocedureLocators are used to link actual and formal arguments and returns within constraints.
 #[derive(Clone)]
-pub struct NodeContext<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> {
+pub struct NodeContext<
+    R: RegisterMapping,
+    P: PointsToMapping,
+    S: SubprocedureLocators,
+    C: ConstantResolver,
+> {
     reg_map: R,
     points_to: P,
     subprocedure_locators: S,
+    constant_resolver: C,
     weakest_integral_type: TypeVariable,
 }
 
-impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContextMapping
-    for NodeContext<R, P, S>
+impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: ConstantResolver>
+    NodeContextMapping for NodeContext<R, P, S, C>
 {
     fn apply_def(&self, term: &Term<Def>) -> Self {
         let r = self.reg_map.apply_def(term);
         let p = self.points_to.apply_def(term);
         let s = self.subprocedure_locators.apply_def(term);
-        NodeContext::new(r, p, s, self.weakest_integral_type.clone())
+        let c = self.constant_resolver.apply_def(term);
+        NodeContext::new(r, p, s, c, self.weakest_integral_type.clone())
     }
 }
 
-impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContext<R, P, S> {
+impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: ConstantResolver>
+    NodeContext<R, P, S, C>
+{
     /// Given a register, pointer, and subprocedure mapping, generates a full NodeContext.
-    pub fn new(r: R, p: P, s: S, weakest_integral_type: TypeVariable) -> NodeContext<R, P, S> {
+    pub fn new(
+        r: R,
+        p: P,
+        s: S,
+        c: C,
+        weakest_integral_type: TypeVariable,
+    ) -> NodeContext<R, P, S, C> {
         NodeContext {
             reg_map: r,
             points_to: p,
             subprocedure_locators: s,
+            constant_resolver: c,
             weakest_integral_type,
         }
     }
@@ -417,6 +441,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators> NodeContex
                     Self::unhandled_expr(value, vman)
                 }
             },
+            Expression::Const(value) => (
+                self.constant_resolver
+                    .resolve_constant_to_variable(value, vman),
+                ConstraintSet::default(),
+            ),
             _ => Self::unhandled_expr(value, vman), // TODO(ian) handle additional constraints, add/sub
         }
     }
@@ -774,31 +803,33 @@ pub fn fold_over_definition_states<C: NodeContextMapping, I>(
 
 /// Holds a mapping between the nodes and their flow-sensitive analysis results, which
 /// are needed for constraint generation
-pub struct Context<'a, R, P, S>
+pub struct Context<'a, R, P, S, C>
 where
     R: RegisterMapping,
     P: PointsToMapping,
     S: SubprocedureLocators,
+    C: ConstantResolver,
 {
     graph: &'a Graph<'a>,
-    node_contexts: &'a HashMap<NodeIndex, NodeContext<R, P, S>>,
+    node_contexts: &'a HashMap<NodeIndex, NodeContext<R, P, S, C>>,
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
     function_filter: Option<HashSet<Tid>>,
 }
 
-impl<'a, R, P, S> Context<'a, R, P, S>
+impl<'a, R, P, S, C> Context<'a, R, P, S, C>
 where
     R: RegisterMapping,
     P: PointsToMapping,
     S: SubprocedureLocators,
+    C: ConstantResolver,
 {
     /// Creates a new context for type constraint generation.
     pub fn new(
         graph: &'a Graph<'a>,
-        node_contexts: &'a HashMap<NodeIndex, NodeContext<R, P, S>>,
+        node_contexts: &'a HashMap<NodeIndex, NodeContext<R, P, S, C>>,
         extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
         function_filter: Option<HashSet<Tid>>,
-    ) -> Context<'a, R, P, S> {
+    ) -> Context<'a, R, P, S, C> {
         Context {
             graph,
             node_contexts,
@@ -815,7 +846,7 @@ where
     }
 
     fn handle_block_start(
-        nd_ctxt: NodeContext<R, P, S>,
+        nd_ctxt: NodeContext<R, P, S, C>,
         blk: &Term<Blk>,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
@@ -829,7 +860,7 @@ where
             blk,
             ConstraintSet::default(),
             &mut |df: &Term<Def>,
-                  curr_ctxt: &NodeContext<R, P, S>,
+                  curr_ctxt: &NodeContext<R, P, S, C>,
                   mut curr_constraints: ConstraintSet| {
                 curr_constraints.insert_all(&curr_ctxt.handle_def(df, vman));
                 curr_constraints
@@ -849,7 +880,7 @@ where
     fn collect_extern_call_constraints(
         &self,
         calling_blk: &Term<Blk>,
-        nd_ctxt: &NodeContext<R, P, S>,
+        nd_ctxt: &NodeContext<R, P, S, C>,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
         let edges = &calling_blk.term.jmps;
@@ -876,7 +907,7 @@ where
     fn collect_extern_ret_constraints(
         &self,
         nd_ind: NodeIndex,
-        nd_ctxt: &NodeContext<R, P, S>,
+        nd_ctxt: &NodeContext<R, P, S, C>,
         vman: &mut VariableManager,
     ) -> ConstraintSet {
         let mut cons = ConstraintSet::default();
@@ -956,7 +987,7 @@ where
                         info!("entry formals, {:?}", ent_cons);
                         total_cons.insert_all(&ent_cons);
                     }
-                    let new_context: NodeContext<R, P, S> = (*nd_cont).clone();
+                    let new_context: NodeContext<R, P, S, C> = (*nd_cont).clone();
                     total_cons.insert_all(&Self::handle_block_start(new_context, blk, vman));
                     total_cons
                 }

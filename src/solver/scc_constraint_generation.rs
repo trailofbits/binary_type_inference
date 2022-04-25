@@ -23,7 +23,7 @@ use super::{
 use crate::{
     analysis::callgraph::CallGraph,
     constraint_generation::{
-        self, NodeContext, PointsToMapping, RegisterMapping, SubprocedureLocators,
+        self, ConstantResolver, NodeContext, PointsToMapping, RegisterMapping, SubprocedureLocators,
     },
     constraints::{
         AddConstraint, ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint,
@@ -35,15 +35,16 @@ use crate::{
 use std::io::Write;
 
 // TODO(ian): dont use the tid filter and instead lookup the set of target nodes to traverse or use intraproc graphs. This is ineffecient
-pub struct Context<'a, 'b, 'c, R, P, S, T, U>
+pub struct Context<'a, 'b, 'c, R, P, S, C, T, U>
 where
     R: RegisterMapping,
     P: PointsToMapping,
     S: SubprocedureLocators,
+    C: ConstantResolver,
 {
     cg: CallGraph,
     graph: &'a Graph<'a>,
-    node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
+    node_contexts: HashMap<NodeIndex, NodeContext<R, P, S, C>>,
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
     rule_context: RuleContext,
     vman: &'b mut VariableManager,
@@ -377,24 +378,25 @@ fn insert_missed_formals(simplified_cs_set: &mut ConstraintSet, original_cs_set:
     })
 }
 
-impl<R, P, S, T, U> Context<'_, '_, '_, R, P, S, T, U>
+impl<R, P, S, C, T, U> Context<'_, '_, '_, R, P, S, C, T, U>
 where
     R: RegisterMapping,
     P: PointsToMapping,
     S: SubprocedureLocators,
+    C: ConstantResolver,
     U: NamedLatticeElement,
     T: NamedLattice<U>,
 {
     pub fn new<'a, 'b, 'c>(
         cg: CallGraph,
         graph: &'a Graph<'a>,
-        node_contexts: HashMap<NodeIndex, NodeContext<R, P, S>>,
+        node_contexts: HashMap<NodeIndex, NodeContext<R, P, S, C>>,
         extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
         rule_context: RuleContext,
         vman: &'b mut VariableManager,
         lattice: LatticeInfo<'c, T, U>,
         debug_dir: FileDebugLogger,
-    ) -> Context<'a, 'b, 'c, R, P, S, T, U> {
+    ) -> Context<'a, 'b, 'c, R, P, S, C, T, U> {
         Context {
             cg,
             graph,
