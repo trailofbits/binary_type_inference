@@ -494,6 +494,14 @@ impl DerivedTypeVar {
         self.labels.len() == 1 && self.refers_to_in_parameter()
     }
 
+    pub fn refers_to_global(&self) -> bool {
+        self.get_base_variable().is_global()
+    }
+
+    pub fn is_global(&self) -> bool {
+        self.labels.len() == 0 && self.refers_to_global()
+    }
+
     pub fn is_out_parameter(&self) -> bool {
         self.labels.len() == 1 && self.refers_to_out_parameter()
     }
