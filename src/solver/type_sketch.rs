@@ -682,6 +682,7 @@ where
             self.build_and_label_scc_sketch(associated_tids)?;
         }
 
+        self.display_sketches("before_polybind")?;
         self.bind_polymorphic_types()?;
         self.apply_global_instantiations()?;
         self.collect_aliases()?;
@@ -2328,6 +2329,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         let grp = self.quotient_graph.get_group_for_node(reached_idx);
 
         let rand_fst = grp.iter().next().expect("groups should be non empty");
+
         let _index_in_new_graph = into.add_node(
             Self::tag_base_with_destination_tag(from_base, rand_fst.clone()),
             self.quotient_graph
@@ -2380,6 +2382,28 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
     /// Copies the reachable subgraph from a DerivedTypeVar in from to the parent graph.
     /// The from variable may contain callsite tags which are stripped when looking up the subgraph but then attached to each node
     /// where the base matches the from var.
+
+    fn get_target_nodes_to_copy(&self, representing: &DerivedTypeVar) -> BTreeSet<NodeIndex> {
+        let repr = self.quotient_graph.get_node(&representing);
+        let mut stack: Vec<NodeIndex> = self
+            .get_graph()
+            .get_node_mapping()
+            .iter()
+            .filter_map(|(dtv, idx)| if dtv.is_global() { Some(*idx) } else { None })
+            .collect();
+
+        if let Some(repr) = repr {
+            stack.push(*repr);
+        }
+
+        let mut dfs = Dfs::from_parts(stack, HashSet::new());
+        let mut reached = BTreeSet::new();
+        while let Some(nx) = dfs.next(self.get_graph().get_graph()) {
+            reached.insert(nx);
+        }
+        reached
+    }
+
     pub fn copy_reachable_subgraph_into(
         &self,
         from: &DerivedTypeVar,
@@ -2390,18 +2414,8 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
             Vec::from_iter(from.get_field_labels().iter().cloned()),
         );
         info!("Looking for repr {}", representing);
-
-        if let Some(representing) = self.quotient_graph.get_node(&representing) {
-            info!("Found repr");
-            let reachable_idxs: BTreeSet<_> =
-                Dfs::new(self.quotient_graph.get_graph(), *representing)
-                    .iter(self.quotient_graph.get_graph())
-                    .collect();
-            info!(
-                "Reaching set: {:#?}",
-                &reachable_idxs.iter().map(|x| x.index()).collect::<Vec<_>>()
-            );
-
+        let reachable_idxs = self.get_target_nodes_to_copy(&representing);
+        if !reachable_idxs.is_empty() {
             reachable_idxs.iter().for_each(|reached_idx| {
                 self.add_idx_to(from.get_base_variable(), *reached_idx, into)
             });
@@ -2414,7 +2428,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
                 {
                     let (key1, w1) = self.get_key_and_weight_for_index(edge.source());
                     let key1 = Self::tag_base_with_destination_tag(from.get_base_variable(), key1);
-                    info!("Source nd {}", key1);
+
                     let source = into.add_node(key1.clone(), w1);
                     if &key1 == from {
                         repr = Some(source);
@@ -2422,7 +2436,6 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
 
                     let (key2, w2) = self.get_key_and_weight_for_index(edge.target());
                     let key2 = Self::tag_base_with_destination_tag(from.get_base_variable(), key2);
-                    info!("Dst nd {}", key2);
                     let target = into.add_node(key2.clone(), w2);
                     if &key2 == from {
                         repr = Some(target);
