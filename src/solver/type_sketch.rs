@@ -498,7 +498,7 @@ struct SCCLocation {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct GlobalLocation {
-    scc: TypeVariable,
+    globvar: TypeVariable,
     target_path: NodeIndex,
 }
 
@@ -507,6 +507,15 @@ struct GlobalLocation {
 enum TypeLocation {
     SCCLoc(SCCLocation),
     GlobalLoc(GlobalLocation),
+}
+
+impl TypeLocation {
+    fn get_target_index(&self) -> NodeIndex {
+        match self {
+            TypeLocation::SCCLoc(loc) => loc.target_path,
+            TypeLocation::GlobalLoc(loc) => loc.target_path,
+        }
+    }
 }
 
 /// Creates a structured and labeled sketch graph
@@ -518,7 +527,7 @@ pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     scc_signatures: HashMap<Tid, Rc<ConstraintSet>>,
     // Collects a shared sketchgraph representing the functions in the SCC
     scc_repr: HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>,
-    global_repr: HashMap<TypeVariable, SketchGraph<LatticeBounds<U>>>,
+    global_repr: HashMap<TypeVariable, (NodeIndex, Sketch<LatticeBounds<U>>)>,
     cg: CallGraph,
     tid_to_cg_idx: HashMap<Tid, NodeIndex>,
     lattice: &'a T,
@@ -572,6 +581,7 @@ where
             type_lattice_elements,
             parameter_aliases: BTreeMap::new(),
             debug_dir,
+            global_repr: HashMap::new(),
         }
     }
 
@@ -756,11 +766,19 @@ where
         labeling: &mut HashMap<DerivedTypeVar, NodeIndex>,
         location_to_index: &mut BTreeMap<TypeLocation, NodeIndex>,
     ) -> anyhow::Result<()> {
-        let global_map = self.collect_global_instantiations()?;
-        for (tv, repr_sketch) in global_map.into_iter() {
-            let entry_node = repr_sketch.copy_sketch_into_graph(resulting_graph);
+        for (tv, (_, repr_sketch)) in self.global_repr.iter() {
+            let (entry_node, old_idx_to_new_idx) =
+                repr_sketch.copy_sketch_into_graph(resulting_graph);
             labeling.insert(DerivedTypeVar::new(tv.clone()), entry_node);
-            location_to_index.insert(TypeLocation::GlobalLoc(tv.clone()), entry_node);
+            for (old_idx, new_idx) in old_idx_to_new_idx {
+                location_to_index.insert(
+                    TypeLocation::GlobalLoc(GlobalLocation {
+                        globvar: tv.clone(),
+                        target_path: old_idx,
+                    }),
+                    new_idx,
+                );
+            }
         }
         Ok(())
     }
@@ -1256,7 +1274,14 @@ where
                         target_path: *src_idx,
                         scc: associated_scc_tids.clone(),
                     }),
-                    TypeLocation::GlobalLoc(gdtv.get_base_variable().clone()),
+                    TypeLocation::GlobalLoc(GlobalLocation {
+                        globvar: gdtv.get_base_variable().clone(),
+                        target_path: self
+                            .global_repr
+                            .get(gdtv.get_base_variable())
+                            .expect("all global variables should have a representative sketch")
+                            .0,
+                    }),
                 )
             })
         });
@@ -1276,14 +1301,137 @@ where
         })
     }
 
+    /// Finds every node in the aliased subgraph that is reached by an edge from outside the subgraph
+    /// Records the path from the subgraph root to the given node
+    fn get_subgraph_entries_for_scc_loc(
+        &self,
+        scc_loc: &SCCLocation,
+    ) -> Vec<(NodeIndex, Vec<FieldLabel>)> {
+        let skg = self.get_built_sketch_from_scc(&scc_loc.scc);
+        let reachable = skg.get_graph().get_reachable_idxs(scc_loc.target_path);
+
+        explore_paths(&skg.get_graph().get_graph(), scc_loc.target_path)
+            .filter(|(_, target_node)| {
+                skg.get_graph()
+                    .get_graph()
+                    .neighbors_directed(*target_node, Incoming)
+                    .any(|incoming_neighbor| !reachable.contains(&incoming_neighbor))
+            })
+            .map(|(reaching_path, target_node)| {
+                (
+                    target_node,
+                    reaching_path
+                        .iter()
+                        .map(|eid| {
+                            skg.get_graph()
+                                .get_graph()
+                                .edge_weight(*eid)
+                                .expect("edge weights should be available")
+                                .clone()
+                        })
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    fn get_graph_referenced_by_type_loc(
+        &self,
+        type_loc: &TypeLocation,
+    ) -> Option<MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>> {
+        match type_loc {
+            TypeLocation::SCCLoc(scc_loc) => Some(
+                self.get_built_sketch_from_scc(&scc_loc.scc)
+                    .get_graph()
+                    .clone(),
+            ),
+            TypeLocation::GlobalLoc(glob_var) => self
+                .global_repr
+                .get(&glob_var.globvar)
+                .map(|(_, repr)| repr.get_graph().clone()),
+        }
+    }
+
+    fn find_child_location_by_path(
+        &self,
+        ty_loc: &TypeLocation,
+        path: &[FieldLabel],
+    ) -> Option<TypeLocation> {
+        let target_graph = self.get_graph_referenced_by_type_loc(ty_loc);
+        target_graph.and_then(|grph| {
+            let target_idx = ty_loc.get_target_index();
+            let maybe_new_node = find_node(grph.get_graph(), target_idx, path.iter());
+            maybe_new_node.map(|new_node| match ty_loc {
+                TypeLocation::SCCLoc(scc_loc) => TypeLocation::SCCLoc(SCCLocation {
+                    scc: scc_loc.scc.clone(),
+                    target_path: new_node,
+                }),
+                TypeLocation::GlobalLoc(glob_loc) => TypeLocation::GlobalLoc(GlobalLocation {
+                    globvar: glob_loc.globvar.clone(),
+                    target_path: new_node,
+                }),
+            })
+        })
+    }
+
+    fn get_implied_aliasing_relations(
+        &self,
+        from_loc: &TypeLocation,
+        to_alias: &TypeLocation,
+    ) -> anyhow::Result<Vec<(TypeLocation, TypeLocation)>> {
+        let target_scc_loc = if let TypeLocation::SCCLoc(scc_loc) = from_loc {
+            Ok(scc_loc)
+        } else {
+            Err(anyhow::anyhow!(
+                "All aliases should start from an scc location"
+            ))
+        }?;
+
+        Ok(self
+            .get_subgraph_entries_for_scc_loc(target_scc_loc)
+            .iter()
+            .filter_map(|(scc_idx, path)| {
+                self.find_child_location_by_path(to_alias, &path)
+                    .map(|to_loc| {
+                        (
+                            TypeLocation::SCCLoc(SCCLocation {
+                                scc: target_scc_loc.scc.clone(),
+                                target_path: *scc_idx,
+                            }),
+                            to_loc,
+                        )
+                    })
+            })
+            .collect())
+    }
+
+    fn extend_aliasing_relations(
+        &self,
+        orig: &BTreeMap<TypeLocation, TypeLocation>,
+    ) -> anyhow::Result<BTreeMap<TypeLocation, TypeLocation>> {
+        let mut mp = BTreeMap::new();
+        for mapping in orig.iter() {
+            let implied = self.get_implied_aliasing_relations(mapping.0, mapping.1)?;
+            mp.extend(implied);
+        }
+
+        Ok(mp)
+    }
+
     fn collect_aliases(&mut self) -> anyhow::Result<()> {
         let ordering = self.visit_sccs_in_topo_order()?;
+
+        let mut temp_res = BTreeMap::new();
         ordering.iter().for_each(|(ccg, target_scc_idx, scc_tids)| {
-            self.parameter_aliases.extend(
+            temp_res.extend(
                 self.collect_aliases_for_scc(ccg, scc_tids, target_scc_idx)
                     .into_iter(),
             );
         });
+
+        let extended_aliases = self.extend_aliasing_relations(&temp_res)?;
+
+        self.parameter_aliases = extended_aliases;
         Ok(())
     }
 
@@ -1335,7 +1483,7 @@ where
     fn type_location_to_string(&self, ty_loc: &TypeLocation) -> String {
         match ty_loc {
             TypeLocation::SCCLoc(scc_loc) => self.scc_loc_to_str(scc_loc),
-            TypeLocation::GlobalLoc(tvar) => tvar.get_name(),
+            TypeLocation::GlobalLoc(tvar) => tvar.globvar.get_name(),
         }
     }
 
@@ -1595,7 +1743,10 @@ pub struct Sketch<U: std::cmp::PartialEq> {
 }
 
 impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
-    fn copy_sketch_into_graph(&self, grph: &mut StableDiGraph<U, FieldLabel>) -> NodeIndex {
+    fn copy_sketch_into_graph(
+        &self,
+        grph: &mut StableDiGraph<U, FieldLabel>,
+    ) -> (NodeIndex, HashMap<NodeIndex, NodeIndex>) {
         let mut loc_map = HashMap::new();
         for idx in self.quotient_graph.get_graph().node_indices() {
             loc_map.insert(
@@ -1616,7 +1767,7 @@ impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
             grph.add_edge(*src, *dst, e.weight().clone());
         }
 
-        *loc_map.get(&self.get_entry()).unwrap()
+        (*loc_map.get(&self.get_entry()).unwrap(), loc_map)
     }
 }
 
