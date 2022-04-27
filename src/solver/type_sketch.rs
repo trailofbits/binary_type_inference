@@ -685,7 +685,7 @@ where
         self.bind_polymorphic_types()?;
         self.apply_global_instantiations()?;
         self.collect_aliases()?;
-        self.save_aliased_types()?;
+        self.save_aliased_types("after_extension")?;
         self.display_sketches("after_polybind")?;
         Ok(())
     }
@@ -1421,17 +1421,17 @@ where
     fn collect_aliases(&mut self) -> anyhow::Result<()> {
         let ordering = self.visit_sccs_in_topo_order()?;
 
-        let mut temp_res = BTreeMap::new();
         ordering.iter().for_each(|(ccg, target_scc_idx, scc_tids)| {
-            temp_res.extend(
+            self.parameter_aliases.extend(
                 self.collect_aliases_for_scc(ccg, scc_tids, target_scc_idx)
                     .into_iter(),
             );
         });
 
-        let extended_aliases = self.extend_aliasing_relations(&temp_res)?;
+        self.save_aliased_types("before_extension")?;
 
-        self.parameter_aliases = extended_aliases;
+        let extended_aliases = self.extend_aliasing_relations(&self.parameter_aliases)?;
+        self.parameter_aliases.extend(extended_aliases);
         Ok(())
     }
 
@@ -1482,19 +1482,20 @@ where
         }
     }
 
-    fn save_aliased_types(&self) -> anyhow::Result<()> {
-        self.debug_dir.log_to_fname("global_graph_aliases", &|| {
-            self.parameter_aliases
-                .iter()
-                .map(|(t1, t2)| {
-                    format!(
-                        "{}:{}",
-                        self.type_location_to_string(t1),
-                        self.type_location_to_string(t2)
-                    )
-                })
-                .join("\n")
-        })
+    fn save_aliased_types(&self, event_time: &str) -> anyhow::Result<()> {
+        self.debug_dir
+            .log_to_fname(&format!("global_graph_aliases_at_{}", event_time), &|| {
+                self.parameter_aliases
+                    .iter()
+                    .map(|(t1, t2)| {
+                        format!(
+                            "{}:{}",
+                            self.type_location_to_string(t1),
+                            self.type_location_to_string(t2)
+                        )
+                    })
+                    .join("\n")
+            })
     }
 
     fn bind_polymorphic_types(&mut self) -> anyhow::Result<()> {
