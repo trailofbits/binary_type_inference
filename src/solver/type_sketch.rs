@@ -668,6 +668,7 @@ where
         self.bind_polymorphic_types()?;
         self.apply_global_instantiations()?;
         self.collect_aliases()?;
+        self.save_aliased_types()?;
         self.display_sketches("after_polybind")?;
         Ok(())
     }
@@ -1277,6 +1278,73 @@ where
             );
         });
         Ok(())
+    }
+
+    fn scc_loc_to_str(&self, scc_loc: &SCCLocation) -> String {
+        let sk = self.get_built_sketch_from_scc(&scc_loc.scc);
+        for curr_repr in &scc_loc.scc {
+            let curr_var = tid_to_tvar(curr_repr);
+            if let Some(curr_node) = sk
+                .get_graph()
+                .get_node(&DerivedTypeVar::new(curr_var.clone()))
+            {
+                if let Some(path) = petgraph::algo::all_simple_paths::<Vec<_>, _>(
+                    &sk.get_graph().get_graph(),
+                    *curr_node,
+                    scc_loc.target_path,
+                    0,
+                    None,
+                )
+                .next()
+                {
+                    let it: Option<Vec<FieldLabel>> = path
+                        .windows(2)
+                        .map(|wid| {
+                            let edge_start = wid[0];
+                            let e = sk
+                                .get_graph()
+                                .get_graph()
+                                .edges_directed(edge_start, Outgoing);
+                            e.filter(|x| x.target() == wid[1])
+                                .map(|x| x.weight().clone())
+                                .next()
+                        })
+                        .collect();
+                    if let Some(pth) = it {
+                        return format!("{}", DerivedTypeVar::create_with_path(curr_var, pth));
+                    }
+                }
+            }
+        }
+        println!("scc {:#?}", scc_loc.scc);
+        for (k, v) in sk.get_graph().get_node_mapping() {
+            println!("{}:{}", k, v.index());
+        }
+        println!("{}", scc_loc.target_path.index());
+        println!("{}", sk);
+        "global_only_used_for_in_parameter_refinement".to_owned()
+    }
+
+    fn type_location_to_string(&self, ty_loc: &TypeLocation) -> String {
+        match ty_loc {
+            TypeLocation::SCCLoc(scc_loc) => self.scc_loc_to_str(scc_loc),
+            TypeLocation::GlobalLoc(tvar) => tvar.get_name(),
+        }
+    }
+
+    fn save_aliased_types(&self) -> anyhow::Result<()> {
+        self.debug_dir.log_to_fname("global_graph_aliases", &|| {
+            self.parameter_aliases
+                .iter()
+                .map(|(t1, t2)| {
+                    format!(
+                        "{}:{}",
+                        self.type_location_to_string(t1),
+                        self.type_location_to_string(t2)
+                    )
+                })
+                .join("\n")
+        })
     }
 
     fn bind_polymorphic_types(&mut self) -> anyhow::Result<()> {

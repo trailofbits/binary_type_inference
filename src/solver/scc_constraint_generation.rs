@@ -500,7 +500,11 @@ where
 
                 // Adds var constraint simulations so if we know about parameters but werent able to relate them to interesting variables we still remember they exist
                 insert_missed_formals(&mut cons, &resolved_cs_set);
-                println!("Final {}", cons);
+
+                self.debug_dir.log_to_fname(
+                    &format!("{}_simplified_constraints", repr_tid.get_str_repr()),
+                    &|| &cons,
+                )?;
 
                 Ok(SCCConstraints {
                     scc: Vec::from_iter(tid_filter.into_iter()),
