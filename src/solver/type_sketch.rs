@@ -1471,12 +1471,7 @@ where
                 }
             }
         }
-        println!("scc {:#?}", scc_loc.scc);
-        for (k, v) in sk.get_graph().get_node_mapping() {
-            println!("{}:{}", k, v.index());
-        }
-        println!("{}", scc_loc.target_path.index());
-        println!("{}", sk);
+
         "global_only_used_for_in_parameter_refinement".to_owned()
     }
 
@@ -1543,6 +1538,12 @@ where
             }
             self.replace_scc_repr(scc, target_of_refinement);
         }
+
+        for (gv, sketch_repr) in var_mapping {
+            self.global_repr
+                .insert(gv, (sketch_repr.get_entry(), sketch_repr));
+        }
+
         //
         Ok(())
     }
