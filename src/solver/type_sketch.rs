@@ -496,11 +496,17 @@ struct SCCLocation {
     target_path: NodeIndex,
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+struct GlobalLocation {
+    scc: TypeVariable,
+    target_path: NodeIndex,
+}
+
 /// We describe two types of locations that can be aliased. Type members in SCCs and glopals
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum TypeLocation {
     SCCLoc(SCCLocation),
-    GlobalLoc(TypeVariable),
+    GlobalLoc(GlobalLocation),
 }
 
 /// Creates a structured and labeled sketch graph
@@ -512,6 +518,7 @@ pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     scc_signatures: HashMap<Tid, Rc<ConstraintSet>>,
     // Collects a shared sketchgraph representing the functions in the SCC
     scc_repr: HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>,
+    global_repr: HashMap<TypeVariable, SketchGraph<LatticeBounds<U>>>,
     cg: CallGraph,
     tid_to_cg_idx: HashMap<Tid, NodeIndex>,
     lattice: &'a T,
