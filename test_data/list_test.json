@@ -1726,6 +1726,7 @@
                 }
               }
             ],
+            "calling_convention": "__cdecl",
             "formals": [
               {
                 "location": {
@@ -1805,7 +1806,8 @@
           "address": "00000000"
         }
       ],
-      "image_base": "00000000"
+      "image_base": "00000000",
+      "global_variables": []
     }
   },
   "stack_pointer_register": {

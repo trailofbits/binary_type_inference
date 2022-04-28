@@ -43,6 +43,7 @@ use crate::ctypes::Union;
 use crate::graph_algos::mapping_graph::{self, MappingGraph};
 use crate::graph_algos::{explore_paths, find_node};
 use crate::pb_constraints::DerivedTypeVariable;
+use crate::util::FileDebugLogger;
 
 use super::constraint_graph::TypeVarNode;
 use super::dfa_operations::{self, complement, union, Alphabet, ExplicitDFA, Indices, DFA};
@@ -490,9 +491,31 @@ where
 /// Refers to some type node in a sketch graph within a program
 /// Can always find because sketch graphs are prefix closed
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
-struct TypeLocation {
+struct SCCLocation {
     scc: Vec<Tid>,
     target_path: NodeIndex,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+struct GlobalLocation {
+    globvar: TypeVariable,
+    target_path: NodeIndex,
+}
+
+/// We describe two types of locations that can be aliased. Type members in SCCs and glopals
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+enum TypeLocation {
+    SCCLoc(SCCLocation),
+    GlobalLoc(GlobalLocation),
+}
+
+impl TypeLocation {
+    fn get_target_index(&self) -> NodeIndex {
+        match self {
+            TypeLocation::SCCLoc(loc) => loc.target_path,
+            TypeLocation::GlobalLoc(loc) => loc.target_path,
+        }
+    }
 }
 
 /// Creates a structured and labeled sketch graph
@@ -504,12 +527,15 @@ pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     scc_signatures: HashMap<Tid, Rc<ConstraintSet>>,
     // Collects a shared sketchgraph representing the functions in the SCC
     scc_repr: HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>,
+    global_repr: HashMap<TypeVariable, (NodeIndex, Sketch<LatticeBounds<U>>)>,
     cg: CallGraph,
     tid_to_cg_idx: HashMap<Tid, NodeIndex>,
     lattice: &'a T,
     type_lattice_elements: HashSet<TypeVariable>,
     /// Aliases some type nodes accross sccs to bind polymorphic parameters loc->loc
     parameter_aliases: BTreeMap<TypeLocation, TypeLocation>,
+
+    debug_dir: FileDebugLogger,
 }
 
 #[derive(Debug)]
@@ -530,6 +556,7 @@ where
         scc_constraints: Vec<SCCConstraints>,
         lattice: &'a T,
         type_lattice_elements: HashSet<TypeVariable>,
+        debug_dir: FileDebugLogger,
     ) -> SCCSketchsBuilder<'a, U, T> {
         let scc_signatures = scc_constraints
             .into_iter()
@@ -553,6 +580,8 @@ where
             lattice,
             type_lattice_elements,
             parameter_aliases: BTreeMap::new(),
+            debug_dir,
+            global_repr: HashMap::new(),
         }
     }
 
@@ -617,6 +646,28 @@ where
             .map(|sorted| (condensed, sorted))
     }
 
+    fn display_sketches(&self, event_time: &str) -> anyhow::Result<()> {
+        for (var, repr) in self.scc_repr.iter() {
+            self.debug_dir.log_to_fname(
+                &format!("{}_sketch_{}", event_time, var.get_name()),
+                &|| repr,
+            )?;
+
+            self.debug_dir.log_to_fname(
+                &format!("{}_mapping_{}", event_time, var.get_name()),
+                &|| {
+                    repr.quotient_graph
+                        .get_node_mapping()
+                        .iter()
+                        .map(|(nd, idx)| format!("{}:{}", nd, idx.index()))
+                        .join("\n")
+                },
+            )?;
+        }
+
+        Ok(())
+    }
+
     pub fn build(&mut self) -> anyhow::Result<()> {
         let (condensed, mut sorted) = self.get_topo_order_for_cg()?;
         sorted.reverse();
@@ -629,8 +680,12 @@ where
             self.build_and_label_scc_sketch(associated_tids)?;
         }
 
+        self.display_sketches("before_polybind")?;
         self.bind_polymorphic_types()?;
+        self.apply_global_instantiations()?;
         self.collect_aliases()?;
+        self.save_aliased_types("after_extension")?;
+        self.display_sketches("after_polybind")?;
         Ok(())
     }
 
@@ -646,24 +701,24 @@ where
             let weight = &sg.quotient_graph.get_graph()[nd_idx];
             let new_idx = resulting_graph.add_node(weight.clone());
             location_to_index.insert(
-                TypeLocation {
+                TypeLocation::SCCLoc(SCCLocation {
                     scc: curr_scc.clone(),
                     target_path: nd_idx,
-                },
+                }),
                 new_idx,
             );
         }
 
         for edge in sg.quotient_graph.get_graph().edge_references() {
-            let source_loc = TypeLocation {
+            let source_loc = TypeLocation::SCCLoc(SCCLocation {
                 scc: curr_scc.clone(),
                 target_path: edge.source(),
-            };
+            });
             // Todo these should probably be shared RC vecs for cheap cloning
-            let maybe_dst_loc = TypeLocation {
+            let maybe_dst_loc = TypeLocation::SCCLoc(SCCLocation {
                 scc: curr_scc.clone(),
                 target_path: edge.target(),
-            };
+            });
 
             let dst_loc = if let Some(alias_dst_loc) = self.parameter_aliases.get(&maybe_dst_loc) {
                 alias_dst_loc
@@ -684,22 +739,47 @@ where
         // resulting labeling is tricky because we could end up referencing the in parameter within a bound type which wont actually have that dtv label since we dont copy them down.
         // We should only label base variables imo. This means we look through the scc and find the sccs base variables within the graph
         for (dtv, tgt_idx) in sg.quotient_graph.get_node_mapping().iter() {
-            if dtv.get_field_labels().len() == 0
+            if (dtv.get_field_labels().len() == 0
                 && dtv.get_base_variable().get_cs_tag().is_none()
                 // Dont want labels for concrete types, no need to solve for them if not used.
-                && !self.type_lattice_elements.contains(dtv.get_base_variable())
+                && !self.type_lattice_elements.contains(dtv.get_base_variable()))
+                || dtv.is_global()
+            // globals are pointed to their roots
             {
                 resulting_labeling.insert(
                     dtv.clone(),
                     *location_to_index
-                        .get(&TypeLocation {
+                        .get(&TypeLocation::SCCLoc(SCCLocation {
                             scc: curr_scc.clone(),
                             target_path: *tgt_idx,
-                        })
+                        }))
                         .expect("All nodes should be added to the location map"),
                 );
             }
         }
+    }
+
+    fn add_globals_to_global_graph(
+        &self,
+        resulting_graph: &mut StableDiGraph<LatticeBounds<U>, FieldLabel>,
+        labeling: &mut HashMap<DerivedTypeVar, NodeIndex>,
+        location_to_index: &mut BTreeMap<TypeLocation, NodeIndex>,
+    ) -> anyhow::Result<()> {
+        for (tv, (_, repr_sketch)) in self.global_repr.iter() {
+            let (entry_node, old_idx_to_new_idx) =
+                repr_sketch.copy_sketch_into_graph(resulting_graph);
+            labeling.insert(DerivedTypeVar::new(tv.clone()), entry_node);
+            for (old_idx, new_idx) in old_idx_to_new_idx {
+                location_to_index.insert(
+                    TypeLocation::GlobalLoc(GlobalLocation {
+                        globvar: tv.clone(),
+                        target_path: old_idx,
+                    }),
+                    new_idx,
+                );
+            }
+        }
+        Ok(())
     }
 
     /// After binding polymorphic types we can build a singular sketch graph representing all types. The only labels that are preserved are scc internal dtvs
@@ -707,6 +787,13 @@ where
         let mut location_to_index: BTreeMap<TypeLocation, NodeIndex> = BTreeMap::new();
         let mut resulting_graph: StableDiGraph<LatticeBounds<U>, FieldLabel> = StableDiGraph::new();
         let mut resulting_labeling: HashMap<DerivedTypeVar, NodeIndex> = HashMap::new();
+
+        self.add_globals_to_global_graph(
+            &mut resulting_graph,
+            &mut resulting_labeling,
+            &mut location_to_index,
+        )?;
+
         let (condensed, mut sorted) = self.get_topo_order_for_cg()?;
         sorted.reverse();
         // we go in reverse topo order so that the callee will have types if we need to bind.
@@ -725,6 +812,12 @@ where
 
         let mp = MappingGraph::from_dfa_and_labeling(resulting_graph);
         let mut final_graph = mp.relable_representative_nodes(resulting_labeling);
+
+        assert!(final_graph
+            .get_node_mapping()
+            .iter()
+            .all(|(x, _)| x.get_base_variable().get_cs_tag().is_none()));
+
         final_graph.remove_nodes_unreachable_from_label();
         Ok(SketchGraph {
             quotient_graph: final_graph,
@@ -932,7 +1025,7 @@ where
         condensed_cg: &Graph<Vec<Tid>, (), Directed>,
         scc_idx: NodeIndex,
         target_dtv: &DerivedTypeVar,
-    ) -> Vec<(Sketch<LatticeBounds<U>>, TypeLocation)> {
+    ) -> Vec<(Sketch<LatticeBounds<U>>, SCCLocation)> {
         let parent_nodes = condensed_cg.neighbors_directed(scc_idx, EdgeDirection::Incoming);
         parent_nodes
             .map(|scc_idx| {
@@ -948,7 +1041,7 @@ where
                     .map(|(idx, sketch)| {
                         (
                             sketch,
-                            TypeLocation {
+                            SCCLocation {
                                 scc: wt.clone(),
                                 target_path: idx,
                             },
@@ -1012,14 +1105,14 @@ where
                         maybe_representative_node.and_then(|repr_node| {
                             maybe_from_node.map(|from_node| {
                                 (
-                                    TypeLocation {
+                                    TypeLocation::SCCLoc(SCCLocation {
                                         scc: from_scc,
                                         target_path: from_node,
-                                    },
-                                    TypeLocation {
+                                    }),
+                                    TypeLocation::SCCLoc(SCCLocation {
                                         scc: repr_scc,
                                         target_path: repr_node,
-                                    },
+                                    }),
                                 )
                             })
                         })
@@ -1048,8 +1141,6 @@ where
             &Sketch<LatticeBounds<U>>,
         ) -> Sketch<LatticeBounds<U>>,
     ) {
-        let parent_nodes = condensed.neighbors_directed(target_idx, EdgeDirection::Incoming);
-
         let orig_reprs = target_scc_repr.get_representing_sketch(target_dtv.clone());
 
         // There should only be one representation of a formal in an SCC
@@ -1057,7 +1148,7 @@ where
         let (_orig_loc, orig_repr) = &orig_reprs[0];
 
         // A type is represented by its sketch and has a location
-        let callsite_types: Vec<(Sketch<LatticeBounds<U>>, TypeLocation)> =
+        let callsite_types: Vec<(Sketch<LatticeBounds<U>>, SCCLocation)> =
             self.get_callsite_types_for_dtv(condensed, target_idx, &target_dtv);
         let mut call_site_type = callsite_types
             .iter()
@@ -1132,7 +1223,7 @@ where
                 target_idx,
             );
         }
-        /*
+
         let out_params = orig_repr.get_out_params();
         for dtv in out_params {
             self.refine_formal_out(
@@ -1142,7 +1233,7 @@ where
                 dtv,
                 target_idx,
             );
-        }*/
+        }
 
         orig_repr.simplify_pointers();
 
@@ -1157,7 +1248,7 @@ where
     ) -> BTreeMap<TypeLocation, TypeLocation> {
         let orig_repr = self.get_built_sketch_from_scc(associated_scc_tids);
 
-        orig_repr
+        let mut param_aliases = orig_repr
             .get_in_params()
             .into_iter()
             .chain(orig_repr.get_out_params().into_iter())
@@ -1173,7 +1264,31 @@ where
                     .into_iter(),
                 );
                 acc
+            });
+
+        let global_aliases = orig_repr.get_globals().into_iter().filter_map(|gdtv| {
+            orig_repr.get_graph().get_node(&gdtv).map(|src_idx| {
+                (
+                    TypeLocation::SCCLoc(SCCLocation {
+                        target_path: *src_idx,
+                        scc: associated_scc_tids.clone(),
+                    }),
+                    TypeLocation::GlobalLoc(GlobalLocation {
+                        globvar: gdtv.get_base_variable().clone(),
+                        target_path: self
+                            .global_repr
+                            .get(gdtv.get_base_variable())
+                            .expect("all global variables should have a representative sketch")
+                            .0,
+                    }),
+                )
             })
+        });
+
+        global_aliases.for_each(|(k, v)| {
+            param_aliases.insert(k, v);
+        });
+        param_aliases
     }
 
     fn visit_sccs_in_topo_order(&self) -> anyhow::Result<SCCOrdering> {
@@ -1185,15 +1300,201 @@ where
         })
     }
 
+    /// Finds every node in the aliased subgraph that is reached by an edge from outside the subgraph
+    /// Records the path from the subgraph root to the given node
+    fn get_subgraph_entries_for_scc_loc(
+        &self,
+        scc_loc: &SCCLocation,
+    ) -> Vec<(NodeIndex, Vec<FieldLabel>)> {
+        let skg = self.get_built_sketch_from_scc(&scc_loc.scc);
+        let reachable = skg.get_graph().get_reachable_idxs(scc_loc.target_path);
+
+        explore_paths(&skg.get_graph().get_graph(), scc_loc.target_path)
+            .filter(|(_, target_node)| {
+                skg.get_graph()
+                    .get_graph()
+                    .neighbors_directed(*target_node, Incoming)
+                    .any(|incoming_neighbor| !reachable.contains(&incoming_neighbor))
+            })
+            .map(|(reaching_path, target_node)| {
+                (
+                    target_node,
+                    reaching_path
+                        .iter()
+                        .map(|eid| {
+                            skg.get_graph()
+                                .get_graph()
+                                .edge_weight(*eid)
+                                .expect("edge weights should be available")
+                                .clone()
+                        })
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    fn get_graph_referenced_by_type_loc(
+        &self,
+        type_loc: &TypeLocation,
+    ) -> Option<MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>> {
+        match type_loc {
+            TypeLocation::SCCLoc(scc_loc) => Some(
+                self.get_built_sketch_from_scc(&scc_loc.scc)
+                    .get_graph()
+                    .clone(),
+            ),
+            TypeLocation::GlobalLoc(glob_var) => self
+                .global_repr
+                .get(&glob_var.globvar)
+                .map(|(_, repr)| repr.get_graph().clone()),
+        }
+    }
+
+    fn find_child_location_by_path(
+        &self,
+        ty_loc: &TypeLocation,
+        path: &[FieldLabel],
+    ) -> Option<TypeLocation> {
+        let target_graph = self.get_graph_referenced_by_type_loc(ty_loc);
+        target_graph.and_then(|grph| {
+            let target_idx = ty_loc.get_target_index();
+            let maybe_new_node = find_node(grph.get_graph(), target_idx, path.iter());
+            maybe_new_node.map(|new_node| match ty_loc {
+                TypeLocation::SCCLoc(scc_loc) => TypeLocation::SCCLoc(SCCLocation {
+                    scc: scc_loc.scc.clone(),
+                    target_path: new_node,
+                }),
+                TypeLocation::GlobalLoc(glob_loc) => TypeLocation::GlobalLoc(GlobalLocation {
+                    globvar: glob_loc.globvar.clone(),
+                    target_path: new_node,
+                }),
+            })
+        })
+    }
+
+    fn get_implied_aliasing_relations(
+        &self,
+        from_loc: &TypeLocation,
+        to_alias: &TypeLocation,
+    ) -> anyhow::Result<Vec<(TypeLocation, TypeLocation)>> {
+        let target_scc_loc = if let TypeLocation::SCCLoc(scc_loc) = from_loc {
+            Ok(scc_loc)
+        } else {
+            Err(anyhow::anyhow!(
+                "All aliases should start from an scc location"
+            ))
+        }?;
+
+        Ok(self
+            .get_subgraph_entries_for_scc_loc(target_scc_loc)
+            .iter()
+            .filter_map(|(scc_idx, path)| {
+                self.find_child_location_by_path(to_alias, &path)
+                    .map(|to_loc| {
+                        (
+                            TypeLocation::SCCLoc(SCCLocation {
+                                scc: target_scc_loc.scc.clone(),
+                                target_path: *scc_idx,
+                            }),
+                            to_loc,
+                        )
+                    })
+            })
+            .collect())
+    }
+
+    fn extend_aliasing_relations(
+        &self,
+        orig: &BTreeMap<TypeLocation, TypeLocation>,
+    ) -> anyhow::Result<BTreeMap<TypeLocation, TypeLocation>> {
+        let mut mp = BTreeMap::new();
+        for mapping in orig.iter() {
+            let implied = self.get_implied_aliasing_relations(mapping.0, mapping.1)?;
+            mp.extend(implied);
+        }
+
+        Ok(mp)
+    }
+
     fn collect_aliases(&mut self) -> anyhow::Result<()> {
         let ordering = self.visit_sccs_in_topo_order()?;
+
         ordering.iter().for_each(|(ccg, target_scc_idx, scc_tids)| {
             self.parameter_aliases.extend(
                 self.collect_aliases_for_scc(ccg, scc_tids, target_scc_idx)
                     .into_iter(),
             );
         });
+
+        self.save_aliased_types("before_extension")?;
+
+        let extended_aliases = self.extend_aliasing_relations(&self.parameter_aliases)?;
+        self.parameter_aliases.extend(extended_aliases);
         Ok(())
+    }
+
+    fn scc_loc_to_str(&self, scc_loc: &SCCLocation) -> String {
+        let sk = self.get_built_sketch_from_scc(&scc_loc.scc);
+        for curr_repr in &scc_loc.scc {
+            let curr_var = tid_to_tvar(curr_repr);
+            if let Some(curr_node) = sk
+                .get_graph()
+                .get_node(&DerivedTypeVar::new(curr_var.clone()))
+            {
+                if let Some(path) = petgraph::algo::all_simple_paths::<Vec<_>, _>(
+                    &sk.get_graph().get_graph(),
+                    *curr_node,
+                    scc_loc.target_path,
+                    0,
+                    None,
+                )
+                .next()
+                {
+                    let it: Option<Vec<FieldLabel>> = path
+                        .windows(2)
+                        .map(|wid| {
+                            let edge_start = wid[0];
+                            let e = sk
+                                .get_graph()
+                                .get_graph()
+                                .edges_directed(edge_start, Outgoing);
+                            e.filter(|x| x.target() == wid[1])
+                                .map(|x| x.weight().clone())
+                                .next()
+                        })
+                        .collect();
+                    if let Some(pth) = it {
+                        return format!("{}", DerivedTypeVar::create_with_path(curr_var, pth));
+                    }
+                }
+            }
+        }
+
+        "global_only_used_for_in_parameter_refinement".to_owned()
+    }
+
+    fn type_location_to_string(&self, ty_loc: &TypeLocation) -> String {
+        match ty_loc {
+            TypeLocation::SCCLoc(scc_loc) => self.scc_loc_to_str(scc_loc),
+            TypeLocation::GlobalLoc(tvar) => tvar.globvar.get_name(),
+        }
+    }
+
+    fn save_aliased_types(&self, event_time: &str) -> anyhow::Result<()> {
+        self.debug_dir
+            .log_to_fname(&format!("global_graph_aliases_at_{}", event_time), &|| {
+                self.parameter_aliases
+                    .iter()
+                    .map(|(t1, t2)| {
+                        format!(
+                            "{}:{}",
+                            self.type_location_to_string(t1),
+                            self.type_location_to_string(t2)
+                        )
+                    })
+                    .join("\n")
+            })
     }
 
     fn bind_polymorphic_types(&mut self) -> anyhow::Result<()> {
@@ -1202,6 +1503,66 @@ where
             self.refine_formals(ccg, scc_tids, target_scc_idx)
         });
         Ok(())
+    }
+
+    fn insert_global_sketches(
+        global_sketches: &mut HashMap<TypeVariable, Sketch<LatticeBounds<U>>>,
+        sg: &SketchGraph<LatticeBounds<U>>,
+    ) {
+        sg.quotient_graph
+            .get_node_mapping()
+            .iter()
+            .for_each(|(dtv, idx)| {
+                if dtv.is_global() {
+                    let sks = sg.get_representing_sketch(dtv.clone());
+                    assert!(sks.len() == 1);
+                    let (_, skg) = &sks[0];
+                    let curr_sketch = global_sketches
+                        .entry(dtv.get_base_variable().clone())
+                        .or_insert_with(|| skg.clone());
+                    *curr_sketch = curr_sketch.intersect(&skg)
+                }
+            });
+    }
+
+    pub fn apply_global_instantiations(&mut self) -> anyhow::Result<()> {
+        let var_mapping = self.collect_global_instantiations()?;
+
+        let ordering = self.visit_sccs_in_topo_order()?;
+
+        for (_condensed, _scc_idx, scc) in ordering.iter() {
+            let mut target_of_refinement = self.get_built_sketch_from_scc(scc);
+            for (tv, refined_sketch) in var_mapping.iter() {
+                target_of_refinement
+                    .maybe_replace_dtv(&DerivedTypeVar::new(tv.clone()), refined_sketch.clone());
+            }
+            self.replace_scc_repr(scc, target_of_refinement);
+        }
+
+        for (gv, sketch_repr) in var_mapping {
+            self.global_repr
+                .insert(gv, (sketch_repr.get_entry(), sketch_repr));
+        }
+
+        //
+        Ok(())
+    }
+
+    pub fn collect_global_instantiations(
+        &self,
+    ) -> anyhow::Result<HashMap<TypeVariable, Sketch<LatticeBounds<U>>>> {
+        let mut global_sketches: HashMap<TypeVariable, Sketch<LatticeBounds<U>>> = HashMap::new();
+
+        self.scc_repr.iter().for_each(|(_, sg)| {
+            Self::insert_global_sketches(&mut global_sketches, sg);
+        });
+
+        for (tv, sketch) in global_sketches.iter() {
+            self.debug_dir
+                .log_to_fname(&format!("global_var_sketch_{}", &tv.get_name()), &|| sketch)?;
+        }
+
+        Ok(global_sketches)
     }
 }
 
@@ -1259,6 +1620,15 @@ impl<U: std::cmp::PartialEq> SketchGraph<U> {
             .collect::<Vec<DerivedTypeVar>>()
     }
 
+    fn get_globals(&self) -> Vec<DerivedTypeVar> {
+        self.quotient_graph
+            .get_node_mapping()
+            .iter()
+            .map(|(dtv, _idx)| dtv.clone())
+            .filter(|dtv| dtv.is_global())
+            .collect::<Vec<DerivedTypeVar>>()
+    }
+
     fn get_out_params(&self) -> Vec<DerivedTypeVar> {
         self.quotient_graph
             .get_node_mapping()
@@ -1279,6 +1649,16 @@ impl<U: Display + Clone + std::cmp::PartialEq + AbstractMagma<Additive>> SketchG
     fn replace_dtv(&mut self, dtv: &DerivedTypeVar, sketch: Sketch<U>) {
         self.quotient_graph
             .replace_node(dtv.clone(), sketch.quotient_graph)
+    }
+
+    fn maybe_replace_dtv(&mut self, dtv: &DerivedTypeVar, sketch: Sketch<U>) -> bool {
+        if self.quotient_graph.get_node_mapping().contains_key(dtv) {
+            self.quotient_graph
+                .replace_node(dtv.clone(), sketch.quotient_graph);
+            true
+        } else {
+            false
+        }
     }
 
     fn get_representations_by_dtv(
@@ -1361,6 +1741,35 @@ pub struct Sketch<U: std::cmp::PartialEq> {
     quotient_graph: MappingGraph<U, DerivedTypeVar, FieldLabel>,
     representing: DerivedTypeVar,
     default_label: U,
+}
+
+impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
+    fn copy_sketch_into_graph(
+        &self,
+        grph: &mut StableDiGraph<U, FieldLabel>,
+    ) -> (NodeIndex, HashMap<NodeIndex, NodeIndex>) {
+        let mut loc_map = HashMap::new();
+        for idx in self.quotient_graph.get_graph().node_indices() {
+            loc_map.insert(
+                idx,
+                grph.add_node(
+                    self.quotient_graph
+                        .get_graph()
+                        .node_weight(idx)
+                        .expect("idxs should have weights")
+                        .clone(),
+                ),
+            );
+        }
+
+        for e in self.quotient_graph.get_graph().edge_references() {
+            let src = loc_map.get(&e.source()).unwrap();
+            let dst = loc_map.get(&e.target()).unwrap();
+            grph.add_edge(*src, *dst, e.weight().clone());
+        }
+
+        (*loc_map.get(&self.get_entry()).unwrap(), loc_map)
+    }
 }
 
 impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
@@ -1918,6 +2327,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         let grp = self.quotient_graph.get_group_for_node(reached_idx);
 
         let rand_fst = grp.iter().next().expect("groups should be non empty");
+
         let _index_in_new_graph = into.add_node(
             Self::tag_base_with_destination_tag(from_base, rand_fst.clone()),
             self.quotient_graph
@@ -1970,6 +2380,28 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
     /// Copies the reachable subgraph from a DerivedTypeVar in from to the parent graph.
     /// The from variable may contain callsite tags which are stripped when looking up the subgraph but then attached to each node
     /// where the base matches the from var.
+
+    fn get_target_nodes_to_copy(&self, representing: &DerivedTypeVar) -> BTreeSet<NodeIndex> {
+        let repr = self.quotient_graph.get_node(&representing);
+        let mut stack: Vec<NodeIndex> = self
+            .get_graph()
+            .get_node_mapping()
+            .iter()
+            .filter_map(|(dtv, idx)| if dtv.is_global() { Some(*idx) } else { None })
+            .collect();
+
+        if let Some(repr) = repr {
+            stack.push(*repr);
+        }
+
+        let mut dfs = Dfs::from_parts(stack, HashSet::new());
+        let mut reached = BTreeSet::new();
+        while let Some(nx) = dfs.next(self.get_graph().get_graph()) {
+            reached.insert(nx);
+        }
+        reached
+    }
+
     pub fn copy_reachable_subgraph_into(
         &self,
         from: &DerivedTypeVar,
@@ -1980,18 +2412,8 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
             Vec::from_iter(from.get_field_labels().iter().cloned()),
         );
         info!("Looking for repr {}", representing);
-
-        if let Some(representing) = self.quotient_graph.get_node(&representing) {
-            info!("Found repr");
-            let reachable_idxs: BTreeSet<_> =
-                Dfs::new(self.quotient_graph.get_graph(), *representing)
-                    .iter(self.quotient_graph.get_graph())
-                    .collect();
-            info!(
-                "Reaching set: {:#?}",
-                &reachable_idxs.iter().map(|x| x.index()).collect::<Vec<_>>()
-            );
-
+        let reachable_idxs = self.get_target_nodes_to_copy(&representing);
+        if !reachable_idxs.is_empty() {
             reachable_idxs.iter().for_each(|reached_idx| {
                 self.add_idx_to(from.get_base_variable(), *reached_idx, into)
             });
@@ -2004,7 +2426,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
                 {
                     let (key1, w1) = self.get_key_and_weight_for_index(edge.source());
                     let key1 = Self::tag_base_with_destination_tag(from.get_base_variable(), key1);
-                    info!("Source nd {}", key1);
+
                     let source = into.add_node(key1.clone(), w1);
                     if &key1 == from {
                         repr = Some(source);
@@ -2012,7 +2434,6 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
 
                     let (key2, w2) = self.get_key_and_weight_for_index(edge.target());
                     let key2 = Self::tag_base_with_destination_tag(from.get_base_variable(), key2);
-                    info!("Dst nd {}", key2);
                     let target = into.add_node(key2.clone(), w2);
                     if &key2 == from {
                         repr = Some(target);
@@ -2055,6 +2476,7 @@ mod test {
                 NamedLatticeElement,
             },
         },
+        util::FileDebugLogger,
     };
 
     use super::{insert_dtv, LatticeBounds, SCCSketchsBuilder, SketchBuilder};
@@ -2204,6 +2626,7 @@ mod test {
             ],
             &lat,
             nd_set,
+            FileDebugLogger::default(),
         );
 
         skb.build().expect("Should succeed in building sketch");
@@ -2335,6 +2758,7 @@ mod test {
             ],
             &lat,
             nd_set,
+            FileDebugLogger::default(),
         );
 
         skb.build().expect("Should succeed in building sketch");
@@ -2460,6 +2884,7 @@ mod test {
             ],
             &lat,
             nd_set,
+            FileDebugLogger::default(),
         );
 
         skb.build().expect("able to build sketches");
@@ -2607,6 +3032,7 @@ mod test {
             ],
             &lat,
             nd_set,
+            FileDebugLogger::default(),
         );
 
         skb.build().expect("Should succeed in building sketch");

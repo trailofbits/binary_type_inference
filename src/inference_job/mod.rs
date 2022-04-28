@@ -32,6 +32,7 @@ use crate::{
         points_to::PointsToContext,
         register_map::{self, RegisterContext},
         subproc_loc::ProcedureContext,
+        GhidraConstantResolver,
     },
     solver::{
         constraint_graph::RuleContext,
@@ -270,7 +271,10 @@ impl InferenceJob {
         &self,
         graph: &'a Graph<'a>,
     ) -> anyhow::Result<
-        HashMap<NodeIndex, NodeContext<RegisterContext, PointsToContext, ProcedureContext>>,
+        HashMap<
+            NodeIndex,
+            NodeContext<RegisterContext, PointsToContext, ProcedureContext, GhidraConstantResolver>,
+        >,
     > {
         let rt_mem = Self::get_runtime_image(&self.proj, &self.binary_bytes)?;
 
@@ -364,6 +368,7 @@ impl InferenceJob {
             _,
             _,
             _,
+            _,
             EnumeratedNamedLattice,
             CustomLatticeElement,
         > = scc_constraint_generation::Context::new(
@@ -396,6 +401,7 @@ impl InferenceJob {
             scc_constraints,
             &self.lattice,
             self.get_lattice_elems().collect(),
+            self.debug_dir.clone(),
         );
 
         bldr.build()?;

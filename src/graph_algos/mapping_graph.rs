@@ -70,7 +70,7 @@ where
     E: Clone,
     N: Clone + std::cmp::Eq + Hash,
 {
-    fn get_reachable_idxs(&self, idx: NodeIndex) -> BTreeSet<NodeIndex> {
+    pub fn get_reachable_idxs(&self, idx: NodeIndex) -> BTreeSet<NodeIndex> {
         Dfs::new(&self.grph, idx).iter(&self.grph).collect()
     }
 

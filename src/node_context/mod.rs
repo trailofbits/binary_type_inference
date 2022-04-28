@@ -1,16 +1,25 @@
-use std::{collections::HashMap, fmt::format};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, HashMap},
+    fmt::format,
+    rc::Rc,
+};
 
 use cwe_checker_lib::{
     analysis::{graph::Graph, pointer_inference::Config},
-    intermediate_representation::Project,
+    intermediate_representation::{Program, Project, Tid},
     utils::binary::RuntimeMemoryImage,
     AnalysisResults,
 };
+use log::info;
 use petgraph::graph::NodeIndex;
 
 use crate::{
-    constraint_generation::{NodeContext, PointsToMapping, RegisterMapping, SubprocedureLocators},
-    constraints::TypeVariable,
+    constraint_generation::{
+        tid_to_tvar, ConstantResolver, NodeContext, NodeContextMapping, PointsToMapping,
+        RegisterMapping, SubprocedureLocators,
+    },
+    constraints::{DerivedTypeVar, TypeVariable},
     util::FileDebugLogger,
 };
 
@@ -31,28 +40,87 @@ use self::{
 };
 
 /// Joins mappings from [NodeIndex] to each analysis result into a singular map of [NodeContext].  
-pub fn make_node_contexts<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators>(
+pub fn make_node_contexts<
+    R: RegisterMapping,
+    P: PointsToMapping,
+    S: SubprocedureLocators,
+    C: ConstantResolver,
+>(
     mut register_contexts: HashMap<NodeIndex, R>,
     mut points_to_contexts: HashMap<NodeIndex, P>,
     mut subproc_contexts: HashMap<NodeIndex, S>,
+    mut constant_contexts: HashMap<NodeIndex, C>,
     nodes: impl Iterator<Item = NodeIndex>,
     weakest_integral_type: TypeVariable,
-) -> HashMap<NodeIndex, NodeContext<R, P, S>> {
+) -> HashMap<NodeIndex, NodeContext<R, P, S, C>> {
     nodes
         .filter_map(|idx| {
             let r = register_contexts.remove(&idx);
             let p = points_to_contexts.remove(&idx);
             let s = subproc_contexts.remove(&idx);
-
-            match (r, p, s) {
-                (Some(r), Some(p), Some(s)) => Some((
+            let c = constant_contexts.remove(&idx);
+            match (r, p, s, c) {
+                (Some(r), Some(p), Some(s), Some(c)) => Some((
                     idx,
-                    NodeContext::new(r, p, s, weakest_integral_type.clone()),
+                    NodeContext::new(r, p, s, c, weakest_integral_type.clone()),
                 )),
                 _ => None,
             }
         })
         .collect()
+}
+
+#[derive(Debug, Clone)]
+pub struct GhidraConstantResolver {
+    global_map: Rc<BTreeMap<u64, Tid>>,
+}
+
+impl<T> From<T> for GhidraConstantResolver
+where
+    T: Borrow<Program>,
+{
+    fn from(prog: T) -> Self {
+        let p = prog.borrow();
+
+        let mp = p
+            .global_variables
+            .iter()
+            .map(|(b, term)| (*b, term.tid.clone()))
+            .collect();
+
+        GhidraConstantResolver {
+            global_map: Rc::new(mp),
+        }
+    }
+}
+
+impl NodeContextMapping for GhidraConstantResolver {
+    fn apply_def(
+        &self,
+        _term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Def,
+        >,
+    ) -> Self {
+        self.clone()
+    }
+}
+
+impl ConstantResolver for GhidraConstantResolver {
+    fn resolve_constant_to_variable(
+        &self,
+        target: &cwe_checker_lib::intermediate_representation::Bitvector,
+        vman: &mut crate::constraints::VariableManager,
+    ) -> crate::constraints::DerivedTypeVar {
+        DerivedTypeVar::new(if let Ok(tgt) = target.try_to_u64() {
+            info!("Resolving constant {:#x}", tgt);
+            self.global_map
+                .get(&tgt)
+                .map(|t| TypeVariable::new_global(t.get_str_repr().to_owned()))
+                .unwrap_or_else(|| vman.fresh())
+        } else {
+            vman.fresh()
+        })
+    }
 }
 
 /// Creates a default context with the default analyses [register_map], [points_to], and [subproc_loc]
@@ -61,7 +129,12 @@ pub fn create_default_context<'a>(
     config: Config,
     weakest_integral_type: TypeVariable,
     debug_dir: FileDebugLogger,
-) -> Result<HashMap<NodeIndex, NodeContext<RegisterContext, PointsToContext, ProcedureContext>>> {
+) -> Result<
+    HashMap<
+        NodeIndex,
+        NodeContext<RegisterContext, PointsToContext, ProcedureContext, GhidraConstantResolver>,
+    >,
+> {
     let reg_context = register_map::run_analysis(proj.project, proj.control_flow_graph);
 
     for nd_idx in proj.control_flow_graph.node_indices() {
@@ -90,10 +163,16 @@ pub fn create_default_context<'a>(
         .map(|idx| (idx, proc_handler.clone()))
         .collect();
 
+    let const_context = GhidraConstantResolver::from(&proj.project.program.term);
+
     Ok(make_node_contexts(
         reg_context,
         points_to_context,
         proc_context,
+        proj.control_flow_graph
+            .node_indices()
+            .map(|idx| (idx, const_context.clone()))
+            .collect(),
         proj.control_flow_graph.node_indices(),
         weakest_integral_type,
     ))

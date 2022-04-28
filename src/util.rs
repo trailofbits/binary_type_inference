@@ -54,7 +54,7 @@ pub fn procedure_type_variable_map(proj: &Project) -> HashMap<TypeVariable, Tid>
 
 use std::rc::Rc;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct FileDebugLogger {
     debug_dir: Rc<Option<String>>,
 }

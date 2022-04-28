@@ -184,6 +184,7 @@ struct Rule {
 
 /// The rule context stores the set of interesting variables needed to generate delta C (the constraint pushdown system rules).
 /// The set of interesting type variables decides which nodes get attached to the start and end state. Interesting variables will have two nodes an LHS and an RHS.
+#[derive(Clone)]
 pub struct RuleContext {
     interesting: BTreeSet<TypeVariable>,
 }
@@ -192,6 +193,10 @@ impl RuleContext {
     /// Creates a rule context from a set of interesting variables.
     pub fn new(interesting: BTreeSet<TypeVariable>) -> RuleContext {
         RuleContext { interesting }
+    }
+
+    pub fn insert_variable(&mut self, new: TypeVariable) {
+        self.interesting.insert(new);
     }
 
     /// Gets the set of interesting variables.
