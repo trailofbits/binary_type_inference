@@ -158,9 +158,8 @@ fn main() -> anyhow::Result<()> {
 
         if_job.get_interesting_tids().iter().for_each(|x| {
             let tvar = binary_type_inference::constraint_generation::tid_to_tvar(x);
-
             if let Some(idx) = grph.get_node_index_for_variable(
-                &binary_type_inference::constraints::DerivedTypeVar::new(tvar),
+                &binary_type_inference::constraints::DerivedTypeVar::new(tvar.clone()),
             ) {
                 let mut tid_to_node_idx = binary_type_inference::ctypes::TidToNodeIndex::default();
                 tid_to_node_idx.node_index = idx.index().try_into().unwrap();

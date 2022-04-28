@@ -34,7 +34,12 @@ pub fn tid_indexed_by_variable(tid: &Tid, var: &Variable) -> TypeVariable {
 
 /// Converts a [Tid] to a [TypeVariable] by retrieving the string representation of the TID
 pub fn tid_to_tvar(tid: &Tid) -> TypeVariable {
-    TypeVariable::new(tid.get_str_repr().to_owned())
+    // TODO(Ian): maybe change tids to store types?
+    if tid.get_str_repr().starts_with("glb_") {
+        TypeVariable::new_global(tid.get_str_repr().to_owned())
+    } else {
+        TypeVariable::new(tid.get_str_repr().to_owned())
+    }
 }
 
 /// Converts a [Tid] to a [TypeVariable] by retrieving the string representation of the TID

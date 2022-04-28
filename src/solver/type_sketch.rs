@@ -647,9 +647,7 @@ where
     }
 
     fn display_sketches(&self, event_time: &str) -> anyhow::Result<()> {
-        println!("displaying sketches");
         for (var, repr) in self.scc_repr.iter() {
-            println!("attempting to log");
             self.debug_dir.log_to_fname(
                 &format!("{}_sketch_{}", event_time, var.get_name()),
                 &|| repr,
