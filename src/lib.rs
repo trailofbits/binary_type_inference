@@ -242,7 +242,8 @@ mod tests {
             println!("Dtv: {} Group: {}", dtv, idx.index());
         }
 
-        let lowered = InferenceJob::lower_labeled_sketch_graph(&labeled_graph)
+        let lowered = job
+            .lower_labeled_sketch_graph(&labeled_graph)
             .expect("Should be able to lower graph");
 
         let tid_map = job

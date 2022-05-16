@@ -1,5 +1,8 @@
 use csv::{DeserializeRecordsIter, ReaderBuilder, WriterBuilder};
-use cwe_checker_lib::analysis::pointer_inference::PointerInference;
+use cwe_checker_lib::{
+    analysis::pointer_inference::PointerInference,
+    intermediate_representation::{Arg, Tid},
+};
 use log::warn;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -319,97 +322,6 @@ fn collect_params<U: NamedLatticeElement>(
         .collect::<Vec<_>>()
 }
 
-// unions outs and ins at same parameters if we have multiple conflicting params
-fn build_function_types<U: NamedLatticeElement>(
-    nd: NodeIndex,
-    grph: &SketchGraph<LatticeBounds<U>>,
-) -> Vec<CType> {
-    // index to vector of targets
-    let in_params = collect_params(nd, grph, &|lbl| {
-        if let FieldLabel::In(idx) = lbl {
-            Some(*idx)
-        } else {
-            None
-        }
-    });
-
-    let out_params = collect_params(nd, grph, &|lbl| {
-        if let FieldLabel::Out(idx) = lbl {
-            Some(*idx)
-        } else {
-            None
-        }
-    });
-
-    if out_params.len() > 1 {
-        warn!("Ignoring multi return type. Currently, multi returns are not supported");
-    }
-
-    if !in_params.is_empty() || !out_params.is_empty() {
-        vec![CType::Function {
-            params: in_params,
-            return_ty: out_params
-                .into_iter()
-                .find(|x| x.index == 0)
-                .map(|x| Box::new(x.type_index)),
-        }]
-    } else {
-        Vec::new()
-    }
-}
-
-// We shall always give a type... even if it is undef
-fn build_type<U: NamedLatticeElement>(
-    nd: NodeIndex,
-    grph: &SketchGraph<LatticeBounds<U>>,
-) -> CType {
-    let act_graph = grph.get_graph().get_graph();
-    if act_graph
-        .edges_directed(nd, EdgeDirection::Outgoing)
-        .count()
-        == 0
-    {
-        return build_terminal_type(&act_graph[nd]);
-    }
-
-    let struct_types = build_structure_types(nd, grph);
-    // alias types, alias and struct are mutually exclusive, by checking if we only have zero fields in both
-    let alias_types = build_alias_types(nd, grph);
-    // pointer types
-    let pointer_types = build_pointer_types(nd, grph);
-
-    // function types
-
-    let function_types = build_function_types(nd, grph);
-
-    let mut total_types = Vec::new();
-
-    total_types.extend(struct_types);
-    total_types.extend(alias_types);
-    total_types.extend(pointer_types);
-    total_types.extend(function_types);
-
-    if total_types.len() == 1 {
-        let ty = total_types.into_iter().next().unwrap();
-        ty
-    } else {
-        CType::Union(total_types.into_iter().map(|x| Box::new(x)).collect())
-    }
-}
-
-/// Collects ctypes for a graph
-pub fn collect_ctypes<U: NamedLatticeElement>(
-    grph: &SketchGraph<LatticeBounds<U>>,
-) -> anyhow::Result<HashMap<NodeIndex, CType>> {
-    // types are local decisions so we dont care what order types are built in
-    let mut types = HashMap::new();
-    for nd in grph.get_graph().get_graph().node_indices() {
-        types.insert(nd, build_type(nd, grph));
-    }
-
-    Ok(types)
-}
-
 fn param_to_protofbuf(internal_param: Parameter) -> ctypes::Parameter {
     let mut param = ctypes::Parameter::default();
     param.parameter_index = internal_param.index.try_into().unwrap();
@@ -492,4 +404,156 @@ pub fn convert_mapping_to_profobuf(mp: HashMap<NodeIndex, CType>) -> CTypeMappin
     });
 
     mapping
+}
+
+pub struct LoweringContext<U: NamedLatticeElement> {
+    out_params: BTreeMap<NodeIndex, Vec<Arg>>,
+    default_lattice_elem: LatticeBounds<U>,
+}
+
+impl<U: NamedLatticeElement> LoweringContext<U> {
+    pub fn new(
+        tid_to_node_index: &HashMap<Tid, NodeIndex>,
+        out_param_mapping: &HashMap<Tid, Vec<Arg>>,
+        default_lattice_elem: LatticeBounds<U>,
+    ) -> LoweringContext<U> {
+        LoweringContext {
+            out_params: out_param_mapping
+                .iter()
+                .filter_map(|(k, v)| tid_to_node_index.get(k).map(|nd_idx| (*nd_idx, v.clone())))
+                .collect(),
+            default_lattice_elem,
+        }
+    }
+
+    fn build_return_type_structure(
+        idx: NodeIndex,
+        orig_param_locs: &[Arg],
+        params: &[Parameter],
+        default_lattice_elem: &LatticeBounds<U>,
+    ) -> CType {
+        let mp = params
+            .iter()
+            .map(|x| (x.index, x))
+            .collect::<HashMap<_, _>>();
+
+        let mut flds = Vec::new();
+        let mut curr_off = 0;
+        for (i, arg) in orig_param_locs.iter().enumerate() {
+            flds.push(Field {
+                byte_offset: usize::try_from(curr_off).expect("offset should fit in usize"),
+                bit_sz: arg.bytesize().as_bit_length(),
+                type_index: mp
+                    .get(&i)
+                    .map(|x| x.type_index.clone())
+                    .unwrap_or_else(|| build_terminal_type(default_lattice_elem)),
+            });
+            // TODO(Ian) doesnt seem like there is a non bit length accessor on the private field?
+            curr_off += arg.bytesize().as_bit_length() / 8;
+        }
+
+        CType::Structure(flds)
+    }
+
+    // unions outs and ins at same parameters if we have multiple conflicting params
+    fn build_function_types(
+        &self,
+        nd: NodeIndex,
+        grph: &SketchGraph<LatticeBounds<U>>,
+    ) -> Vec<CType> {
+        // index to vector of targets
+        let in_params = collect_params(nd, grph, &|lbl| {
+            if let FieldLabel::In(idx) = lbl {
+                Some(*idx)
+            } else {
+                None
+            }
+        });
+
+        let mut out_params = collect_params(nd, grph, &|lbl| {
+            if let FieldLabel::Out(idx) = lbl {
+                Some(*idx)
+            } else {
+                None
+            }
+        });
+
+        out_params.sort_by_key(|p| p.index);
+        let def = vec![];
+        let curr_orig_params = self.out_params.get(&nd).unwrap_or(&def);
+        // has multiple out params need to pad
+        let oparam = if out_params.len() > 1 || curr_orig_params.len() > 1 {
+            log::info!("Creating multifield return type");
+            Some(Box::new(Self::build_return_type_structure(
+                nd,
+                self.out_params.get(&nd).unwrap_or(&def),
+                &out_params,
+                &self.default_lattice_elem,
+            )))
+        } else {
+            out_params
+                .iter()
+                .next()
+                .map(|x| Box::new(x.type_index.clone()))
+        };
+
+        if !in_params.is_empty() || !out_params.is_empty() {
+            vec![CType::Function {
+                params: in_params,
+                return_ty: oparam,
+            }]
+        } else {
+            Vec::new()
+        }
+    }
+
+    // We shall always give a type... even if it is undef
+    fn build_type(&self, nd: NodeIndex, grph: &SketchGraph<LatticeBounds<U>>) -> CType {
+        let act_graph = grph.get_graph().get_graph();
+        if act_graph
+            .edges_directed(nd, EdgeDirection::Outgoing)
+            .count()
+            == 0
+        {
+            return build_terminal_type(&act_graph[nd]);
+        }
+
+        let struct_types = build_structure_types(nd, grph);
+        // alias types, alias and struct are mutually exclusive, by checking if we only have zero fields in both
+        let alias_types = build_alias_types(nd, grph);
+        // pointer types
+        let pointer_types = build_pointer_types(nd, grph);
+
+        // function types
+
+        let function_types = self.build_function_types(nd, grph);
+
+        let mut total_types = Vec::new();
+
+        total_types.extend(struct_types);
+        total_types.extend(alias_types);
+        total_types.extend(pointer_types);
+        total_types.extend(function_types);
+
+        if total_types.len() == 1 {
+            let ty = total_types.into_iter().next().unwrap();
+            ty
+        } else {
+            CType::Union(total_types.into_iter().map(|x| Box::new(x)).collect())
+        }
+    }
+
+    /// Collects ctypes for a graph
+    pub fn collect_ctypes(
+        &self,
+        grph: &SketchGraph<LatticeBounds<U>>,
+    ) -> anyhow::Result<HashMap<NodeIndex, CType>> {
+        // types are local decisions so we dont care what order types are built in
+        let mut types = HashMap::new();
+        for nd in grph.get_graph().get_graph().node_indices() {
+            types.insert(nd, self.build_type(nd, grph));
+        }
+
+        Ok(types)
+    }
 }

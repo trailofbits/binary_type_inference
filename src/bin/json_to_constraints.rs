@@ -156,20 +156,16 @@ fn main() -> anyhow::Result<()> {
     if !matches.is_present("human_readable_output") {
         let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(ctypes);
 
-        if_job.get_interesting_tids().iter().for_each(|x| {
-            let tvar = binary_type_inference::constraint_generation::tid_to_tvar(x);
-            if let Some(idx) = grph.get_node_index_for_variable(
-                &binary_type_inference::constraints::DerivedTypeVar::new(tvar.clone()),
-            ) {
-                let mut tid_to_node_idx = binary_type_inference::ctypes::TidToNodeIndex::default();
-                tid_to_node_idx.node_index = idx.index().try_into().unwrap();
-                let mut tid = binary_type_inference::ctypes::Tid::default();
-                tid.address = x.address.clone();
-                tid.name = x.get_str_repr().to_owned();
-                tid_to_node_idx.tid = Some(tid);
-                pb.type_variable_repr_nodes.push(tid_to_node_idx);
-            }
-        });
+        let mapping = if_job.get_graph_labeling(&grph);
+        for (k, v) in mapping {
+            let mut tid_to_node_idx = binary_type_inference::ctypes::TidToNodeIndex::default();
+            tid_to_node_idx.node_index = v.index().try_into().unwrap();
+            let mut tid = binary_type_inference::ctypes::Tid::default();
+            tid.address = k.address.clone();
+            tid.name = k.get_str_repr().to_owned();
+            tid_to_node_idx.tid = Some(tid);
+            pb.type_variable_repr_nodes.push(tid_to_node_idx);
+        }
 
         let mut buf = Vec::new();
         pb.encode(&mut buf)?;

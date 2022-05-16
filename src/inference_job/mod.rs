@@ -12,7 +12,7 @@ use cwe_checker_lib::{
         graph::{Graph, Node},
         pointer_inference::Config,
     },
-    intermediate_representation::{Project, Tid},
+    intermediate_representation::{Arg, Project, Tid},
     utils::binary::RuntimeMemoryImage,
     AnalysisResults,
 };
@@ -27,7 +27,7 @@ use crate::{
         AdditionalConstraint, ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable,
         VariableManager,
     },
-    lowering::{self, CType},
+    lowering::{self, CType, LoweringContext},
     node_context::{
         points_to::PointsToContext,
         register_map::{self, RegisterContext},
@@ -41,7 +41,7 @@ use crate::{
             CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLattice,
             NamedLatticeElement,
         },
-        type_sketch::{LatticeBounds, SCCSketchsBuilder, SketchGraph},
+        type_sketch::{identity_element, LatticeBounds, SCCSketchsBuilder, SketchGraph},
     },
     util::FileDebugLogger,
 };
@@ -409,10 +409,44 @@ impl InferenceJob {
         bldr.build_global_type_graph()
     }
 
-    pub fn lower_labeled_sketch_graph<U: NamedLatticeElement>(
-        sg: &SketchGraph<LatticeBounds<U>>,
+    pub fn get_graph_labeling(
+        &self,
+        grph: &SketchGraph<LatticeBounds<CustomLatticeElement>>,
+    ) -> HashMap<Tid, NodeIndex> {
+        let mut tot = HashMap::new();
+        self.get_interesting_tids().iter().for_each(|x| {
+            let tvar = crate::constraint_generation::tid_to_tvar(x);
+            if let Some(idx) = grph
+                .get_node_index_for_variable(&crate::constraints::DerivedTypeVar::new(tvar.clone()))
+            {
+                tot.insert(x.clone(), idx);
+            }
+        });
+        tot
+    }
+
+    fn get_out_parameter_mapping(&self) -> HashMap<Tid, Vec<Arg>> {
+        self.proj
+            .program
+            .term
+            .subs
+            .iter()
+            .map(|(k, sub)| (k.clone(), sub.term.formal_rets.clone()))
+            .collect()
+    }
+
+    pub fn lower_labeled_sketch_graph(
+        &self,
+        sg: &SketchGraph<LatticeBounds<CustomLatticeElement>>,
     ) -> anyhow::Result<HashMap<NodeIndex, CType>> {
-        lowering::collect_ctypes(sg)
+        let id = identity_element(&self.lattice);
+        let lcontext = LoweringContext::new(
+            &self.get_graph_labeling(sg),
+            &self.get_out_parameter_mapping(),
+            id,
+        );
+
+        lcontext.collect_ctypes(sg)
     }
 
     #[deprecated(
@@ -436,13 +470,13 @@ impl InferenceJob {
         HashMap<NodeIndex, CType>,
     )> {
         self.recover_additional_shared_returns();
-        let mut cons = self.get_simplified_constraints()?;
+        let cons = self.get_simplified_constraints()?;
 
         // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.
 
         let labeled_graph = self.get_labeled_sketch_graph(cons)?;
 
-        let lowered = Self::lower_labeled_sketch_graph(&labeled_graph)?;
+        let lowered = self.lower_labeled_sketch_graph(&labeled_graph)?;
         Ok((labeled_graph, lowered))
     }
 

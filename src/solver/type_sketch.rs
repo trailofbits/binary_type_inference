@@ -325,7 +325,9 @@ where
 }
 
 /// The identity operation described for Lattice bounds
-fn identity_element<T: NamedLattice<U>, U: NamedLatticeElement>(lattice: &T) -> LatticeBounds<U> {
+pub fn identity_element<T: NamedLattice<U>, U: NamedLatticeElement>(
+    lattice: &T,
+) -> LatticeBounds<U> {
     let bot = lattice.bot();
     let top = lattice.top();
     LatticeBounds {
