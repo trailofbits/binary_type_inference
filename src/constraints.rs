@@ -347,12 +347,7 @@ impl Display for FieldLabel {
             FieldLabel::Store => f.write_str("store"),
             &FieldLabel::Add(offset) => f.write_fmt(format_args!("+{}", offset)),
             FieldLabel::In(ind) => f.write_fmt(format_args!("in_{}", ind)),
-            FieldLabel::Out(ind) => {
-                if *ind != 0 {
-                    error!("Multi return field label cannot be converted to retypd constraints");
-                }
-                f.write_str("out")
-            }
+            FieldLabel::Out(ind) => f.write_fmt(format_args!("out_{}", ind)),
             FieldLabel::Field(field) => write!(f, "{}", field),
         }
     }

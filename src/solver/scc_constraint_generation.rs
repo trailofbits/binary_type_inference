@@ -35,7 +35,7 @@ use crate::{
 use std::io::Write;
 
 // TODO(ian): dont use the tid filter and instead lookup the set of target nodes to traverse or use intraproc graphs. This is ineffecient
-pub struct Context<'a, 'b, 'c, R, P, S, C, T, U>
+pub struct Context<'a, 'b, 'c, 'd, R, P, S, C, T, U>
 where
     R: RegisterMapping,
     P: PointsToMapping,
@@ -50,6 +50,7 @@ where
     vman: &'b mut VariableManager,
     lattice_def: LatticeInfo<'c, T, U>,
     debug_dir: FileDebugLogger,
+    additional_constraints: &'d BTreeMap<Tid, ConstraintSet>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -378,7 +379,7 @@ fn insert_missed_formals(simplified_cs_set: &mut ConstraintSet, original_cs_set:
     })
 }
 
-impl<R, P, S, C, T, U> Context<'_, '_, '_, R, P, S, C, T, U>
+impl<R, P, S, C, T, U> Context<'_, '_, '_, '_, R, P, S, C, T, U>
 where
     R: RegisterMapping,
     P: PointsToMapping,
@@ -387,7 +388,7 @@ where
     U: NamedLatticeElement,
     T: NamedLattice<U>,
 {
-    pub fn new<'a, 'b, 'c>(
+    pub fn new<'a, 'b, 'c, 'd>(
         cg: CallGraph,
         graph: &'a Graph<'a>,
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S, C>>,
@@ -396,7 +397,8 @@ where
         vman: &'b mut VariableManager,
         lattice: LatticeInfo<'c, T, U>,
         debug_dir: FileDebugLogger,
-    ) -> Context<'a, 'b, 'c, R, P, S, C, T, U> {
+        additional_constraints: &'d BTreeMap<Tid, ConstraintSet>,
+    ) -> Context<'a, 'b, 'c, 'd, R, P, S, C, T, U> {
         Context {
             cg,
             graph,
@@ -406,6 +408,7 @@ where
             vman,
             lattice_def: lattice,
             debug_dir,
+            additional_constraints,
         }
     }
 
@@ -432,10 +435,13 @@ where
                     Some(tid_filter.clone()),
                 );
 
-                let basic_cons = cont.generate_constraints(self.vman);
-                println!("Cons for: {:#?}", tid_filter);
-                //println!("Basic cons: {}", basic_cons);
+                let mut basic_cons = cont.generate_constraints(self.vman);
 
+                for tid in tid_filter.iter() {
+                    if let Some(to_insert) = self.additional_constraints.get(tid) {
+                        basic_cons.insert_all(&to_insert);
+                    }
+                }
                 let resolved_cs_set = self.lattice_def.infer_pointers(&basic_cons)?;
 
                 let diff = ConstraintSet::from(

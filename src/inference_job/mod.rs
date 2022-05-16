@@ -386,6 +386,7 @@ impl InferenceJob {
                     .expect("the weak integer type is always in the lattice"),
             ),
             self.debug_dir.clone(),
+            &self.additional_constraints,
         );
         context.get_simplified_constraints()
     }
@@ -414,6 +415,9 @@ impl InferenceJob {
         lowering::collect_ctypes(sg)
     }
 
+    #[deprecated(
+        note = "Additional constraints are now inserted during constraint generation, it is not recommended to insert them again."
+    )]
     pub fn insert_additional_constraints(&self, scc_cons: &mut Vec<SCCConstraints>) {
         for scc in scc_cons.iter_mut() {
             for tid in scc.scc.iter() {
@@ -435,8 +439,6 @@ impl InferenceJob {
         let mut cons = self.get_simplified_constraints()?;
 
         // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.
-
-        self.insert_additional_constraints(&mut cons);
 
         let labeled_graph = self.get_labeled_sketch_graph(cons)?;
 

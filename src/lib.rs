@@ -229,8 +229,6 @@ mod tests {
 
         test_equivalence(expected_values.constraint_gen.as_ref(), &normalized);
 
-        job.insert_additional_constraints(&mut genned_cons);
-
         let labeled_graph = job
             .get_labeled_sketch_graph(genned_cons)
             .expect("Creating the sketch graph should not fail");
@@ -409,6 +407,17 @@ mod tests {
             .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
             .set_lattice_json("mooosl_test_lattice.json".to_owned())
             .set_interesting_tids_file("full_mooosl_tid_list.json".to_owned());
+        run_test_case(bldr.build());
+    }
+
+    #[test]
+    fn test_composite_params_and_return() {
+        let mut bldr = TestCaseBuilder::new();
+        bldr.set_binary_path("composite_return/composite_return.so".to_owned())
+            .set_ir_json_path("composite_return/composite_return.json".to_owned())
+            .set_additional_constraints("composite_return/additional_cons.json".to_owned())
+            .set_lattice_json("composite_return/lattice.json".to_owned())
+            .set_interesting_tids_file("composite_return/interesting_tids.json".to_owned());
         run_test_case(bldr.build());
     }
 }
