@@ -19,7 +19,6 @@ use petgraph::visit::EdgeRef;
 
 use crate::solver::dfa_operations::DFA;
 
-
 use super::{explore_paths, find_node};
 
 // TODO(ian): use this abstraction for the transducer

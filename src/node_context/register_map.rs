@@ -13,11 +13,9 @@ use petgraph::EdgeDirection::Incoming;
 use crate::analysis;
 use crate::analysis::reaching_definitions::{Context, Definition, TermSet};
 use crate::constraint_generation::{self, NodeContextMapping, RegisterMapping};
-use crate::constraints::{
-    TypeVariable,
-};
+use crate::constraints::TypeVariable;
 
-use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint};
+use cwe_checker_lib::analysis::forward_interprocedural_fixpoint;
 use cwe_checker_lib::intermediate_representation::Def;
 
 /// The context of register definitions for a given program ICFG node.

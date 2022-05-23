@@ -5,7 +5,7 @@ use std::{
 };
 
 use cwe_checker_lib::{
-    analysis::{pointer_inference::Config},
+    analysis::pointer_inference::Config,
     intermediate_representation::{Program, Tid},
     AnalysisResults,
 };
@@ -14,8 +14,8 @@ use petgraph::graph::NodeIndex;
 
 use crate::{
     constraint_generation::{
-        ConstantResolver, NodeContext, NodeContextMapping, PointsToMapping,
-        RegisterMapping, SubprocedureLocators,
+        ConstantResolver, NodeContext, NodeContextMapping, PointsToMapping, RegisterMapping,
+        SubprocedureLocators,
     },
     constraints::{DerivedTypeVar, TypeVariable},
     util::FileDebugLogger,

@@ -15,7 +15,7 @@ use cwe_checker_lib::{
     AnalysisResults,
 };
 
-use petgraph::{graph::NodeIndex};
+use petgraph::graph::NodeIndex;
 use serde::de::DeserializeOwned;
 
 use crate::{

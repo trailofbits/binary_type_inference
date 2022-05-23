@@ -1,32 +1,27 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet};
-use std::fmt::{Display};
+use std::fmt::Display;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
-use std::ops::{Deref};
+use std::ops::Deref;
 use std::rc::Rc;
 use std::{collections::HashMap, hash::Hash};
 
-use alga::general::{
-    AbstractMagma, Additive, Identity, JoinSemilattice, Lattice, MeetSemilattice,
-};
+use alga::general::{AbstractMagma, Additive, Identity, JoinSemilattice, Lattice, MeetSemilattice};
 use anyhow::Context;
 
 use cwe_checker_lib::intermediate_representation::Tid;
-
 
 use itertools::Itertools;
 use log::info;
 use petgraph::dot::Dot;
 use petgraph::graph::IndexType;
-use petgraph::stable_graph::{StableDiGraph};
+use petgraph::stable_graph::StableDiGraph;
 use petgraph::unionfind::UnionFind;
-use petgraph::visit::{
-    Dfs, EdgeRef, IntoEdgeReferences, IntoEdgesDirected, IntoNeighborsDirected,
-};
-use petgraph::visit::{Walker};
+use petgraph::visit::Walker;
+use petgraph::visit::{Dfs, EdgeRef, IntoEdgeReferences, IntoEdgesDirected, IntoNeighborsDirected};
+use petgraph::Directed;
 use petgraph::EdgeDirection::{self, Incoming};
-use petgraph::{Directed};
 use petgraph::{
     graph::NodeIndex,
     graph::{EdgeIndex, Graph},
@@ -39,17 +34,14 @@ use crate::constraints::{
     ConstraintSet, DerivedTypeVar, Field, FieldLabel, TyConstraint, TypeVariable,
 };
 
-use crate::graph_algos::mapping_graph::{MappingGraph};
+use crate::graph_algos::mapping_graph::MappingGraph;
 use crate::graph_algos::{explore_paths, find_node};
 
 use crate::util::FileDebugLogger;
 
-
 use super::dfa_operations::{self, complement, union, Alphabet, ExplicitDFA, DFA};
 use super::scc_constraint_generation::SCCConstraints;
-use super::type_lattice::{
-    NamedLattice, NamedLatticeElement,
-};
+use super::type_lattice::{NamedLattice, NamedLatticeElement};
 use std::convert::TryFrom;
 
 // an equivalence between eq nodes implies an equivalence between edge

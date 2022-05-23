@@ -12,7 +12,7 @@ use petgraph::data::DataMap;
 use petgraph::dot::Dot;
 
 use crate::graph_algos::all_simple_paths;
-use petgraph::visit::{IntoNodeReferences};
+use petgraph::visit::IntoNodeReferences;
 use petgraph::{
     graph::EdgeIndex,
     graph::NodeIndex,
@@ -20,7 +20,7 @@ use petgraph::{
     visit::{EdgeRef, IntoEdgeReferences, Reversed, Walker},
 };
 
-use std::collections::{HashSet};
+use std::collections::HashSet;
 
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -1368,10 +1368,8 @@ mod tests {
     use super::StackSymbol;
     use super::{parse_finite_state, ControlState, Rule, TypeVarControlState, VHat};
 
-    
     use pretty_assertions::assert_eq;
 
-    
     use std::{collections::BTreeSet, iter::FromIterator, vec};
 
     use crate::{

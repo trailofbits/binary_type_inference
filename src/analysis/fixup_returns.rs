@@ -11,10 +11,7 @@
 /// If they are, we add that function's reaching formals as returns to the current function.
 use std::collections::HashMap;
 
-use cwe_checker_lib::{
-    intermediate_representation::{Arg, Blk, Jmp, Project, Sub, Term, Tid},
-};
-
+use cwe_checker_lib::intermediate_representation::{Arg, Blk, Jmp, Project, Sub, Term, Tid};
 
 use crate::{
     analysis::reaching_definitions::Definition, constraint_generation::NodeContextMapping,

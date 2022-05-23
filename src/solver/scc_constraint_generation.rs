@@ -29,7 +29,6 @@ use crate::{
     util::FileDebugLogger,
 };
 
-
 // TODO(ian): dont use the tid filter and instead lookup the set of target nodes to traverse or use intraproc graphs. This is ineffecient
 pub struct Context<'a, 'b, 'c, 'd, R, P, S, C, T, U>
 where

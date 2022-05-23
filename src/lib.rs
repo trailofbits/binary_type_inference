@@ -52,26 +52,18 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    
-    
-
+    use crate::{
+        constraints::DerivedTypeVar,
+        solver::{type_lattice::CustomLatticeElement, type_sketch::SketchGraph},
+    };
     use crate::{
         constraints::{ConstraintSet, SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
         lowering::CType,
         solver::type_sketch::LatticeBounds,
     };
-    use crate::{
-        constraints::{DerivedTypeVar},
-        solver::{
-            type_lattice::{CustomLatticeElement},
-            type_sketch::SketchGraph,
-        },
-    };
     use cwe_checker_lib::intermediate_representation::Tid;
-    use petgraph::{
-        graph::NodeIndex,
-    };
+    use petgraph::graph::NodeIndex;
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
 

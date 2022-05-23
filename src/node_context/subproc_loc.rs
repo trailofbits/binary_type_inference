@@ -5,7 +5,6 @@ use cwe_checker_lib::intermediate_representation::{Expression, Variable};
 
 use crate::constraint_generation::{ArgTvar, NodeContextMapping, SubprocedureLocators};
 
-
 #[derive(Clone)]
 /// The context for a node needed to evaluate an argument specification.
 pub struct ProcedureContext {

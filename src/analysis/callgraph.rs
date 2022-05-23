@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use cwe_checker_lib::{
-    intermediate_representation::{Jmp, Project, Sub, Tid},
-};
+use cwe_checker_lib::intermediate_representation::{Jmp, Project, Sub, Tid};
 use petgraph::{
     data::Build,
     graph::{DiGraph, NodeIndex},

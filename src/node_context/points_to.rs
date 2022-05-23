@@ -1,4 +1,3 @@
-
 use crate::constraint_generation::{NodeContextMapping, PointsToMapping, TypeVariableAccess};
 use crate::constraints::TypeVariable;
 
@@ -195,12 +194,6 @@ pub fn run_analysis<'a>(
 
 #[cfg(test)]
 mod test {
-    
-
-    
-    
-
-    
 
     /*
     use super::run_analysis;

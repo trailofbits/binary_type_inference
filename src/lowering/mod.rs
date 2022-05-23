@@ -1,27 +1,18 @@
+use cwe_checker_lib::intermediate_representation::{Arg, Tid};
 
-use cwe_checker_lib::{
-    intermediate_representation::{Arg, Tid},
-};
-
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::{
     constraints,
     ctypes::{self, CTypeMapping},
-    solver::{type_sketch::LatticeBounds},
+    solver::type_sketch::LatticeBounds,
 };
 use std::convert::TryInto;
 
-
-
 use serde::{Deserialize, Serialize};
 
-
-
 use petgraph::{
-    graph::{NodeIndex},
+    graph::NodeIndex,
     visit::{EdgeRef, IntoEdgesDirected},
     EdgeDirection,
 };

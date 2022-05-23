@@ -1,8 +1,6 @@
 use binary_type_inference::{
     inference_job::{InferenceJob, JobDefinition, JsonDef, ProtobufDef},
-    solver::{
-        type_lattice::{NamedLatticeElement},
-    },
+    solver::type_lattice::NamedLatticeElement,
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use clap::{App, Arg};
@@ -10,12 +8,11 @@ use clap::{App, Arg};
 use petgraph::dot::Dot;
 use prost::Message;
 
+use std::convert::TryInto;
 use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
 };
-use std::{convert::TryInto};
-
 
 fn parse_collection_from_file<T: Message + Default>(filename: &str) -> anyhow::Result<Vec<T>> {
     let mut f = std::fs::File::open(filename)?;
