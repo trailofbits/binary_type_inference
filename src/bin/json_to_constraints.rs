@@ -1,40 +1,21 @@
 use binary_type_inference::{
-    constraint_generation,
-    constraints::{
-        parse_constraint_set, ConstraintSet, DerivedTypeVar, SubtypeConstraint, TyConstraint,
-        TypeVariable,
-    },
-    ctypes::{self},
     inference_job::{InferenceJob, JobDefinition, JsonDef, ProtobufDef},
-    node_context,
-    pb_constraints::{self},
     solver::{
-        constraint_graph::{RuleContext, FSA},
-        type_lattice::{LatticeDefinition, NamedLatticeElement},
-        type_sketch::SketchGraph,
+        type_lattice::{NamedLatticeElement},
     },
-    util,
 };
 use byteorder::{BigEndian, ReadBytesExt};
 use clap::{App, Arg};
-use cwe_checker_lib::{
-    analysis::pointer_inference::Config,
-    intermediate_representation::{self, Tid},
-    utils::binary::RuntimeMemoryImage,
-};
+
 use petgraph::dot::Dot;
 use prost::Message;
-use regex::Regex;
+
 use std::{
-    any,
-    collections::BTreeSet,
-    convert::TryFrom,
-    fmt::format,
     io::{Read, Write},
     path::{Path, PathBuf},
 };
-use std::{collections::HashSet, convert::TryInto};
-use tempdir::TempDir;
+use std::{convert::TryInto};
+
 
 fn parse_collection_from_file<T: Message + Default>(filename: &str) -> anyhow::Result<Vec<T>> {
     let mut f = std::fs::File::open(filename)?;

@@ -1,14 +1,12 @@
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, HashMap},
-    fmt::format,
     rc::Rc,
 };
 
 use cwe_checker_lib::{
-    analysis::{graph::Graph, pointer_inference::Config},
-    intermediate_representation::{Program, Project, Tid},
-    utils::binary::RuntimeMemoryImage,
+    analysis::{pointer_inference::Config},
+    intermediate_representation::{Program, Tid},
     AnalysisResults,
 };
 use log::info;
@@ -16,7 +14,7 @@ use petgraph::graph::NodeIndex;
 
 use crate::{
     constraint_generation::{
-        tid_to_tvar, ConstantResolver, NodeContext, NodeContextMapping, PointsToMapping,
+        ConstantResolver, NodeContext, NodeContextMapping, PointsToMapping,
         RegisterMapping, SubprocedureLocators,
     },
     constraints::{DerivedTypeVar, TypeVariable},

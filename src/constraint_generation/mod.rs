@@ -7,9 +7,9 @@ use cwe_checker_lib::{
 
 use log::{info, warn};
 use petgraph::{
-    graph::{Edges, IndexType, NodeIndex},
+    graph::{IndexType, NodeIndex},
     visit::EdgeRef,
-    EdgeDirection, EdgeType,
+    EdgeDirection,
 };
 
 use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variable};
@@ -22,7 +22,6 @@ use crate::constraints::{
 };
 
 use std::{
-    any::Any,
     collections::{btree_set::BTreeSet, BTreeMap, HashMap, HashSet},
     convert::TryInto,
 };

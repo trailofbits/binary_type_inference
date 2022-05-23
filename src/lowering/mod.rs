@@ -1,32 +1,28 @@
-use csv::{DeserializeRecordsIter, ReaderBuilder, WriterBuilder};
+
 use cwe_checker_lib::{
-    analysis::pointer_inference::PointerInference,
     intermediate_representation::{Arg, Tid},
 };
-use log::warn;
+
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    ffi::OsStr,
-    fmt::Display,
-    path::{Path, PathBuf},
+    collections::{BTreeMap, BTreeSet, HashMap},
 };
 
 use crate::{
     constraints,
     ctypes::{self, CTypeMapping},
-    solver::{type_lattice::NamedLattice, type_sketch::LatticeBounds},
+    solver::{type_sketch::LatticeBounds},
 };
 use std::convert::TryInto;
 
-use anyhow::{Context, Result};
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use std::process;
+use serde::{Deserialize, Serialize};
+
+
 
 use petgraph::{
-    graph::{EdgeReference, NodeIndex},
-    visit::{EdgeRef, IntoEdgesDirected, IntoNodeIdentifiers, IntoNodeReferences},
+    graph::{NodeIndex},
+    visit::{EdgeRef, IntoEdgesDirected},
     EdgeDirection,
 };
 
@@ -427,7 +423,7 @@ impl<U: NamedLatticeElement> LoweringContext<U> {
     }
 
     fn build_return_type_structure(
-        idx: NodeIndex,
+        _idx: NodeIndex,
         orig_param_locs: &[Arg],
         params: &[Parameter],
         default_lattice_elem: &LatticeBounds<U>,

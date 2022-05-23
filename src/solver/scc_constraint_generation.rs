@@ -1,9 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    fmt::Display,
     iter::FromIterator,
-    marker::PhantomData,
-    path::PathBuf,
     vec,
 };
 
@@ -13,7 +10,7 @@ use cwe_checker_lib::{
     intermediate_representation::{ExternSymbol, Tid},
 };
 use itertools::Itertools;
-use petgraph::{dot::Dot, graph::NodeIndex, EdgeDirection::Outgoing};
+use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing};
 
 use super::{
     constraint_graph::{RuleContext, FSA},
@@ -29,10 +26,9 @@ use crate::{
         AddConstraint, ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint,
         TypeVariable, VariableManager,
     },
-    pb_constraints::DerivedTypeVariable,
     util::FileDebugLogger,
 };
-use std::io::Write;
+
 
 // TODO(ian): dont use the tid filter and instead lookup the set of target nodes to traverse or use intraproc graphs. This is ineffecient
 pub struct Context<'a, 'b, 'c, 'd, R, P, S, C, T, U>

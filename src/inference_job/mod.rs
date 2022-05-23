@@ -1,9 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
-    fs::File,
     iter::FromIterator,
-    path::PathBuf,
 };
 
 use anyhow::Context;
@@ -16,8 +14,8 @@ use cwe_checker_lib::{
     utils::binary::RuntimeMemoryImage,
     AnalysisResults,
 };
-use log::info;
-use petgraph::{dot::Dot, graph::NodeIndex};
+
+use petgraph::{graph::NodeIndex};
 use serde::de::DeserializeOwned;
 
 use crate::{
@@ -27,7 +25,7 @@ use crate::{
         AdditionalConstraint, ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable,
         VariableManager,
     },
-    lowering::{self, CType, LoweringContext},
+    lowering::{CType, LoweringContext},
     node_context::{
         points_to::PointsToContext,
         register_map::{self, RegisterContext},
@@ -396,7 +394,7 @@ impl InferenceJob {
         scc_constraints: Vec<scc_constraint_generation::SCCConstraints>,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<CustomLatticeElement>>> {
         let cg = callgraph::Context::new(&self.proj).get_graph();
-        let elems = self.get_lattice_elems();
+        let _elems = self.get_lattice_elems();
         let mut bldr = SCCSketchsBuilder::new(
             cg,
             scc_constraints,

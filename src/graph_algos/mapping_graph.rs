@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fmt::{Debug, Display},
     hash::Hash,
 };
@@ -11,15 +11,14 @@ use petgraph::{
     data::{Build, DataMap},
     graph::{EdgeIndex, NodeIndex},
     stable_graph::StableDiGraph,
-    visit::{Dfs, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNodeReferences, Walker},
-    Directed,
+    visit::{Dfs, IntoEdgeReferences, IntoEdgesDirected, Walker},
     EdgeDirection::Outgoing,
 };
 
 use petgraph::visit::EdgeRef;
 
 use crate::solver::dfa_operations::DFA;
-use crate::{constraints::DerivedTypeVar, solver::dfa_operations::Alphabet};
+
 
 use super::{explore_paths, find_node};
 
@@ -90,7 +89,7 @@ where
         let filtered_nodes = self
             .nodes
             .iter()
-            .filter(|(k, v)| reachable_idxs.contains(v))
+            .filter(|(_k, v)| reachable_idxs.contains(v))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 

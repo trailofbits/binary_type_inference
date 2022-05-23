@@ -1,33 +1,32 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet};
-use std::fmt::{format, Display};
+use std::fmt::{Display};
 use std::iter::FromIterator;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref};
 use std::rc::Rc;
 use std::{collections::HashMap, hash::Hash};
 
 use alga::general::{
-    AbstractMagma, Additive, AdditiveMagma, Identity, JoinSemilattice, Lattice, MeetSemilattice,
+    AbstractMagma, Additive, Identity, JoinSemilattice, Lattice, MeetSemilattice,
 };
 use anyhow::Context;
-use cwe_checker_lib::analysis::graph;
+
 use cwe_checker_lib::intermediate_representation::Tid;
-use cwe_checker_lib::pcode::Label;
-use env_logger::Target;
+
+
 use itertools::Itertools;
 use log::info;
 use petgraph::dot::Dot;
 use petgraph::graph::IndexType;
-use petgraph::stable_graph::{StableDiGraph, StableGraph};
+use petgraph::stable_graph::{StableDiGraph};
 use petgraph::unionfind::UnionFind;
 use petgraph::visit::{
-    Dfs, EdgeRef, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNeighborsDirected,
-    IntoNodeReferences,
+    Dfs, EdgeRef, IntoEdgeReferences, IntoEdgesDirected, IntoNeighborsDirected,
 };
-use petgraph::visit::{IntoNodeIdentifiers, Walker};
+use petgraph::visit::{Walker};
 use petgraph::EdgeDirection::{self, Incoming};
-use petgraph::{algo, Directed, EdgeType};
+use petgraph::{Directed};
 use petgraph::{
     graph::NodeIndex,
     graph::{EdgeIndex, Graph},
@@ -37,19 +36,19 @@ use EdgeDirection::Outgoing;
 use crate::analysis::callgraph::CallGraph;
 use crate::constraint_generation::{self, tid_to_tvar};
 use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, Field, FieldLabel, TyConstraint, TypeVariable, Variance,
+    ConstraintSet, DerivedTypeVar, Field, FieldLabel, TyConstraint, TypeVariable,
 };
-use crate::ctypes::Union;
-use crate::graph_algos::mapping_graph::{self, MappingGraph};
+
+use crate::graph_algos::mapping_graph::{MappingGraph};
 use crate::graph_algos::{explore_paths, find_node};
-use crate::pb_constraints::DerivedTypeVariable;
+
 use crate::util::FileDebugLogger;
 
-use super::constraint_graph::TypeVarNode;
-use super::dfa_operations::{self, complement, union, Alphabet, ExplicitDFA, Indices, DFA};
+
+use super::dfa_operations::{self, complement, union, Alphabet, ExplicitDFA, DFA};
 use super::scc_constraint_generation::SCCConstraints;
 use super::type_lattice::{
-    CustomLatticeElement, LatticeDefinition, NamedLattice, NamedLatticeElement,
+    NamedLattice, NamedLatticeElement,
 };
 use std::convert::TryFrom;
 
@@ -906,7 +905,7 @@ where
 
         let condensed = petgraph::algo::condensation(subty_with_reaching_labels, true);
 
-        let mp = condensed.map(|_, _| "", |_eidx, eweight| eweight.iter().join("."));
+        let _mp = condensed.map(|_, _| "", |_eidx, eweight| eweight.iter().join("."));
         let ordering = petgraph::algo::toposort(&condensed, None)
             .map_err(|_| anyhow::anyhow!("cycle error"))
             .with_context(|| {
@@ -1130,7 +1129,7 @@ where
     fn refine_formal(
         &self,
         condensed: &Graph<Vec<Tid>, (), Directed>,
-        target_scc: Vec<Tid>,
+        _target_scc: Vec<Tid>,
         target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
         target_dtv: DerivedTypeVar,
         target_idx: NodeIndex,
@@ -1511,7 +1510,7 @@ where
         sg.quotient_graph
             .get_node_mapping()
             .iter()
-            .for_each(|(dtv, idx)| {
+            .for_each(|(dtv, _idx)| {
                 if dtv.is_global() {
                     let sks = sg.get_representing_sketch(dtv.clone());
                     assert!(sks.len() == 1);
@@ -2455,7 +2454,6 @@ mod test {
 
     use cwe_checker_lib::intermediate_representation::Tid;
     use petgraph::{
-        dot::Dot,
         graph::DiGraph,
         visit::{EdgeRef, IntoEdgesDirected},
         EdgeDirection::Outgoing,
@@ -2483,7 +2481,7 @@ mod test {
     #[test]
     fn test_simple_equivalence() {
         // should reduce to one type
-        let (rem, test_set) = parse_constraint_set(
+        let (rem, _test_set) = parse_constraint_set(
             "
             loop_breaker517.load.σ64@40 <= loop_breaker517
             sub_001014fb.out.load.σ64@40 <= loop_breaker517.store.σ64@0

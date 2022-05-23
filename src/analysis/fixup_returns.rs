@@ -12,10 +12,9 @@
 use std::collections::HashMap;
 
 use cwe_checker_lib::{
-    analysis::graph::{Graph, Node},
     intermediate_representation::{Arg, Blk, Jmp, Project, Sub, Term, Tid},
 };
-use petgraph::graph::NodeIndex;
+
 
 use crate::{
     analysis::reaching_definitions::Definition, constraint_generation::NodeContextMapping,
@@ -56,7 +55,7 @@ impl Context<'_> {
                 let vars_to_defs = context_before_jumps.get_register_context();
                 vars_to_defs
                     .iter()
-                    .filter(|(v, tset)| {
+                    .filter(|(_v, tset)| {
                         tset.iter()
                             .any(|t| matches!(t, &Definition::ActualRet(_, _)))
                     })

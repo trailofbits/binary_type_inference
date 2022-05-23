@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use cwe_checker_lib::{
-    analysis::graph::Graph,
     intermediate_representation::{Jmp, Project, Sub, Tid},
 };
 use petgraph::{

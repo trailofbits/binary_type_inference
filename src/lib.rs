@@ -52,27 +52,25 @@ mod tests {
         path::{Path, PathBuf},
     };
 
-    use alga::general::Lattice;
-    use petgraph::visit::EdgeRef;
+    
+    
 
     use crate::{
-        constraints::{ConstraintSet, Field, FieldLabel, SubtypeConstraint, TyConstraint},
+        constraints::{ConstraintSet, SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
         lowering::CType,
         solver::type_sketch::LatticeBounds,
     };
     use crate::{
-        constraints::{DerivedTypeVar, TypeVariable},
+        constraints::{DerivedTypeVar},
         solver::{
-            type_lattice::{CustomLatticeElement, NamedLatticeElement},
+            type_lattice::{CustomLatticeElement},
             type_sketch::SketchGraph,
         },
     };
     use cwe_checker_lib::intermediate_representation::Tid;
     use petgraph::{
-        dot::Dot,
         graph::NodeIndex,
-        visit::{IntoEdgesDirected, IntoNeighbors},
     };
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
@@ -203,7 +201,7 @@ mod tests {
 
         let expected_values = ExpectedOutputs::try_from(tc.expected_outputs)
             .expect("could not open expected outputs");
-        let mut genned_cons = job
+        let genned_cons = job
             .get_simplified_constraints()
             .expect("could not get constraints");
 
@@ -246,7 +244,7 @@ mod tests {
             .lower_labeled_sketch_graph(&labeled_graph)
             .expect("Should be able to lower graph");
 
-        let tid_map = job
+        let _tid_map = job
             .get_interesting_tids()
             .iter()
             .filter_map(|x| {

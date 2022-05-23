@@ -3,7 +3,7 @@ use alga::general::Multiplicative;
 use alga::general::{AbstractMagma, AbstractSemigroup, Identity, TwoSidedInverse};
 use alga_derive::Alga;
 use cwe_checker_lib::intermediate_representation::Tid;
-use log::error;
+
 use nom::branch::alt;
 use nom::bytes::complete::take_while;
 use nom::character::complete::{digit1, space0};
