@@ -3,7 +3,8 @@
 //! Utilizes the [CWE checker pointer analysis](cwe_checker_lib::analysis::pointer_inference), reaching definitions, and parameter analysis from ghidra
 //! to generate subtyping constraints of the form used in [retypd](https://github.com/GrammaTech/retypd).
 #![warn(missing_docs)]
-mod analysis;
+/// Custom fixpoint analyses used by type inference.
+pub mod analysis;
 
 /// Generates constraints as specified in [constraints] from an IR [Project](cwe_checker_lib::intermediate_representation::Project)
 pub mod constraint_generation;
@@ -30,11 +31,13 @@ pub mod graph_algos;
 pub mod lowering;
 
 /// Protobuf ctypes
+#[allow(missing_docs)]
 pub mod ctypes {
     include!(concat!(env!("OUT_DIR"), "/ctypes.rs"));
 }
 
 /// Protobuf constraints
+#[allow(missing_docs)]
 pub mod pb_constraints {
     include!(concat!(env!("OUT_DIR"), "/constraints.rs"));
 }
@@ -47,33 +50,22 @@ pub mod inference_job;
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::{BTreeSet, HashMap},
-        iter::FromIterator,
+        collections::HashMap,
         path::{Path, PathBuf},
     };
 
-    use alga::general::Lattice;
-    use petgraph::visit::EdgeRef;
-
     use crate::{
-        constraints::{ConstraintSet, Field, FieldLabel, SubtypeConstraint, TyConstraint},
+        constraints::DerivedTypeVar,
+        solver::{type_lattice::CustomLatticeElement, type_sketch::SketchGraph},
+    };
+    use crate::{
+        constraints::{SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
         lowering::CType,
         solver::type_sketch::LatticeBounds,
     };
-    use crate::{
-        constraints::{DerivedTypeVar, TypeVariable},
-        solver::{
-            type_lattice::{CustomLatticeElement, NamedLatticeElement},
-            type_sketch::SketchGraph,
-        },
-    };
     use cwe_checker_lib::intermediate_representation::Tid;
-    use petgraph::{
-        dot::Dot,
-        graph::NodeIndex,
-        visit::{IntoEdgesDirected, IntoNeighbors},
-    };
+    use petgraph::graph::NodeIndex;
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
 
@@ -83,17 +75,8 @@ mod tests {
 
     struct ExpectedOutputFiles {
         constraint_gen: Option<String>,
-        constraint_simplification: Option<String>,
         ctype_mapping: Option<String>,
         sketch_properties: Vec<Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>>,
-    }
-
-    fn parse_constraint_set_test(fname: &str) -> anyhow::Result<ConstraintSet> {
-        let f = std::fs::File::open(fname)?;
-        let v: Vec<SubtypeConstraint> = serde_json::from_reader(f)?;
-        Ok(ConstraintSet::from(BTreeSet::from_iter(
-            v.into_iter().map(|x| TyConstraint::SubTy(x)),
-        )))
     }
 
     use serde::{Deserialize, Serialize};
@@ -127,7 +110,6 @@ mod tests {
 
     struct ExpectedOutputs {
         constraint_gen: Option<Vec<DeserSCCCons>>,
-        constraint_simplification: Option<ConstraintSet>,
         ctype_mapping: Option<HashMap<NodeIndex, CType>>,
         sketch_properties: Vec<Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>>,
     }
@@ -140,17 +122,12 @@ mod tests {
                 .constraint_gen
                 .map_or(Ok(None), |op| parse_scc_constraints(&op).map(Some))?;
 
-            let constrain_simpl_expec = value
-                .constraint_simplification
-                .map_or(Ok(None), |op| parse_constraint_set_test(&op).map(Some))?;
-
             let ctype_mapping = value
                 .ctype_mapping
                 .map_or(Ok(None), |op| parse_ctype_mapping(&op).map(Some))?;
 
             Ok(ExpectedOutputs {
                 constraint_gen: expected_gen,
-                constraint_simplification: constrain_simpl_expec,
                 ctype_mapping,
                 sketch_properties: value.sketch_properties,
             })
@@ -203,7 +180,7 @@ mod tests {
 
         let expected_values = ExpectedOutputs::try_from(tc.expected_outputs)
             .expect("could not open expected outputs");
-        let mut genned_cons = job
+        let genned_cons = job
             .get_simplified_constraints()
             .expect("could not get constraints");
 
@@ -229,8 +206,6 @@ mod tests {
 
         test_equivalence(expected_values.constraint_gen.as_ref(), &normalized);
 
-        job.insert_additional_constraints(&mut genned_cons);
-
         let labeled_graph = job
             .get_labeled_sketch_graph(genned_cons)
             .expect("Creating the sketch graph should not fail");
@@ -244,10 +219,11 @@ mod tests {
             println!("Dtv: {} Group: {}", dtv, idx.index());
         }
 
-        let lowered = InferenceJob::lower_labeled_sketch_graph(&labeled_graph)
+        let lowered = job
+            .lower_labeled_sketch_graph(&labeled_graph)
             .expect("Should be able to lower graph");
 
-        let tid_map = job
+        let _tid_map = job
             .get_interesting_tids()
             .iter()
             .filter_map(|x| {
@@ -308,6 +284,8 @@ mod tests {
             self
         }
 
+        // Currently not checking any sketch properties but good to have.
+        #[allow(dead_code)]
         fn add_sketch_property(
             &mut self,
             t: Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>,
@@ -336,6 +314,8 @@ mod tests {
             self
         }
 
+        // Currently we arent checking ctypes in tests but we should in the future.
+        #[allow(dead_code)]
         fn set_expec_ctype_mapping(&mut self, v: String) -> &mut Self {
             self.expec_ctype_mapping = Some(v);
             self
@@ -365,9 +345,6 @@ mod tests {
                 expected_outputs: ExpectedOutputFiles {
                     constraint_gen: self
                         .expec_constraint_gen
-                        .map(|x| Self::expected_data_dir(x)),
-                    constraint_simplification: self
-                        .expec_constraint_simplification
                         .map(|x| Self::expected_data_dir(x)),
                     ctype_mapping: self.expec_ctype_mapping.map(|x| Self::expected_data_dir(x)),
                     sketch_properties: self.sketch_properties,
@@ -409,6 +386,17 @@ mod tests {
             .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
             .set_lattice_json("mooosl_test_lattice.json".to_owned())
             .set_interesting_tids_file("full_mooosl_tid_list.json".to_owned());
+        run_test_case(bldr.build());
+    }
+
+    #[test]
+    fn test_composite_params_and_return() {
+        let mut bldr = TestCaseBuilder::new();
+        bldr.set_binary_path("composite_return/composite_return.so".to_owned())
+            .set_ir_json_path("composite_return/composite_return.json".to_owned())
+            .set_additional_constraints("composite_return/additional_cons.json".to_owned())
+            .set_lattice_json("composite_return/lattice.json".to_owned())
+            .set_interesting_tids_file("composite_return/interesting_tids.json".to_owned());
         run_test_case(bldr.build());
     }
 }

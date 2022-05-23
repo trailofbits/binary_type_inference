@@ -1,66 +1,17 @@
 use binary_type_inference::{
-    constraint_generation,
-    constraints::{
-        parse_constraint_set, ConstraintSet, DerivedTypeVar, SubtypeConstraint, TyConstraint,
-        TypeVariable,
-    },
-    ctypes::{self},
     inference_job::{InferenceJob, JobDefinition, JsonDef, ProtobufDef},
-    node_context,
-    pb_constraints::{self},
-    solver::{
-        constraint_graph::{RuleContext, FSA},
-        type_lattice::{LatticeDefinition, NamedLatticeElement},
-        type_sketch::SketchGraph,
-    },
-    util,
+    solver::type_lattice::NamedLatticeElement,
 };
-use byteorder::{BigEndian, ReadBytesExt};
 use clap::{App, Arg};
-use cwe_checker_lib::{
-    analysis::pointer_inference::Config,
-    intermediate_representation::{self, Tid},
-    utils::binary::RuntimeMemoryImage,
-};
+
 use petgraph::dot::Dot;
 use prost::Message;
-use regex::Regex;
+
+use std::convert::TryInto;
 use std::{
-    any,
-    collections::BTreeSet,
-    convert::TryFrom,
-    fmt::format,
-    io::{Read, Write},
+    io::Write,
     path::{Path, PathBuf},
 };
-use std::{collections::HashSet, convert::TryInto};
-use tempdir::TempDir;
-
-fn parse_collection_from_file<T: Message + Default>(filename: &str) -> anyhow::Result<Vec<T>> {
-    let mut f = std::fs::File::open(filename)?;
-    let mut total = Vec::new();
-    loop {
-        let res = f.read_u32::<BigEndian>();
-
-        match res {
-            Err(err) => {
-                if matches!(err.kind(), std::io::ErrorKind::UnexpectedEof) {
-                    return Ok(total);
-                } else {
-                    return Err(anyhow::Error::from(err));
-                }
-            }
-            Ok(sz) => {
-                let mut buf = vec![0; sz as usize];
-                f.read_exact(&mut buf)?;
-
-                let res = T::decode(buf.as_ref())
-                    .map_err(|_err| anyhow::anyhow!("Decoding error for type T"))?;
-                total.push(res);
-            }
-        }
-    }
-}
 
 pub fn immutably_push<P>(pb: &PathBuf, new_path: P) -> PathBuf
 where
@@ -156,20 +107,16 @@ fn main() -> anyhow::Result<()> {
     if !matches.is_present("human_readable_output") {
         let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(ctypes);
 
-        if_job.get_interesting_tids().iter().for_each(|x| {
-            let tvar = binary_type_inference::constraint_generation::tid_to_tvar(x);
-            if let Some(idx) = grph.get_node_index_for_variable(
-                &binary_type_inference::constraints::DerivedTypeVar::new(tvar.clone()),
-            ) {
-                let mut tid_to_node_idx = binary_type_inference::ctypes::TidToNodeIndex::default();
-                tid_to_node_idx.node_index = idx.index().try_into().unwrap();
-                let mut tid = binary_type_inference::ctypes::Tid::default();
-                tid.address = x.address.clone();
-                tid.name = x.get_str_repr().to_owned();
-                tid_to_node_idx.tid = Some(tid);
-                pb.type_variable_repr_nodes.push(tid_to_node_idx);
-            }
-        });
+        let mapping = if_job.get_graph_labeling(&grph);
+        for (k, v) in mapping {
+            let mut tid_to_node_idx = binary_type_inference::ctypes::TidToNodeIndex::default();
+            tid_to_node_idx.node_index = v.index().try_into().unwrap();
+            let mut tid = binary_type_inference::ctypes::Tid::default();
+            tid.address = k.address.clone();
+            tid.name = k.get_str_repr().to_owned();
+            tid_to_node_idx.tid = Some(tid);
+            pb.type_variable_repr_nodes.push(tid_to_node_idx);
+        }
 
         let mut buf = Vec::new();
         pb.encode(&mut buf)?;

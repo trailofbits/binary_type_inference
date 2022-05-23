@@ -10,6 +10,8 @@ use cwe_checker_lib::{
 use petgraph::graph::NodeIndex;
 use std::collections::HashMap;
 
+/// The context for a stack depth analysis. The stack depth analysis utilizes results from
+/// the VSA analysis in cwe checker to determine the minimum/maximum (depening on which way the stack grows) stack offset.
 pub struct Context<'a> {
     node_contexts: &'a HashMap<NodeIndex, PointerState>,
     graph: &'a Graph<'a>,
@@ -32,6 +34,7 @@ fn merge_into(
 }
 
 impl<'a> Context<'a> {
+    /// Creates a new stack analysis context.
     pub fn new(
         node_contexts: &'a HashMap<NodeIndex, PointerState>,
         graph: &'a Graph<'a>,
@@ -79,6 +82,7 @@ impl<'a> Context<'a> {
         )
     }
 
+    /// Computes the maximum stack depths at each time in a function
     pub fn get_stack_depths(&self) -> HashMap<AbstractIdentifier, i64> {
         let mut min_stack_depth: HashMap<AbstractIdentifier, i64> = HashMap::new();
         for nd_idx in self.graph.node_indices() {

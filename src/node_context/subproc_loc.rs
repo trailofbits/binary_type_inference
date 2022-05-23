@@ -4,7 +4,6 @@ use cwe_checker_lib::intermediate_representation::Arg;
 use cwe_checker_lib::intermediate_representation::{Expression, Variable};
 
 use crate::constraint_generation::{ArgTvar, NodeContextMapping, SubprocedureLocators};
-use crate::constraints::ConstraintSet;
 
 #[derive(Clone)]
 /// The context for a node needed to evaluate an argument specification.
@@ -30,7 +29,7 @@ impl SubprocedureLocators for ProcedureContext {
         arg: &Arg,
         reg: &impl crate::constraint_generation::RegisterMapping,
         points_to: &impl crate::constraint_generation::PointsToMapping,
-        vm: &mut crate::constraints::VariableManager,
+        _vm: &mut crate::constraints::VariableManager,
     ) -> BTreeSet<ArgTvar> {
         match arg {
             Arg::Register { expr, .. } => {

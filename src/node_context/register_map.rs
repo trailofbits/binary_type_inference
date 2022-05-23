@@ -6,18 +6,16 @@ use std::ops::Deref;
 use cwe_checker_lib::abstract_domain::DomainMap;
 use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
-use cwe_checker_lib::intermediate_representation::{Project, Term, Variable};
+use cwe_checker_lib::intermediate_representation::{Project, Variable};
 use petgraph::graph::NodeIndex;
 use petgraph::EdgeDirection::Incoming;
 
 use crate::analysis;
 use crate::analysis::reaching_definitions::{Context, Definition, TermSet};
 use crate::constraint_generation::{self, NodeContextMapping, RegisterMapping};
-use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, SubtypeConstraint, TyConstraint, TypeVariable,
-};
-use crate::util::FileDebugLogger;
-use cwe_checker_lib::analysis::{forward_interprocedural_fixpoint, pointer_inference};
+use crate::constraints::TypeVariable;
+
+use cwe_checker_lib::analysis::forward_interprocedural_fixpoint;
 use cwe_checker_lib::intermediate_representation::Def;
 
 /// The context of register definitions for a given program ICFG node.
@@ -29,7 +27,7 @@ pub struct RegisterContext {
 impl Display for RegisterContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (v, tset) in self.mapping.iter() {
-            write!(f, "{}: {}\n", v.name, tset)?;
+            writeln!(f, "{}: {}", v.name, tset)?;
         }
         Ok(())
     }
@@ -39,13 +37,6 @@ impl RegisterContext {
     /// Creates a new register context that can answer register access queries from a reaching definitions [NodeValue].
     pub fn new(mapping: BTreeMap<Variable, TermSet>) -> RegisterContext {
         RegisterContext { mapping }
-    }
-
-    fn create_empty_var_name(
-        _var: &Variable,
-        vman: &mut crate::constraints::VariableManager,
-    ) -> TypeVariable {
-        vman.fresh()
     }
 
     fn generate_multi_def_constraint(
@@ -70,6 +61,7 @@ impl RegisterContext {
         }
     }
 
+    /// Gets the underyling mapping for this context, mapping a variable to a set of terms.
     pub fn get_register_context(&self) -> &BTreeMap<Variable, TermSet> {
         &self.mapping
     }

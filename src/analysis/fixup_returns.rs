@@ -11,23 +11,23 @@
 /// If they are, we add that function's reaching formals as returns to the current function.
 use std::collections::HashMap;
 
-use cwe_checker_lib::{
-    analysis::graph::{Graph, Node},
-    intermediate_representation::{Arg, Blk, Jmp, Project, Sub, Term, Tid},
-};
-use petgraph::graph::NodeIndex;
+use cwe_checker_lib::intermediate_representation::{Arg, Blk, Jmp, Project, Sub, Term, Tid};
 
 use crate::{
     analysis::reaching_definitions::Definition, constraint_generation::NodeContextMapping,
     node_context::register_map::RegisterContext,
 };
 
+/// Context for fixing the return variables of a given subprocedure.
+/// A context holds onto the project it is going to mutate with additional returns.
+/// The analysis utilizes reaching definitions results to find when a function returns a value that is then not captured in the ghidra signature for that function (ie. a tail call)
 pub struct Context<'a> {
     reaching_defs_start_of_block: HashMap<Tid, RegisterContext>,
     ir: &'a mut Project,
 }
 
 impl Context<'_> {
+    /// Creates a return analysis context from a reaching definitions mapping for this project and a project
     pub fn new<'a>(
         ir: &'a mut Project,
         reaching_defs_start_of_block: HashMap<Tid, RegisterContext>,
@@ -56,7 +56,7 @@ impl Context<'_> {
                 let vars_to_defs = context_before_jumps.get_register_context();
                 vars_to_defs
                     .iter()
-                    .filter(|(v, tset)| {
+                    .filter(|(_v, tset)| {
                         tset.iter()
                             .any(|t| matches!(t, &Definition::ActualRet(_, _)))
                     })
@@ -98,6 +98,8 @@ impl Context<'_> {
         tot
     }
 
+    /// Adds returns to the formal returns of procedures that do not have returns currently
+    /// and at their return blocks, there is a reaching definition from an actualret.
     pub fn apply_psuedo_returns(&mut self) {
         let m = self.collect_returns();
         for (_, sub) in self.ir.program.term.subs.iter_mut() {

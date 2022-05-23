@@ -1,9 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::TryFrom,
-    fs::File,
     iter::FromIterator,
-    path::PathBuf,
 };
 
 use anyhow::Context;
@@ -12,12 +10,12 @@ use cwe_checker_lib::{
         graph::{Graph, Node},
         pointer_inference::Config,
     },
-    intermediate_representation::{Project, Tid},
+    intermediate_representation::{Arg, Project, Tid},
     utils::binary::RuntimeMemoryImage,
     AnalysisResults,
 };
-use log::info;
-use petgraph::{dot::Dot, graph::NodeIndex};
+
+use petgraph::graph::NodeIndex;
 use serde::de::DeserializeOwned;
 
 use crate::{
@@ -27,7 +25,7 @@ use crate::{
         AdditionalConstraint, ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable,
         VariableManager,
     },
-    lowering::{self, CType},
+    lowering::{CType, LoweringContext},
     node_context::{
         points_to::PointsToContext,
         register_map::{self, RegisterContext},
@@ -39,9 +37,8 @@ use crate::{
         scc_constraint_generation::{self, LatticeInfo, SCCConstraints},
         type_lattice::{
             CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLattice,
-            NamedLatticeElement,
         },
-        type_sketch::{LatticeBounds, SCCSketchsBuilder, SketchGraph},
+        type_sketch::{identity_element, LatticeBounds, SCCSketchsBuilder, SketchGraph},
     },
     util::FileDebugLogger,
 };
@@ -50,30 +47,23 @@ use byteorder::{BigEndian, ReadBytesExt};
 use prost::Message;
 use std::io::Read;
 
-/*    let matches = App::new("json_to_constraints")
-.arg(Arg::with_name("input_bin").required(true).index(1))
-.arg(Arg::with_name("input_json").required(true).index(2))
-.arg(Arg::with_name("lattice_json").required(true))
-.arg(Arg::with_name("additional_constraints_file").required(true))
-.arg(Arg::with_name("interesting_tids").required(true))
-.arg(Arg::with_name("function_filter_list").required(false))
-.arg(Arg::with_name("human_readable").takes_value(false))
-.arg(
-    Arg::with_name("out")
-        .long("out")
-        .required(true)
-        .takes_value(true),
-)
-.get_matches();*/
-
+/// Defines a type inference job in terms of the input files.
+/// The interchange format can be protobuf or json depending on
+/// wether human readable input and output is required.
 pub struct JobDefinition {
+    /// Path to the original binary
     pub binary_path: String,
+    /// Path to the cwe checker json IR exported file
     pub ir_json_path: String,
+    /// Path to json repreenting the type lattice
     pub lattice_json: String,
+    /// Path to a file containing additional constraints to inject.
     pub additional_constraints_file: String,
+    /// The interesting tids in the IR to solve types for.
     pub interesting_tids: String,
 }
 
+/// A type inference job that has been parsed into its in memory representation.
 pub struct InferenceJob {
     binary_bytes: Vec<u8>,
     proj: Project,
@@ -85,11 +75,13 @@ pub struct InferenceJob {
     debug_dir: FileDebugLogger,
 }
 
+/// A way to parse readers into a given representation type
 pub trait InferenceParsing<T> {
+    /// Parse a collection of messages from a reader
     fn parse_collection<R: Read>(rdr: R) -> anyhow::Result<Vec<T>>;
 }
 
-struct ProtobufParsing {}
+struct ProtobufParsing;
 
 impl<T: Message + Default> InferenceParsing<T> for ProtobufParsing {
     fn parse_collection<R: Read>(rdr: R) -> anyhow::Result<Vec<T>> {
@@ -109,7 +101,9 @@ where
         .map(|x| R::try_from(x).map_err(|e| anyhow::Error::from(e)))
         .collect()
 }
-pub struct ProtobufDef {}
+
+/// A struct the represents parsing input as protobuf.
+pub struct ProtobufDef;
 
 impl InferenceParsing<SubtypeConstraint> for ProtobufDef {
     fn parse_collection<X: Read>(rdr: X) -> anyhow::Result<Vec<SubtypeConstraint>> {
@@ -144,7 +138,8 @@ impl InferenceParsing<AdditionalConstraint> for ProtobufDef {
     }
 }
 
-pub struct JsonDef {}
+/// A struct that represents parsing input as json.
+pub struct JsonDef;
 
 impl<T: DeserializeOwned> InferenceParsing<T> for JsonDef {
     fn parse_collection<R: Read>(rdr: R) -> anyhow::Result<Vec<T>> {
@@ -179,10 +174,12 @@ fn parse_collection_from_file<T: Message + Default, R: Read>(mut r: R) -> anyhow
 }
 
 impl InferenceJob {
+    /// Parses a binary to its bytes.
     pub fn parse_binary(bin_path: &str) -> anyhow::Result<Vec<u8>> {
         std::fs::read(bin_path).map_err(|err| anyhow::Error::from(err).context("parsing_binary"))
     }
 
+    /// Parses an IR json to a [Project]
     pub fn parse_project(proj_path: &str, bin_bytes: &[u8]) -> anyhow::Result<Project> {
         let json_file = std::fs::File::open(proj_path)?;
 
@@ -197,6 +194,7 @@ impl InferenceJob {
         Ok(ir)
     }
 
+    /// Parses the lattice to a [EnumeratedLattice] and the type variable representing the weakest possible integer type (the greatest integer type on the lattice).
     fn parse_lattice_json(
         lattice_json: &str,
     ) -> anyhow::Result<(EnumeratedNamedLattice, TypeVariable)> {
@@ -210,6 +208,7 @@ impl InferenceJob {
         ))
     }
 
+    /// Parses a set of additional subtyping constraints
     fn parse_additional_constraints<T: InferenceParsing<AdditionalConstraint>>(
         additional_constraints_file: &str,
     ) -> anyhow::Result<BTreeMap<Tid, ConstraintSet>> {
@@ -236,6 +235,7 @@ impl InferenceJob {
         Ok(HashSet::from_iter(tids.into_iter()))
     }
 
+    /// Computes the cfg from a project
     pub fn graph_from_project(proj: &Project) -> Graph {
         cwe_checker_lib::analysis::graph::get_program_cfg(
             &proj.program,
@@ -249,10 +249,12 @@ impl InferenceJob {
         )
     }
 
+    /// gets the cfg for this inference job
     pub fn get_graph(&self) -> Graph {
         Self::graph_from_project(&self.proj)
     }
 
+    /// Creates a [RuntimeMemory] by loading a binary.
     pub fn get_runtime_image(proj: &Project, bytes: &[u8]) -> anyhow::Result<RuntimeMemoryImage> {
         let mut rt_mem = RuntimeMemoryImage::new(bytes)?;
 
@@ -267,6 +269,7 @@ impl InferenceJob {
         Ok(rt_mem)
     }
 
+    /// Gets a mapping of NodeIndex to [NodeContext] for each program point in the given graph.
     fn get_node_context<'a>(
         &self,
         graph: &'a Graph<'a>,
@@ -311,10 +314,13 @@ impl InferenceJob {
             .map(|(name, _elem)| TypeVariable::new(name.clone()))
     }
 
+    /// Get the additional constraints for this job as a map from Tid that they apply to, to a set of constraints that must be injected.
     pub fn get_additional_constraints(&self) -> &BTreeMap<Tid, ConstraintSet> {
         &self.additional_constraints
     }
 
+    /// Fix up the returns for the project owned by this job by inserting returns
+    /// Ghidra missed related to tail calls.
     pub fn recover_additional_shared_returns<'a>(&mut self) {
         let grph = Self::graph_from_project(&self.proj);
         let reg_context = register_map::run_analysis(&self.proj, &grph);
@@ -332,6 +338,8 @@ impl InferenceJob {
         rets.apply_psuedo_returns();
     }
 
+    /// Get the contextual information needed for the weighted pushdown automata rules
+    /// including interesting variables and type lattice information.
     pub fn get_rule_context(&self) -> RuleContext {
         let mut only_interestings = BTreeSet::new();
 
@@ -350,10 +358,12 @@ impl InferenceJob {
         RuleContext::new(interesting_and_lattice)
     }
 
+    /// Get the variable manager for this inference job.
     pub fn get_vman(&mut self) -> &mut VariableManager {
         &mut self.vman
     }
 
+    /// Computes simplified type constraints for each scc in this project
     pub fn get_simplified_constraints(
         &mut self,
     ) -> anyhow::Result<Vec<scc_constraint_generation::SCCConstraints>> {
@@ -386,16 +396,18 @@ impl InferenceJob {
                     .expect("the weak integer type is always in the lattice"),
             ),
             self.debug_dir.clone(),
+            &self.additional_constraints,
         );
         context.get_simplified_constraints()
     }
 
+    /// Converts simplified scc constraints into a single type supergraph with labels
     pub fn get_labeled_sketch_graph(
         &self,
         scc_constraints: Vec<scc_constraint_generation::SCCConstraints>,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<CustomLatticeElement>>> {
         let cg = callgraph::Context::new(&self.proj).get_graph();
-        let elems = self.get_lattice_elems();
+        let _elems = self.get_lattice_elems();
         let mut bldr = SCCSketchsBuilder::new(
             cg,
             scc_constraints,
@@ -408,12 +420,54 @@ impl InferenceJob {
         bldr.build_global_type_graph()
     }
 
-    pub fn lower_labeled_sketch_graph<U: NamedLatticeElement>(
-        sg: &SketchGraph<LatticeBounds<U>>,
-    ) -> anyhow::Result<HashMap<NodeIndex, CType>> {
-        lowering::collect_ctypes(sg)
+    /// For a given sketch supergraph, build a mapping from interesting type variables to the node that represents them.
+    pub fn get_graph_labeling(
+        &self,
+        grph: &SketchGraph<LatticeBounds<CustomLatticeElement>>,
+    ) -> HashMap<Tid, NodeIndex> {
+        let mut tot = HashMap::new();
+        self.get_interesting_tids().iter().for_each(|x| {
+            let tvar = crate::constraint_generation::tid_to_tvar(x);
+            if let Some(idx) = grph
+                .get_node_index_for_variable(&crate::constraints::DerivedTypeVar::new(tvar.clone()))
+            {
+                tot.insert(x.clone(), idx);
+            }
+        });
+        tot
     }
 
+    fn get_out_parameter_mapping(&self) -> HashMap<Tid, Vec<Arg>> {
+        self.proj
+            .program
+            .term
+            .subs
+            .iter()
+            .map(|(k, sub)| (k.clone(), sub.term.formal_rets.clone()))
+            .collect()
+    }
+
+    /// Uses heuristics to lower a supergraph to a ctype for each node.
+    pub fn lower_labeled_sketch_graph(
+        &self,
+        sg: &SketchGraph<LatticeBounds<CustomLatticeElement>>,
+    ) -> anyhow::Result<HashMap<NodeIndex, CType>> {
+        let id = identity_element(&self.lattice);
+        let lcontext = LoweringContext::new(
+            &self.get_graph_labeling(sg),
+            &self.get_out_parameter_mapping(),
+            id,
+        );
+
+        lcontext.collect_ctypes(sg)
+    }
+
+    #[deprecated(
+        note = "Additional constraints are now inserted during constraint generation, it is not recommended to insert them again."
+    )]
+    /// Inserts additional constraints held by this job into the set of scc constraints.
+    /// Additional constraints are now inserted during constraint generation so that pointer inference can use
+    /// the additional info provided by injected constraints.
     pub fn insert_additional_constraints(&self, scc_cons: &mut Vec<SCCConstraints>) {
         for scc in scc_cons.iter_mut() {
             for tid in scc.scc.iter() {
@@ -424,6 +478,9 @@ impl InferenceJob {
         }
     }
 
+    /// Applies all default analyses to compute types. First, tailcall returns are fixed, then simplified scc constraints are generated.
+    /// These constraints are transformed into a sketch supergraph where each type variable is represented by a node with edges for its capabilities.
+    /// These nodes are then lowered to a mapping from node to ctype.
     pub fn infer_ctypes(
         &mut self,
         // debug_dir: &PathBuf,
@@ -432,22 +489,22 @@ impl InferenceJob {
         HashMap<NodeIndex, CType>,
     )> {
         self.recover_additional_shared_returns();
-        let mut cons = self.get_simplified_constraints()?;
+        let cons = self.get_simplified_constraints()?;
 
         // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.
 
-        self.insert_additional_constraints(&mut cons);
-
         let labeled_graph = self.get_labeled_sketch_graph(cons)?;
 
-        let lowered = Self::lower_labeled_sketch_graph(&labeled_graph)?;
+        let lowered = self.lower_labeled_sketch_graph(&labeled_graph)?;
         Ok((labeled_graph, lowered))
     }
 
+    /// Gets the set of interesting terms that are solved for.
     pub fn get_interesting_tids(&self) -> &HashSet<Tid> {
         &self.interesting_tids
     }
 
+    /// Parses a job definition to an [InferenceJob] using a marker type that impelments the parsing.
     pub fn parse<T: InferenceParsing<AdditionalConstraint> + InferenceParsing<Tid>>(
         def: &JobDefinition,
         debug_dir: Option<String>,

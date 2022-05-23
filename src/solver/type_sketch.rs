@@ -1,33 +1,26 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet};
-use std::fmt::{format, Display};
+use std::fmt::Display;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::rc::Rc;
 use std::{collections::HashMap, hash::Hash};
 
-use alga::general::{
-    AbstractMagma, Additive, AdditiveMagma, Identity, JoinSemilattice, Lattice, MeetSemilattice,
-};
+use alga::general::{AbstractMagma, Additive, JoinSemilattice, Lattice, MeetSemilattice};
 use anyhow::Context;
-use cwe_checker_lib::analysis::graph;
+
 use cwe_checker_lib::intermediate_representation::Tid;
-use cwe_checker_lib::pcode::Label;
-use env_logger::Target;
+
 use itertools::Itertools;
 use log::info;
 use petgraph::dot::Dot;
 use petgraph::graph::IndexType;
-use petgraph::stable_graph::{StableDiGraph, StableGraph};
+use petgraph::stable_graph::StableDiGraph;
 use petgraph::unionfind::UnionFind;
-use petgraph::visit::{
-    Dfs, EdgeRef, IntoEdgeReferences, IntoEdges, IntoEdgesDirected, IntoNeighborsDirected,
-    IntoNodeReferences,
-};
-use petgraph::visit::{IntoNodeIdentifiers, Walker};
+use petgraph::visit::{Dfs, EdgeRef, IntoEdgeReferences};
+use petgraph::Directed;
 use petgraph::EdgeDirection::{self, Incoming};
-use petgraph::{algo, Directed, EdgeType};
 use petgraph::{
     graph::NodeIndex,
     graph::{EdgeIndex, Graph},
@@ -37,20 +30,17 @@ use EdgeDirection::Outgoing;
 use crate::analysis::callgraph::CallGraph;
 use crate::constraint_generation::{self, tid_to_tvar};
 use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, Field, FieldLabel, TyConstraint, TypeVariable, Variance,
+    ConstraintSet, DerivedTypeVar, Field, FieldLabel, TyConstraint, TypeVariable,
 };
-use crate::ctypes::Union;
-use crate::graph_algos::mapping_graph::{self, MappingGraph};
+
+use crate::graph_algos::mapping_graph::MappingGraph;
 use crate::graph_algos::{explore_paths, find_node};
-use crate::pb_constraints::DerivedTypeVariable;
+
 use crate::util::FileDebugLogger;
 
-use super::constraint_graph::TypeVarNode;
-use super::dfa_operations::{self, complement, union, Alphabet, ExplicitDFA, Indices, DFA};
+use super::dfa_operations::{self, complement, union, Alphabet, ExplicitDFA, DFA};
 use super::scc_constraint_generation::SCCConstraints;
-use super::type_lattice::{
-    CustomLatticeElement, LatticeDefinition, NamedLattice, NamedLatticeElement,
-};
+use super::type_lattice::{NamedLattice, NamedLatticeElement};
 use std::convert::TryFrom;
 
 // an equivalence between eq nodes implies an equivalence between edge
@@ -185,39 +175,6 @@ where
         .collect()
 }
 
-fn constraint_quotients<C>(
-    grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
-    cons: &ConstraintSet,
-) -> UnionFind<usize>
-where
-    C: std::cmp::PartialEq,
-{
-    let mut uf: UnionFind<usize> = UnionFind::new(
-        grph.get_graph()
-            .node_indices()
-            .max()
-            .unwrap_or(NodeIndex::from(0))
-            .index()
-            + 1,
-    );
-
-    if cons.is_empty() {
-        return uf;
-    }
-
-    for cons in cons.iter() {
-        if let TyConstraint::SubTy(sub_cons) = cons {
-            info!("{}", sub_cons);
-            let lt_node = grph.get_node(&sub_cons.lhs).unwrap();
-            let gt_node = grph.get_node(&sub_cons.rhs).unwrap();
-
-            uf.union(lt_node.index(), gt_node.index());
-        }
-    }
-
-    uf
-}
-
 fn create_union_find_for_graph_nodes<C>(
     grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
 ) -> UnionFind<usize>
@@ -325,7 +282,9 @@ where
 }
 
 /// The identity operation described for Lattice bounds
-fn identity_element<T: NamedLattice<U>, U: NamedLatticeElement>(lattice: &T) -> LatticeBounds<U> {
+pub fn identity_element<T: NamedLattice<U>, U: NamedLatticeElement>(
+    lattice: &T,
+) -> LatticeBounds<U> {
     let bot = lattice.bot();
     let top = lattice.top();
     LatticeBounds {
@@ -334,6 +293,8 @@ fn identity_element<T: NamedLattice<U>, U: NamedLatticeElement>(lattice: &T) -> 
     }
 }
 
+/// Insert a derived type variable into this graph by addding a node for each
+/// subcomponent of the derived type variable.
 pub fn insert_dtv<T: NamedLattice<U>, U: NamedLatticeElement>(
     lattice: &T,
     grph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
@@ -350,6 +311,7 @@ pub fn insert_dtv<T: NamedLattice<U>, U: NamedLatticeElement>(
     }
 }
 
+/// Holds onto context to build a sketch from a [ConstraintSet]
 pub struct SketchBuilder<'a, U, T, V> {
     lattice: &'a T,
     type_lattice_elements: &'a HashSet<TypeVariable>,
@@ -463,6 +425,8 @@ where
         Ok(orig_sk_graph)
     }
 
+    /// Build a sketchgraph from a [ConstraintSet] and label
+    /// the graph with which type variable each node represents as well as type lattice bounds.
     pub fn build_and_label_constraints(
         &self,
         sig: &ConstraintSet,
@@ -474,6 +438,7 @@ where
         Ok(orig_sk_graph)
     }
 
+    /// Creates a new [SketchBuilder] from lattice information as well a function that adds a derived type variable to a mapping graph
     pub fn new(
         lattice: &'a T,
         type_lattice_elements: &'a HashSet<TypeVariable>,
@@ -529,7 +494,6 @@ pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     scc_repr: HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>,
     global_repr: HashMap<TypeVariable, (NodeIndex, Sketch<LatticeBounds<U>>)>,
     cg: CallGraph,
-    tid_to_cg_idx: HashMap<Tid, NodeIndex>,
     lattice: &'a T,
     type_lattice_elements: HashSet<TypeVariable>,
     /// Aliases some type nodes accross sccs to bind polymorphic parameters loc->loc
@@ -551,6 +515,7 @@ where
     T: 'a,
     U: Display,
 {
+    /// Creates a new context for generating sketches for each scc.
     pub fn new(
         cg: CallGraph,
         scc_constraints: Vec<SCCConstraints>,
@@ -567,16 +532,10 @@ where
             .flatten()
             .collect::<HashMap<_, _>>();
 
-        let cg_callers = cg
-            .node_indices()
-            .map(|idx| (cg[idx].clone(), idx))
-            .collect();
-
         SCCSketchsBuilder {
             scc_signatures,
             scc_repr: HashMap::new(),
             cg,
-            tid_to_cg_idx: cg_callers,
             lattice,
             type_lattice_elements,
             parameter_aliases: BTreeMap::new(),
@@ -668,6 +627,8 @@ where
         Ok(())
     }
 
+    /// Builds and refines scc sketches by first translating constraint sets to sketches,
+    /// then binding polymorphic types when thye can be refiend, and finally binding and refining globals.
     pub fn build(&mut self) -> anyhow::Result<()> {
         let (condensed, mut sorted) = self.get_topo_order_for_cg()?;
         sorted.reverse();
@@ -904,7 +865,7 @@ where
 
         let condensed = petgraph::algo::condensation(subty_with_reaching_labels, true);
 
-        let mp = condensed.map(|_, _| "", |_eidx, eweight| eweight.iter().join("."));
+        let _mp = condensed.map(|_, _| "", |_eidx, eweight| eweight.iter().join("."));
         let ordering = petgraph::algo::toposort(&condensed, None)
             .map_err(|_| anyhow::anyhow!("cycle error"))
             .with_context(|| {
@@ -1128,7 +1089,7 @@ where
     fn refine_formal(
         &self,
         condensed: &Graph<Vec<Tid>, (), Directed>,
-        target_scc: Vec<Tid>,
+        _target_scc: Vec<Tid>,
         target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
         target_dtv: DerivedTypeVar,
         target_idx: NodeIndex,
@@ -1158,9 +1119,6 @@ where
             .unwrap_or(orig_repr.clone());
 
         call_site_type.label_dtvs(&orig_repr);
-        // Check that we still have the entry labeled
-        assert!(call_site_type.get_entry().index() >= 0);
-
         // if an actual is equal to the replacement type then we can bind that parameter to the type.
 
         target_scc_repr.replace_dtv(&target_dtv, call_site_type.clone());
@@ -1512,7 +1470,7 @@ where
         sg.quotient_graph
             .get_node_mapping()
             .iter()
-            .for_each(|(dtv, idx)| {
+            .for_each(|(dtv, _idx)| {
                 if dtv.is_global() {
                     let sks = sg.get_representing_sketch(dtv.clone());
                     assert!(sks.len() == 1);
@@ -1525,6 +1483,8 @@ where
             });
     }
 
+    /// Find every usage of a global variable and create a new refined type for it
+    /// That is the subtype of all usages. Substitute this new type in at each instatiation
     pub fn apply_global_instantiations(&mut self) -> anyhow::Result<()> {
         let var_mapping = self.collect_global_instantiations()?;
 
@@ -1548,6 +1508,7 @@ where
         Ok(())
     }
 
+    /// Find the sketch representing the type for each global variable.
     pub fn collect_global_instantiations(
         &self,
     ) -> anyhow::Result<HashMap<TypeVariable, Sketch<LatticeBounds<U>>>> {
@@ -1607,6 +1568,7 @@ where
 }
 
 impl<U: std::cmp::PartialEq> SketchGraph<U> {
+    /// Get the node index representing the given [DerivedTypeVar] if it is reperesented in this sketch.
     pub fn get_node_index_for_variable(&self, wt: &DerivedTypeVar) -> Option<NodeIndex> {
         self.quotient_graph.get_node(wt).cloned()
     }
@@ -1640,6 +1602,7 @@ impl<U: std::cmp::PartialEq> SketchGraph<U> {
 }
 
 impl<U: std::cmp::PartialEq> SketchGraph<U> {
+    /// Get the underlying quotiented graph for this [SketchGraph]
     pub fn get_graph(&self) -> &MappingGraph<U, DerivedTypeVar, FieldLabel> {
         &self.quotient_graph
     }
@@ -1707,31 +1670,6 @@ impl Deref for ReprMapping {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl ReprMapping {
-    fn get_representative_dtv_for<T: std::cmp::PartialEq>(
-        &self,
-        lhs: &Sketch<T>,
-        rhs: &Sketch<T>,
-        target: NodeIndex,
-    ) -> Option<DerivedTypeVar> {
-        self.0.get(&target).and_then(|(one, two)| {
-            let lrepr = one.and_then(|repridx| {
-                lhs.get_graph()
-                    .get_group_for_node(repridx)
-                    .into_iter()
-                    .next()
-            });
-            let rrepr = two.and_then(|repridx| {
-                rhs.get_graph()
-                    .get_group_for_node(repridx)
-                    .into_iter()
-                    .next()
-            });
-            lrepr.or(rrepr)
-        })
     }
 }
 
@@ -1876,19 +1814,6 @@ impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
                 .collect();
         self.quotient_graph = self.quotient_graph.relable_representative_nodes(mapping);
         self.representing = other_sketch.representing.clone();
-    }
-}
-
-impl<U: std::cmp::PartialEq + AbstractMagma<Additive>> Sketch<U> {
-    pub fn empty_sketch(representing: DerivedTypeVar, default_label: U) -> Sketch<U> {
-        let mut grph = MappingGraph::new();
-        grph.add_node(representing.clone(), default_label.clone());
-
-        Sketch {
-            quotient_graph: grph,
-            representing,
-            default_label,
-        }
     }
 }
 
@@ -2312,6 +2237,8 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         self.quotient_graph = self.quotient_graph.quoetient_graph(&qgroups);
     }
 
+    /// Simplifies sketch edges of the form x.+40.load.@0sigma8 to x.load.@40sigma8 if all incoming edges are adds,
+    ///  all outgoing edges are laods and stores and all reached nodes only have field edges.
     pub fn simplify_pointers(&mut self) {
         while let Some(pt) = self.find_pointer_simplification() {
             self.apply_pointer_transform(pt);
@@ -2402,6 +2329,9 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         reached
     }
 
+    /// Find the subgraph reachable from this [DerivedTypeVar] (essentially the type of this varaible) and copy it into another graph.
+    /// This function finds type variables by transforming the passed in variable to it's callee type (formal), but will add the
+    /// callsite tag to each instance of the callee variable in the created subgraph.
     pub fn copy_reachable_subgraph_into(
         &self,
         from: &DerivedTypeVar,
@@ -2455,12 +2385,7 @@ mod test {
     use std::collections::HashSet;
 
     use cwe_checker_lib::intermediate_representation::Tid;
-    use petgraph::{
-        dot::Dot,
-        graph::DiGraph,
-        visit::{EdgeRef, IntoEdgesDirected},
-        EdgeDirection::Outgoing,
-    };
+    use petgraph::{graph::DiGraph, visit::EdgeRef, EdgeDirection::Outgoing};
 
     use crate::{
         analysis::callgraph::CallGraph,
@@ -2484,7 +2409,7 @@ mod test {
     #[test]
     fn test_simple_equivalence() {
         // should reduce to one type
-        let (rem, test_set) = parse_constraint_set(
+        let (rem, _test_set) = parse_constraint_set(
             "
             loop_breaker517.load.σ64@40 <= loop_breaker517
             sub_001014fb.out.load.σ64@40 <= loop_breaker517.store.σ64@0

@@ -1,4 +1,3 @@
-use crate::analysis::stack_depth_analysis;
 use crate::constraint_generation::{NodeContextMapping, PointsToMapping, TypeVariableAccess};
 use crate::constraints::TypeVariable;
 
@@ -6,10 +5,10 @@ use anyhow::Result;
 use cwe_checker_lib::abstract_domain::{
     AbstractIdentifier, DataDomain, IntervalDomain, TryToBitvec,
 };
-use cwe_checker_lib::analysis::graph::Graph;
+
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
-use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Project, Variable};
+use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Variable};
 use cwe_checker_lib::AnalysisResults;
 
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
@@ -195,19 +194,6 @@ pub fn run_analysis<'a>(
 
 #[cfg(test)]
 mod test {
-    use std::path::{Path, PathBuf};
-
-    use cwe_checker_lib::{
-        analysis::pointer_inference::Config,
-        intermediate_representation::{ByteSize, Expression, Tid, Variable},
-    };
-    use petgraph::visit::IntoNodeReferences;
-
-    use crate::{
-        analysis::reaching_definitions::Definition,
-        constraint_generation::{NodeContextMapping, PointsToMapping, RegisterMapping},
-        constraints::VariableManager,
-    };
 
     /*
     use super::run_analysis;

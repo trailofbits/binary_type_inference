@@ -1,9 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    fmt::Display,
     iter::FromIterator,
-    marker::PhantomData,
-    path::PathBuf,
     vec,
 };
 
@@ -13,7 +10,7 @@ use cwe_checker_lib::{
     intermediate_representation::{ExternSymbol, Tid},
 };
 use itertools::Itertools;
-use petgraph::{dot::Dot, graph::NodeIndex, EdgeDirection::Outgoing};
+use petgraph::{graph::NodeIndex, EdgeDirection::Outgoing};
 
 use super::{
     constraint_graph::{RuleContext, FSA},
@@ -29,13 +26,12 @@ use crate::{
         AddConstraint, ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint,
         TypeVariable, VariableManager,
     },
-    pb_constraints::DerivedTypeVariable,
     util::FileDebugLogger,
 };
-use std::io::Write;
 
 // TODO(ian): dont use the tid filter and instead lookup the set of target nodes to traverse or use intraproc graphs. This is ineffecient
-pub struct Context<'a, 'b, 'c, R, P, S, C, T, U>
+/// The context needed to generate and simplify typing constraints for each scc in a callgraph of a cwe checker project.
+pub struct Context<'a, 'b, 'c, 'd, R, P, S, C, T, U>
 where
     R: RegisterMapping,
     P: PointsToMapping,
@@ -50,11 +46,17 @@ where
     vman: &'b mut VariableManager,
     lattice_def: LatticeInfo<'c, T, U>,
     debug_dir: FileDebugLogger,
+    additional_constraints: &'d BTreeMap<Tid, ConstraintSet>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
+/// The subtyping constraints for a single SCC.
+/// Hold the [Tid] of the subprocedure terms in this scc and
+/// the constraints.
 pub struct SCCConstraints {
+    /// The subprocedure terms that make up this scc
     pub scc: Vec<Tid>,
+    /// The constraints for this scc.
     pub constraints: ConstraintSet,
 }
 
@@ -234,6 +236,8 @@ where
     }
 }
 
+/// The info needed about a type lattice to generate
+/// scc constraints.
 pub struct LatticeInfo<'c, T, U> {
     lattice: &'c T,
     type_lattice_elements: HashSet<TypeVariable>,
@@ -241,6 +245,7 @@ pub struct LatticeInfo<'c, T, U> {
 }
 
 impl<'c, T, U> LatticeInfo<'c, T, U> {
+    /// Creates a new [LatticeInfo] from a given lattice, its elements, and the greates integer type.
     pub fn new(
         lattice: &'c T,
         type_lattice_elements: HashSet<TypeVariable>,
@@ -378,7 +383,7 @@ fn insert_missed_formals(simplified_cs_set: &mut ConstraintSet, original_cs_set:
     })
 }
 
-impl<R, P, S, C, T, U> Context<'_, '_, '_, R, P, S, C, T, U>
+impl<R, P, S, C, T, U> Context<'_, '_, '_, '_, R, P, S, C, T, U>
 where
     R: RegisterMapping,
     P: PointsToMapping,
@@ -387,7 +392,8 @@ where
     U: NamedLatticeElement,
     T: NamedLattice<U>,
 {
-    pub fn new<'a, 'b, 'c>(
+    /// Creates a new scc constraint generation context.
+    pub fn new<'a, 'b, 'c, 'd>(
         cg: CallGraph,
         graph: &'a Graph<'a>,
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S, C>>,
@@ -396,7 +402,8 @@ where
         vman: &'b mut VariableManager,
         lattice: LatticeInfo<'c, T, U>,
         debug_dir: FileDebugLogger,
-    ) -> Context<'a, 'b, 'c, R, P, S, C, T, U> {
+        additional_constraints: &'d BTreeMap<Tid, ConstraintSet>,
+    ) -> Context<'a, 'b, 'c, 'd, R, P, S, C, T, U> {
         Context {
             cg,
             graph,
@@ -406,9 +413,12 @@ where
             vman,
             lattice_def: lattice,
             debug_dir,
+            additional_constraints,
         }
     }
 
+    /// Runs the computation, generating FSA simplified scc constraints for each.
+    /// Temporary sketches are created to propogate pointer information.
     pub fn get_simplified_constraints(&mut self) -> anyhow::Result<Vec<SCCConstraints>> {
         self.debug_dir.log_to_fname("interesting_vars", &|| {
             self.rule_context
@@ -432,10 +442,13 @@ where
                     Some(tid_filter.clone()),
                 );
 
-                let basic_cons = cont.generate_constraints(self.vman);
-                println!("Cons for: {:#?}", tid_filter);
-                //println!("Basic cons: {}", basic_cons);
+                let mut basic_cons = cont.generate_constraints(self.vman);
 
+                for tid in tid_filter.iter() {
+                    if let Some(to_insert) = self.additional_constraints.get(tid) {
+                        basic_cons.insert_all(&to_insert);
+                    }
+                }
                 let resolved_cs_set = self.lattice_def.infer_pointers(&basic_cons)?;
 
                 let diff = ConstraintSet::from(

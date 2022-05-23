@@ -1,17 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
-use cwe_checker_lib::{
-    analysis::graph::Graph,
-    intermediate_representation::{Jmp, Project, Sub, Tid},
-};
-use petgraph::{
-    data::Build,
-    graph::{DiGraph, NodeIndex},
-};
+use cwe_checker_lib::intermediate_representation::{Jmp, Project, Sub, Tid};
+use petgraph::graph::{DiGraph, NodeIndex};
 
 /// Builds a callgraph of the target project
 
 pub type CallGraph = DiGraph<Tid, ()>;
+
+/// Context for building a callgraph of terms for a project
 pub struct Context<'a> {
     proj: &'a Project,
 }
@@ -33,10 +29,12 @@ impl Context<'_> {
             .collect()
     }
 
+    /// Creates a new [Context] from a [Project]
     pub fn new<'a>(proj: &'a Project) -> Context<'a> {
         Context::<'a> { proj }
     }
 
+    /// Builds the callgraph for the project in this context and returns it
     pub fn get_graph(&self) -> DiGraph<Tid, ()> {
         let mut grph: DiGraph<Tid, ()> = DiGraph::new();
 

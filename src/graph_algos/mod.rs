@@ -3,6 +3,7 @@ use std::{hash::Hash, iter::FromIterator};
 use indexmap::IndexSet;
 use petgraph::visit::{Data, EdgeRef, IntoEdgesDirected, NodeCount};
 
+/// A graph that is quotiented by a given hashable key.
 pub mod mapping_graph;
 
 /// All simple paths that tracks edge paths instead of node paths

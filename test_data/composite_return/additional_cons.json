@@ -1,0 +1,98 @@
+[
+    {
+        "associated_variable": {
+            "id": "sub_00010434",
+            "address": "00010434"
+        },
+        "constraint": {
+            "lhs": {
+                "var": {
+                    "name": "sub_00010434"
+                },
+                "labels": [
+                    {
+                        "In": 0
+                    }
+                ]
+            },
+            "rhs": {
+                "var": {
+                    "name": "int"
+                },
+                "labels": []
+            }
+        }
+    },
+    {
+        "associated_variable": {
+            "id": "sub_00010434",
+            "address": "00010434"
+        },
+        "constraint": {
+            "lhs": {
+                "var": {
+                    "name": "sub_00010434"
+                },
+                "labels": [
+                    {
+                        "In": 1
+                    }
+                ]
+            },
+            "rhs": {
+                "var": {
+                    "name": "int"
+                },
+                "labels": []
+            }
+        }
+    },
+    {
+        "associated_variable": {
+            "id": "sub_00010434",
+            "address": "00010434"
+        },
+        "constraint": {
+            "lhs": {
+                "var": {
+                    "name": "sub_00010434"
+                },
+                "labels": [
+                    {
+                        "In": 2
+                    }
+                ]
+            },
+            "rhs": {
+                "var": {
+                    "name": "int"
+                },
+                "labels": []
+            }
+        }
+    },
+    {
+        "associated_variable": {
+            "id": "sub_00010434",
+            "address": "00010434"
+        },
+        "constraint": {
+            "lhs": {
+                "var": {
+                    "name": "sub_00010434"
+                },
+                "labels": [
+                    {
+                        "In": 3
+                    }
+                ]
+            },
+            "rhs": {
+                "var": {
+                    "name": "int"
+                },
+                "labels": []
+            }
+        }
+    }
+]

@@ -12,8 +12,10 @@ use petgraph::{
     Directed, Graph,
 };
 
+/// A supertrait representing the properties needed to be a DFA's alphabet.
 pub trait Alphabet: Hash + Eq + Ord + Clone {}
 
+/// Indices representing nodes in a DFA.
 pub type Indices = Vec<usize>;
 
 /// So... to support DFAs with infinite alphabets we do some sketch stuff. If an edge does not exist for some alphabe symbol we assume it leads to a reject state.
@@ -21,9 +23,17 @@ pub trait DFA<T>
 where
     T: Alphabet,
 {
+    /// The entry index of the dfa.
     fn entry(&self) -> usize;
+
+    /// The accepting indices of the dfa.
     fn accept_indices(&self) -> Indices;
+
+    /// All indices in the dfa.
     fn all_indices(&self) -> Indices;
+
+    /// For an edge (src, A, dst) src is the index of the src node, dst is the index of the destination, and A is the letter
+    /// required to take that edge.
     fn dfa_edges(&self) -> Vec<(usize, T, usize)>;
 }
 
@@ -388,50 +398,6 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-enum UnionNodeType {
-    Lhs,
-    Rhs,
-    Synthesized,
-}
-
-struct UnionContext {
-    cont: IdContext<(usize, UnionNodeType)>,
-    entry_lhs: usize,
-    entry_rhs: usize,
-}
-
-impl UnionContext {
-    fn get_node(
-        &mut self,
-        src_idx: usize,
-        entry_idx: usize,
-        normal_node_type: UnionNodeType,
-    ) -> usize {
-        if src_idx == entry_idx {
-            self.cont.get_node((0, UnionNodeType::Synthesized))
-        } else {
-            self.cont.get_node((src_idx, normal_node_type))
-        }
-    }
-
-    fn get_lhs_node(&mut self, src_idx: usize) -> usize {
-        self.get_node(src_idx, self.entry_lhs, UnionNodeType::Lhs)
-    }
-
-    fn get_rhs_node(&mut self, src_idx: usize) -> usize {
-        self.get_node(src_idx, self.entry_rhs, UnionNodeType::Rhs)
-    }
-
-    fn new(entry_lhs: usize, entry_rhs: usize) -> UnionContext {
-        UnionContext {
-            cont: IdContext::default(),
-            entry_lhs,
-            entry_rhs,
-        }
-    }
-}
-
 /// Unions the DFA by cartesian product
 pub fn union<T, U, A>(lhs: &T, rhs: &U) -> impl DFA<A>
 where
@@ -459,7 +425,7 @@ where
 
     ExplicitDFA {
         ent_id: lhs.entry(),
-        all_indeces: all_indeces,
+        all_indeces,
         accept_indexes: new_accepts,
         edges: BTreeSet::from_iter(lhs.dfa_edges().into_iter()),
     }

@@ -17,6 +17,8 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+/// The context for a reaching definitions analysis. Reaching definitions needs both a project and a mapping from Tid to external symbols.
+/// The external symbols allow reaching definitions to appropriately update based on ABI info.
 pub struct Context<'a> {
     /// Graph to compute the fixpoint over
     graph: &'a Graph<'a>,
@@ -25,6 +27,7 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
+    /// Creates a new reaching definitions analysis context.
     pub fn new(
         project: &'a Project,
         graph: &'a Graph<'a>,
@@ -38,11 +41,14 @@ impl<'a> Context<'a> {
     }
 }
 
+/// A value that defines a variable
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub enum Definition {
+    /// A fake definition inserted as the first definition of a variable at each entrypoint
     EntryFresh(usize),
+    /// The tid pointing to the IR definition that last updated this variable.
     Normal(Tid),
-    // Definitions created to
+    /// Definitions created at each call return to define the returned variable
     ActualRet(Tid, usize),
 }
 
@@ -58,6 +64,8 @@ impl Display for Definition {
     }
 }
 
+/// The abstract domain of a reaching definitions analysis. At each program point the analysis maps
+/// a variable to a [TermSet] which is the collection of definitions that may define that variable at this program point.
 #[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub struct TermSet(pub BTreeSet<Definition>);
 
@@ -82,6 +90,7 @@ impl AbstractDomain for TermSet {
 }
 
 impl TermSet {
+    /// Creates a new empty [TermSet]
     pub fn new() -> TermSet {
         TermSet(BTreeSet::new())
     }
@@ -133,6 +142,7 @@ impl<'a> Context<'a> {
     }
 }
 
+/// Applies a single definition term to the abstract domain for a reaching definitions analysis
 pub fn apply_def(
     mut old_value: DomainMap<Variable, TermSet, UnionMergeStrategy>,
     def: &Term<Def>,

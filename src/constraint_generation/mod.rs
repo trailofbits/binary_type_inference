@@ -6,11 +6,7 @@ use cwe_checker_lib::{
 };
 
 use log::{info, warn};
-use petgraph::{
-    graph::{Edges, IndexType, NodeIndex},
-    visit::EdgeRef,
-    EdgeDirection, EdgeType,
-};
+use petgraph::{graph::NodeIndex, visit::EdgeRef, EdgeDirection};
 
 use cwe_checker_lib::intermediate_representation::{ByteSize, Expression, Variable};
 
@@ -22,7 +18,6 @@ use crate::constraints::{
 };
 
 use std::{
-    any::Any,
     collections::{btree_set::BTreeSet, BTreeMap, HashMap, HashSet},
     convert::TryInto,
 };
@@ -117,7 +112,11 @@ pub trait SubprocedureLocators: NodeContextMapping {
     ) -> BTreeSet<ArgTvar>;
 }
 
+/// Represents analysis results that can convert accesses to constant addresses to global variables.
+/// An analysis that partitions global variables should implement this trait.
 pub trait ConstantResolver: NodeContextMapping {
+    /// Produces a type variable for an access to the given address. A [VariableManager] is passed to allow
+    /// the resolver to generate guarenteed fresh ephemeral variables.
     fn resolve_constant_to_variable(
         &self,
         target: &Bitvector,
