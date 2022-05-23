@@ -24,7 +24,7 @@ where
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
-    let matches = App::new("json_to_constraints")
+    let matches = App::new("binary_to_types")
         .arg(Arg::with_name("input_bin").required(true).index(1))
         .arg(Arg::with_name("input_json").required(true).index(2))
         .arg(Arg::with_name("lattice_json").required(true))
