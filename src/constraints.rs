@@ -36,10 +36,12 @@ where
     )
 }
 
+/// Parses an alphanumeric identifier using the typical rule that the first character must be alpha.
 pub fn parse_identifier(input: &str) -> IResult<&str, &str> {
     identifier_char(input)
 }
 
+/// Parses a type variable that has a ctr to be used as its callsite tag
 pub fn parse_type_variable_with_cs_tag(input: &str) -> IResult<&str, TypeVariable> {
     map_res::<_, _, _, _, ParseIntError, _, _>(
         tuple((parse_identifier, tag(":"), digit1)),
@@ -56,6 +58,7 @@ pub fn parse_type_variable_with_cs_tag(input: &str) -> IResult<&str, TypeVariabl
     )(input)
 }
 
+/// Parses a normal type variable that does not have a ctr callsite tag
 pub fn parse_type_variable_without_cs_tag(input: &str) -> IResult<&str, TypeVariable> {
     map(identifier_char, |s: &str| TypeVariable::new(s.to_owned()))(input)
 }
@@ -184,6 +187,7 @@ pub struct TypeVariable {
 }
 
 impl TypeVariable {
+    /// Creates a variable with tagged by a callsite term.
     pub fn with_tag(name: String, cs_tag: Tid) -> TypeVariable {
         TypeVariable {
             name,
@@ -192,6 +196,8 @@ impl TypeVariable {
         }
     }
 
+    /// Create a type variable that represents a global variable. These type variables are handled specially,
+    /// in that they are non-polymorphic
     pub fn new_global(name: String) -> TypeVariable {
         TypeVariable {
             name,
@@ -200,14 +206,12 @@ impl TypeVariable {
         }
     }
 
+    /// Returns wether this variable is a global data variable that should be treated non polymorphically and refined as a global.
     pub fn is_global(&self) -> bool {
         self.is_global
     }
 
-    pub fn get_tag(&self) -> &Option<Tid> {
-        &self.cs_tag
-    }
-
+    /// Removes the callsite tag from this variable (if this variable is not callsite tagged this is a noop).
     pub fn to_callee(&self) -> TypeVariable {
         TypeVariable {
             is_global: self.is_global,
@@ -216,6 +220,7 @@ impl TypeVariable {
         }
     }
 
+    /// Gets the callsite tag for this variable if it exists.
     pub fn get_cs_tag(&self) -> &Option<Tid> {
         &self.cs_tag
     }
@@ -265,6 +270,7 @@ impl VariableManager {
         TypeVariable::new(next_name)
     }
 
+    /// Generates a fresh [TypeVariable] in the loop breaker namespace. These are seperately counted identifiers.
     pub fn fresh_loop_breaker(&mut self) -> TypeVariable {
         let next_name = format!("loop_breaker{}", self.curr_id.to_string());
         self.curr_id += 1;
@@ -418,6 +424,7 @@ impl Display for DerivedTypeVar {
 }
 
 impl DerivedTypeVar {
+    /// Determines if this variable has a type capability involving a constant addition of an offset
     pub fn has_add_field(&self) -> bool {
         self.get_field_labels()
             .iter()
@@ -473,30 +480,37 @@ impl DerivedTypeVar {
         &self.labels
     }
 
+    /// Checks if this variable is a formal type variable (no callsite tag and is not a global)
     pub fn is_formal_dtv(&self) -> bool {
-        self.var.cs_tag.is_none()
+        self.var.cs_tag.is_none() && !self.var.is_global()
     }
 
+    /// Checks if this type variable refers to the in parameter of a procedure
     pub fn refers_to_in_parameter(&self) -> bool {
         self.labels.len() >= 1 && matches!(self.labels[0], FieldLabel::In(_))
     }
 
+    /// Checks if this type variable refers to the out parameter of a procedure
     pub fn refers_to_out_parameter(&self) -> bool {
         self.labels.len() >= 1 && matches!(self.labels[0], FieldLabel::Out(_))
     }
 
+    /// Checks if this dtv is exactly an in parameter. ie. "sub_1.in_0"
     pub fn is_in_parameter(&self) -> bool {
         self.labels.len() == 1 && self.refers_to_in_parameter()
     }
 
+    /// Checks if this derived type variable refers to a global
     pub fn refers_to_global(&self) -> bool {
         self.get_base_variable().is_global()
     }
 
+    /// Checks if this derived type variable is exactly a global (represents a global and not its capabilities)
     pub fn is_global(&self) -> bool {
         self.labels.len() == 0 && self.refers_to_global()
     }
 
+    /// Checks if this dtv is exactly an in parameter. ie. "sub_1.out_0"
     pub fn is_out_parameter(&self) -> bool {
         self.labels.len() == 1 && self.refers_to_out_parameter()
     }
@@ -579,8 +593,13 @@ impl TryFrom<pb_constraints::DerivedTypeVariable> for DerivedTypeVar {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+/// Represents an additional constraint that is injected before type solving.
+/// Additional constraints have a Tid which is the subprocedure in which they will be applied.
+/// This allows the SCC generation to determine which scc should contain this subtyping constriant.
 pub struct AdditionalConstraint {
+    /// The actual constraint (x<=y) to inject.
     pub constraint: SubtypeConstraint,
+    /// The sub procedure that this constraint should apply to.
     pub associated_variable: Tid,
 }
 
@@ -648,6 +667,8 @@ impl Display for SubtypeConstraint {
 pub struct ConstraintSet(BTreeSet<TyConstraint>);
 
 impl ConstraintSet {
+    /// Removes all constraints related to adds. Adds are only useful within an SCC,
+    /// they are removed at the barrier to prevent them from leaking odd types into the final supergraph
     pub fn forget_add_constraints(self) -> ConstraintSet {
         ConstraintSet(
             self.0
@@ -662,6 +683,7 @@ impl ConstraintSet {
         )
     }
 
+    /// Get all derived type variables involved in these constraints.
     pub fn variables(&self) -> impl Iterator<Item = &DerivedTypeVar> {
         self.0
             .iter()

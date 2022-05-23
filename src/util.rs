@@ -55,6 +55,7 @@ pub fn procedure_type_variable_map(proj: &Project) -> HashMap<TypeVariable, Tid>
 use std::rc::Rc;
 
 #[derive(Clone, Default)]
+/// Manages optional logging of displayable types to a file in a debug directory
 pub struct FileDebugLogger {
     debug_dir: Rc<Option<String>>,
 }
@@ -62,12 +63,16 @@ pub struct FileDebugLogger {
 use std::io::Write;
 
 impl FileDebugLogger {
+    /// Creates a new [FileDebugLogger] that emits files into the target debug_dir.
+    /// If the target directory is [None] then no logging will occur.
     pub fn new(debug_dir: Option<String>) -> FileDebugLogger {
         FileDebugLogger {
             debug_dir: Rc::new(debug_dir),
         }
     }
 
+    /// Logs the given displayable type into a file with name fname if
+    /// logging is enabled.
     pub fn log_to_fname<V: Display>(
         &self,
         fname: &str,
@@ -77,7 +82,7 @@ impl FileDebugLogger {
             let mut pth = PathBuf::from(debug_dir);
             pth.push(fname);
             let mut out_file = std::fs::File::create(pth)?;
-            write!(&mut out_file, "{}\n", dispalyable())?;
+            writeln!(&mut out_file, "{}", dispalyable())?;
         }
         Ok(())
     }

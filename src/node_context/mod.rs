@@ -69,6 +69,8 @@ pub fn make_node_contexts<
 }
 
 #[derive(Debug, Clone)]
+/// A [ConstantResolver] implementation that uses ghidra
+/// to map some known addresses to global variable terms.
 pub struct GhidraConstantResolver {
     global_map: Rc<BTreeMap<u64, Tid>>,
 }

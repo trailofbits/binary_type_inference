@@ -8,7 +8,6 @@ use alga::general::AbstractMagma;
 use anyhow::{anyhow, Result};
 
 use nom::{branch::alt, bytes::complete::tag, multi::separated_list0, sequence::tuple, IResult};
-use petgraph::data::DataMap;
 use petgraph::dot::Dot;
 
 use crate::graph_algos::all_simple_paths;
@@ -106,15 +105,6 @@ pub struct TypeVarControlState {
     variance: Variance,
 }
 
-impl TypeVarControlState {
-    fn get_tv(&self) -> &TypeVariable {
-        match &self.dt_var {
-            VHat::Interesting(iv) => &iv.tv,
-            VHat::Uninteresting(tv) => tv,
-        }
-    }
-}
-
 impl Display for TypeVarControlState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.dt_var, self.variance)
@@ -195,6 +185,9 @@ impl RuleContext {
         RuleContext { interesting }
     }
 
+    /// Inserts an additional type variable into the set of interesting type variables.
+    /// Type variables can become interesting in the middle of solving, for instance when we add a variable to solve
+    /// for a recursive type.
     pub fn insert_variable(&mut self, new: TypeVariable) {
         self.interesting.insert(new);
     }
@@ -636,21 +629,6 @@ impl FSA {
                 repr_vars.iter().all(|x| !x.is_prefix_of(&root))
             })
             .collect()
-    }
-
-    fn dtv_from_finite_state(fs: &FiniteState) -> Option<DerivedTypeVar> {
-        match fs {
-            FiniteState::Tv(tv) => Some(match &tv.base_var.dt_var {
-                VHat::Interesting(iv) => {
-                    DerivedTypeVar::create_with_path(iv.tv.clone(), tv.access_path.clone())
-                }
-                VHat::Uninteresting(ltv) => {
-                    DerivedTypeVar::create_with_path(ltv.clone(), tv.access_path.clone())
-                }
-            }),
-            FiniteState::Start => None,
-            FiniteState::End => None,
-        }
     }
 
     /// Removes SCC by selecting a representative node that receives a new interesting type variable.
@@ -1294,11 +1272,6 @@ impl FSA {
             }
         }
         None
-    }
-
-    fn st_to_tvar(st: &ControlState) -> &TypeVariable {
-        let ControlState::TypeVar(tv) = st;
-        tv.get_tv()
     }
 
     /// Create a non-saturated FSA for the constraint set and RuleContext

@@ -76,6 +76,7 @@ pub struct LatticeDefinition {
 }
 
 impl LatticeDefinition {
+    /// Creates a new user defined lattice from element names.
     pub fn new(
         less_than_relations_between_handles: Vec<(String, String)>,
         top_handle: String,
@@ -90,6 +91,7 @@ impl LatticeDefinition {
         }
     }
 
+    /// Gets the greatest (weakest) type name that is an integer.
     pub fn get_weakest_integral_type(&self) -> &str {
         &self.weakest_integral_type
     }

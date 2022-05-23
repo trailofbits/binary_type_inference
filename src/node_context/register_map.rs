@@ -27,7 +27,7 @@ pub struct RegisterContext {
 impl Display for RegisterContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (v, tset) in self.mapping.iter() {
-            write!(f, "{}: {}\n", v.name, tset)?;
+            writeln!(f, "{}: {}", v.name, tset)?;
         }
         Ok(())
     }
@@ -37,13 +37,6 @@ impl RegisterContext {
     /// Creates a new register context that can answer register access queries from a reaching definitions [NodeValue].
     pub fn new(mapping: BTreeMap<Variable, TermSet>) -> RegisterContext {
         RegisterContext { mapping }
-    }
-
-    fn create_empty_var_name(
-        _var: &Variable,
-        vman: &mut crate::constraints::VariableManager,
-    ) -> TypeVariable {
-        vman.fresh()
     }
 
     fn generate_multi_def_constraint(
@@ -68,6 +61,7 @@ impl RegisterContext {
         }
     }
 
+    /// Gets the underyling mapping for this context, mapping a variable to a set of terms.
     pub fn get_register_context(&self) -> &BTreeMap<Variable, TermSet> {
         &self.mapping
     }

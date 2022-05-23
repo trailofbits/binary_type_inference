@@ -30,6 +30,7 @@ use crate::{
 };
 
 // TODO(ian): dont use the tid filter and instead lookup the set of target nodes to traverse or use intraproc graphs. This is ineffecient
+/// The context needed to generate and simplify typing constraints for each scc in a callgraph of a cwe checker project.
 pub struct Context<'a, 'b, 'c, 'd, R, P, S, C, T, U>
 where
     R: RegisterMapping,
@@ -49,8 +50,13 @@ where
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
+/// The subtyping constraints for a single SCC.
+/// Hold the [Tid] of the subprocedure terms in this scc and
+/// the constraints.
 pub struct SCCConstraints {
+    /// The subprocedure terms that make up this scc
     pub scc: Vec<Tid>,
+    /// The constraints for this scc.
     pub constraints: ConstraintSet,
 }
 
@@ -230,6 +236,8 @@ where
     }
 }
 
+/// The info needed about a type lattice to generate
+/// scc constraints.
 pub struct LatticeInfo<'c, T, U> {
     lattice: &'c T,
     type_lattice_elements: HashSet<TypeVariable>,
@@ -237,6 +245,7 @@ pub struct LatticeInfo<'c, T, U> {
 }
 
 impl<'c, T, U> LatticeInfo<'c, T, U> {
+    /// Creates a new [LatticeInfo] from a given lattice, its elements, and the greates integer type.
     pub fn new(
         lattice: &'c T,
         type_lattice_elements: HashSet<TypeVariable>,
@@ -383,6 +392,7 @@ where
     U: NamedLatticeElement,
     T: NamedLattice<U>,
 {
+    /// Creates a new scc constraint generation context.
     pub fn new<'a, 'b, 'c, 'd>(
         cg: CallGraph,
         graph: &'a Graph<'a>,
@@ -407,6 +417,8 @@ where
         }
     }
 
+    /// Runs the computation, generating FSA simplified scc constraints for each.
+    /// Temporary sketches are created to propogate pointer information.
     pub fn get_simplified_constraints(&mut self) -> anyhow::Result<Vec<SCCConstraints>> {
         self.debug_dir.log_to_fname("interesting_vars", &|| {
             self.rule_context

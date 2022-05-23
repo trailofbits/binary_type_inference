@@ -3,7 +3,8 @@
 //! Utilizes the [CWE checker pointer analysis](cwe_checker_lib::analysis::pointer_inference), reaching definitions, and parameter analysis from ghidra
 //! to generate subtyping constraints of the form used in [retypd](https://github.com/GrammaTech/retypd).
 #![warn(missing_docs)]
-mod analysis;
+/// Custom fixpoint analyses used by type inference.
+pub mod analysis;
 
 /// Generates constraints as specified in [constraints] from an IR [Project](cwe_checker_lib::intermediate_representation::Project)
 pub mod constraint_generation;
@@ -30,11 +31,13 @@ pub mod graph_algos;
 pub mod lowering;
 
 /// Protobuf ctypes
+#[allow(missing_docs)]
 pub mod ctypes {
     include!(concat!(env!("OUT_DIR"), "/ctypes.rs"));
 }
 
 /// Protobuf constraints
+#[allow(missing_docs)]
 pub mod pb_constraints {
     include!(concat!(env!("OUT_DIR"), "/constraints.rs"));
 }
@@ -47,8 +50,7 @@ pub mod inference_job;
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::{BTreeSet, HashMap},
-        iter::FromIterator,
+        collections::HashMap,
         path::{Path, PathBuf},
     };
 
@@ -57,7 +59,7 @@ mod tests {
         solver::{type_lattice::CustomLatticeElement, type_sketch::SketchGraph},
     };
     use crate::{
-        constraints::{ConstraintSet, SubtypeConstraint, TyConstraint},
+        constraints::{SubtypeConstraint, TyConstraint},
         inference_job::{InferenceJob, JobDefinition, JsonDef},
         lowering::CType,
         solver::type_sketch::LatticeBounds,
@@ -73,17 +75,8 @@ mod tests {
 
     struct ExpectedOutputFiles {
         constraint_gen: Option<String>,
-        constraint_simplification: Option<String>,
         ctype_mapping: Option<String>,
         sketch_properties: Vec<Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>>,
-    }
-
-    fn parse_constraint_set_test(fname: &str) -> anyhow::Result<ConstraintSet> {
-        let f = std::fs::File::open(fname)?;
-        let v: Vec<SubtypeConstraint> = serde_json::from_reader(f)?;
-        Ok(ConstraintSet::from(BTreeSet::from_iter(
-            v.into_iter().map(|x| TyConstraint::SubTy(x)),
-        )))
     }
 
     use serde::{Deserialize, Serialize};
@@ -117,7 +110,6 @@ mod tests {
 
     struct ExpectedOutputs {
         constraint_gen: Option<Vec<DeserSCCCons>>,
-        constraint_simplification: Option<ConstraintSet>,
         ctype_mapping: Option<HashMap<NodeIndex, CType>>,
         sketch_properties: Vec<Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>>,
     }
@@ -130,17 +122,12 @@ mod tests {
                 .constraint_gen
                 .map_or(Ok(None), |op| parse_scc_constraints(&op).map(Some))?;
 
-            let constrain_simpl_expec = value
-                .constraint_simplification
-                .map_or(Ok(None), |op| parse_constraint_set_test(&op).map(Some))?;
-
             let ctype_mapping = value
                 .ctype_mapping
                 .map_or(Ok(None), |op| parse_ctype_mapping(&op).map(Some))?;
 
             Ok(ExpectedOutputs {
                 constraint_gen: expected_gen,
-                constraint_simplification: constrain_simpl_expec,
                 ctype_mapping,
                 sketch_properties: value.sketch_properties,
             })
@@ -297,6 +284,8 @@ mod tests {
             self
         }
 
+        // Currently not checking any sketch properties but good to have.
+        #[allow(dead_code)]
         fn add_sketch_property(
             &mut self,
             t: Box<dyn Fn(&SketchGraph<LatticeBounds<CustomLatticeElement>>)>,
@@ -325,6 +314,8 @@ mod tests {
             self
         }
 
+        // Currently we arent checking ctypes in tests but we should in the future.
+        #[allow(dead_code)]
         fn set_expec_ctype_mapping(&mut self, v: String) -> &mut Self {
             self.expec_ctype_mapping = Some(v);
             self
@@ -354,9 +345,6 @@ mod tests {
                 expected_outputs: ExpectedOutputFiles {
                     constraint_gen: self
                         .expec_constraint_gen
-                        .map(|x| Self::expected_data_dir(x)),
-                    constraint_simplification: self
-                        .expec_constraint_simplification
                         .map(|x| Self::expected_data_dir(x)),
                     ctype_mapping: self.expec_ctype_mapping.map(|x| Self::expected_data_dir(x)),
                     sketch_properties: self.sketch_properties,

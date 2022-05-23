@@ -2,7 +2,6 @@ use binary_type_inference::{
     inference_job::{InferenceJob, JobDefinition, JsonDef, ProtobufDef},
     solver::type_lattice::NamedLatticeElement,
 };
-use byteorder::{BigEndian, ReadBytesExt};
 use clap::{App, Arg};
 
 use petgraph::dot::Dot;
@@ -10,35 +9,9 @@ use prost::Message;
 
 use std::convert::TryInto;
 use std::{
-    io::{Read, Write},
+    io::Write,
     path::{Path, PathBuf},
 };
-
-fn parse_collection_from_file<T: Message + Default>(filename: &str) -> anyhow::Result<Vec<T>> {
-    let mut f = std::fs::File::open(filename)?;
-    let mut total = Vec::new();
-    loop {
-        let res = f.read_u32::<BigEndian>();
-
-        match res {
-            Err(err) => {
-                if matches!(err.kind(), std::io::ErrorKind::UnexpectedEof) {
-                    return Ok(total);
-                } else {
-                    return Err(anyhow::Error::from(err));
-                }
-            }
-            Ok(sz) => {
-                let mut buf = vec![0; sz as usize];
-                f.read_exact(&mut buf)?;
-
-                let res = T::decode(buf.as_ref())
-                    .map_err(|_err| anyhow::anyhow!("Decoding error for type T"))?;
-                total.push(res);
-            }
-        }
-    }
-}
 
 pub fn immutably_push<P>(pb: &PathBuf, new_path: P) -> PathBuf
 where

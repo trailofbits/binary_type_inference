@@ -6,18 +6,14 @@ use std::{
 
 use alga::general::{AbstractMagma, Additive};
 
-use itertools::Itertools;
 use petgraph::{
-    data::{Build, DataMap},
     graph::{EdgeIndex, NodeIndex},
     stable_graph::StableDiGraph,
-    visit::{Dfs, IntoEdgeReferences, IntoEdgesDirected, Walker},
+    visit::{Dfs, IntoEdgeReferences, Walker},
     EdgeDirection::Outgoing,
 };
 
 use petgraph::visit::EdgeRef;
-
-use crate::solver::dfa_operations::DFA;
 
 use super::{explore_paths, find_node};
 
@@ -68,10 +64,12 @@ where
     E: Clone,
     N: Clone + std::cmp::Eq + Hash,
 {
+    /// Get the set of [NodeIndex] reachable from the start index along forward edges.
     pub fn get_reachable_idxs(&self, idx: NodeIndex) -> BTreeSet<NodeIndex> {
         Dfs::new(&self.grph, idx).iter(&self.grph).collect()
     }
 
+    /// Extracts the subgraph of nodes and edges traversable from the start node, only preserving members of the mapping that remain.
     pub fn get_reachable_subgraph(&self, idx: NodeIndex) -> MappingGraph<W, N, E> {
         let reachable_idxs: BTreeSet<_> = self.get_reachable_idxs(idx);
         let filtered_grph = self.grph.filter_map(
@@ -113,6 +111,9 @@ impl<
         E: Hash + Eq + Clone,
     > MappingGraph<W, N, E>
 {
+    /// replaces the node represented by this hash key with a new graph structure.
+    /// Edges into the subgraph are found by looking up the path from the key node to the old edge target
+    /// in the new replacement graph.
     pub fn replace_node(&mut self, key: N, grph: MappingGraph<W, N, E>) {
         let orig_var_idx = *self
             .get_node(&key)
@@ -233,6 +234,7 @@ impl<
         E: Hash + Eq + Clone,
     > MappingGraph<W, N, E>
 {
+    /// Adds a node weight by key, either by applying the magma operator to the prior weight to merge them, or by creating a new node.
     pub fn add_node(&mut self, key: N, weight: W) -> NodeIndex {
         if let Some(x) = self.nodes.get(&key) {
             let old_weight = self.grph.node_weight_mut(*x).unwrap();
@@ -269,6 +271,9 @@ impl<
         self.reprs_to_graph_node.remove(&old_idx);
     }
 
+    /// Merges two nodes, if either doesnt exist then they are added to the other's representing set.
+    /// If both exist the nodes are merged together by adding a node with all the old edges pointing to it.
+    /// The weights are also merged with the magma operator.
     pub fn merge_nodes(&mut self, key1: N, key2: N) {
         match (
             self.nodes.get(&key1).cloned(),
@@ -344,6 +349,7 @@ impl<
         }
     }
 
+    /// Removes a node by index if it exsits and returns the associated weight.
     pub fn remove_node_by_idx(&mut self, idx: NodeIndex) -> Option<W> {
         let nd_set = self.reprs_to_graph_node.remove(&idx);
         if let Some(nd_set) = nd_set {
@@ -355,6 +361,7 @@ impl<
         self.grph.remove_node(idx)
     }
 
+    /// Removes a node by key and returns the weight.
     pub fn remove_node(&mut self, node: &N) -> Option<W> {
         let idx = self.nodes.get(node);
         if let Some(&idx) = idx {
@@ -480,6 +487,7 @@ impl<W: std::cmp::PartialEq + Clone, N: Clone + Hash + Eq + Ord, E: Hash + Eq + 
 }
 
 impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> MappingGraph<W, N, E> {
+    /// Creates a new empty [MappingGraph].
     pub fn new() -> MappingGraph<W, N, E> {
         MappingGraph {
             grph: StableDiGraph::new(),
@@ -488,6 +496,7 @@ impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> MappingGr
         }
     }
 
+    /// Gets the group of node keys represented by this index (may be empty)
     pub fn get_group_for_node(&self, idx: NodeIndex) -> BTreeSet<N> {
         self.reprs_to_graph_node
             .get(&idx)
@@ -495,18 +504,22 @@ impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> MappingGr
             .unwrap_or(BTreeSet::new())
     }
 
+    /// Gets the underlying [petgraph]
     pub fn get_graph(&self) -> &StableDiGraph<W, E> {
         &self.grph
     }
 
+    /// Gets a mutable reference ot the underlying graph
     pub fn get_graph_mut(&mut self) -> &mut StableDiGraph<W, E> {
         &mut self.grph
     }
 
+    /// Gets the mapping from node key to [NodeIndex]
     pub fn get_node_mapping(&self) -> &HashMap<N, NodeIndex> {
         &self.nodes
     }
 
+    /// Returns an iterator of all edges directly going from a to b.
     pub fn edges_between(
         &self,
         a: NodeIndex,
@@ -518,6 +531,7 @@ impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> MappingGr
             .map(|x| x.id())
     }
 
+    /// Adds an edge between a and b with weight e if there is not already an edge between those nodes with an equivalent weight.
     pub fn add_edge(&mut self, a: NodeIndex, b: NodeIndex, e: E) -> bool {
         if !self
             .edges_between(a, b)
@@ -530,6 +544,7 @@ impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> MappingGr
         }
     }
 
+    /// Gets the [NodeIndex] for the graph node representing the given key.
     pub fn get_node(&self, wt: &N) -> Option<&NodeIndex> {
         self.nodes.get(wt)
     }

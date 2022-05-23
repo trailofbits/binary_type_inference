@@ -11,11 +11,7 @@ use std::convert::TryInto;
 
 use serde::{Deserialize, Serialize};
 
-use petgraph::{
-    graph::NodeIndex,
-    visit::{EdgeRef, IntoEdgesDirected},
-    EdgeDirection,
-};
+use petgraph::{graph::NodeIndex, visit::EdgeRef, EdgeDirection};
 
 use crate::{
     constraints::FieldLabel,
@@ -25,21 +21,28 @@ use crate::{
 use std::collections::BinaryHeap;
 use std::convert::TryFrom;
 
+/// Representation of a automata type lowered to a ctype
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum CType {
     /// Primitive means the node has a primitive type associated with its label
     Primitive(String),
+    /// A pointer to another ctype
     Pointer {
+        /// The target type
         target: Box<CType>,
     },
+    /// An alias to the type of a different node
     Alias(NodeIndex),
-    /// Rperesents the fields of a structure. These fields are guarenteed to not overlap, however, may be out of order and require padding.
+    /// Reperesents the fields of a structure. These fields are guarenteed to not overlap, however, may be out of order and require padding.
     Structure(Vec<Field>),
     /// Represents the set of parameters and return type. The parameters may be out of order or missing types. One should consider missing parameters as
     Function {
+        /// The parameters of the function
         params: Vec<Parameter>,
+        /// The return type of the function
         return_ty: Option<Box<CType>>,
     },
+    /// A union of several ctypes
     Union(BTreeSet<Box<CType>>),
 }
 
@@ -324,6 +327,7 @@ fn field_to_protobuf(internal_field: Field) -> ctypes::Field {
     field
 }
 
+/// Converts an in memory [CType] to a protobuf representation of the enum
 pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
     match ct {
         CType::Alias(tgt) => {
@@ -381,6 +385,7 @@ fn convert_ctype_to_protobuf(internal_ty: CType) -> ctypes::CType {
 }
 
 // TODO(ian): dont unwrap u32s
+/// Converts a mapping from NodeIndex's to CTypes to a protobuf representation [CTypeMapping].
 pub fn convert_mapping_to_profobuf(mp: HashMap<NodeIndex, CType>) -> CTypeMapping {
     let mut mapping = CTypeMapping::default();
     mp.into_iter().for_each(|(idx, ctype)| {
@@ -393,12 +398,17 @@ pub fn convert_mapping_to_profobuf(mp: HashMap<NodeIndex, CType>) -> CTypeMappin
     mapping
 }
 
+/// The context needed to attempt to lower a node to a ctype.
+/// The heuristics need to know the original outparam locations for
+/// subprocedure nodes, and a default lattice element to use for unknown types.
 pub struct LoweringContext<U: NamedLatticeElement> {
     out_params: BTreeMap<NodeIndex, Vec<Arg>>,
     default_lattice_elem: LatticeBounds<U>,
 }
 
 impl<U: NamedLatticeElement> LoweringContext<U> {
+    /// Creates a new type lowering context from a mapping from term to node,
+    /// a mapping from subprocedure term to out parameters and a defualt lattice element.
     pub fn new(
         tid_to_node_index: &HashMap<Tid, NodeIndex>,
         out_param_mapping: &HashMap<Tid, Vec<Arg>>,
