@@ -1160,9 +1160,6 @@ where
             .unwrap_or(orig_repr.clone());
 
         call_site_type.label_dtvs(&orig_repr);
-        // Check that we still have the entry labeled
-        assert!(call_site_type.get_entry().index() >= 0);
-
         // if an actual is equal to the replacement type then we can bind that parameter to the type.
 
         target_scc_repr.replace_dtv(&target_dtv, call_site_type.clone());
