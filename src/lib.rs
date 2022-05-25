@@ -46,6 +46,9 @@ pub mod pb_constraints {
 /// simplified constraints, and lowered types.
 pub mod inference_job;
 
+/// Implements comparison operations over type sketches to record metrics on conservativeness and precision
+pub mod evaluation;
+
 // Integration tests
 #[cfg(test)]
 mod tests {
