@@ -1766,13 +1766,13 @@ where
 }
 
 impl<U: std::cmp::PartialEq> Sketch<U> {
-    fn get_graph(&self) -> &MappingGraph<U, DerivedTypeVar, FieldLabel> {
+    pub fn get_graph(&self) -> &MappingGraph<U, DerivedTypeVar, FieldLabel> {
         &self.quotient_graph
     }
 }
 
 impl<U: std::cmp::PartialEq> Sketch<U> {
-    fn get_entry(&self) -> NodeIndex {
+    pub fn get_entry(&self) -> NodeIndex {
         *self
             .quotient_graph
             .get_node(&self.representing)
@@ -2032,11 +2032,26 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         }
     }
 
-    fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
+    pub fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
         self.binop_sketch(other, &U::meet, &union)
     }
 
-    fn union(&self, other: &Sketch<U>) -> Sketch<U> {
+    pub fn empty_language(&self) -> bool {
+        let dfa = self.construct_dfa(&self.alphabet(&self));
+        dfa_operations::is_empty_language(&dfa)
+    }
+
+    pub fn difference(&self, other: &Sketch<U>) -> Sketch<U> {
+        self.binop_sketch(
+            other,
+            &|uself, uother| uself.clone(),
+            &|self_dfa, other_dfa| {
+                dfa_operations::intersection(self_dfa, &dfa_operations::complement(other_dfa))
+            },
+        )
+    }
+
+    pub fn union(&self, other: &Sketch<U>) -> Sketch<U> {
         self.binop_sketch(other, &U::join, &intersection)
     }
 }
