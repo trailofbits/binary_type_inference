@@ -13,6 +13,8 @@ use std::{
     rc::Rc,
 };
 
+use super::type_sketch::SketchLabelElement;
+
 /// A named lattice elment can be cloned and also has a string name.
 pub trait NamedLatticeElement: Lattice + Clone {
     /// The name of this lattice element.
@@ -76,6 +78,13 @@ pub struct LatticeDefinition {
 }
 
 impl LatticeDefinition {
+    /// Merge two [LatticeDefinitions]'
+    pub fn merge_with_other(mut self, def: LatticeDefinition) -> anyhow::Result<LatticeDefinition> {
+        self.less_than_relations_between_handles
+            .extend(def.less_than_relations_between_handles.into_iter());
+        Ok(self)
+    }
+
     /// Creates a new user defined lattice from element names.
     pub fn new(
         less_than_relations_between_handles: Vec<(String, String)>,
@@ -270,7 +279,7 @@ impl LatticeDefinition {
 /// Sets up a lattice as described by the user's definition
 /// This is an ineffecient representation, block decomposition of lattices would be more effecient.
 /// currently doesnt check any lattice laws, good luck
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CustomLatticeElement {
     top: String,
     bot: String,

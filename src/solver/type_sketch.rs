@@ -25,6 +25,7 @@ use petgraph::{
     graph::NodeIndex,
     graph::{EdgeIndex, Graph},
 };
+use serde::{Deserialize, Serialize};
 use EdgeDirection::Outgoing;
 
 use crate::analysis::callgraph::CallGraph;
@@ -50,12 +51,20 @@ struct EdgeImplication {
     edge: (NodeIndex, NodeIndex),
 }
 
+/// The minimum type capabilities required to be used as a type bound
+pub trait SketchLabelElement:
+    std::cmp::PartialEq + Lattice + Clone + AbstractMagma<Additive> + Display
+{
+}
+
 /// Labels for the sketch graph that mantain both an upper bound and lower bound on merged type
-#[derive(Clone, PartialEq, Debug, Eq)]
+#[derive(Clone, PartialEq, Debug, Eq, Serialize, Deserialize)]
 pub struct LatticeBounds<T: Clone + Lattice> {
     upper_bound: T,
     lower_bound: T,
 }
+
+impl<T> SketchLabelElement for LatticeBounds<T> where T: Clone + Lattice + Display {}
 
 impl<T> Display for LatticeBounds<T>
 where
@@ -1653,7 +1662,8 @@ impl<U: Display + Clone + std::cmp::PartialEq + AbstractMagma<Additive>> SketchG
         self.get_representations_by_dtv(&|canidate| target_calee == canidate.to_callee())
     }
 
-    fn get_representing_sketch(&self, dtv: DerivedTypeVar) -> Vec<(NodeIndex, Sketch<U>)> {
+    /// Gets the representing node and entry index to a
+    pub fn get_representing_sketch(&self, dtv: DerivedTypeVar) -> Vec<(NodeIndex, Sketch<U>)> {
         let target_calee = dtv.to_callee();
         self.get_representations_by_dtv(&|canidate| &target_calee == canidate)
     }
@@ -1674,7 +1684,7 @@ impl Deref for ReprMapping {
 }
 
 /// A reachable subgraph of a sketch graph, representing a given root derived type var.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Sketch<U: std::cmp::PartialEq> {
     quotient_graph: MappingGraph<U, DerivedTypeVar, FieldLabel>,
     representing: DerivedTypeVar,
