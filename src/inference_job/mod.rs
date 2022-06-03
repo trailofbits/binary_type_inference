@@ -174,6 +174,11 @@ fn parse_collection_from_file<T: Message + Default, R: Read>(mut r: R) -> anyhow
 }
 
 impl InferenceJob {
+    /// Get the lattice for this inference job
+    pub fn get_lattice(&self) -> &EnumeratedNamedLattice {
+        &self.lattice
+    }
+
     /// Parses a binary to its bytes.
     pub fn parse_binary(bin_path: &str) -> anyhow::Result<Vec<u8>> {
         std::fs::read(bin_path).map_err(|err| anyhow::Error::from(err).context("parsing_binary"))
@@ -194,13 +199,27 @@ impl InferenceJob {
         Ok(ir)
     }
 
-    /// Parses the lattice to a [EnumeratedLattice] and the type variable representing the weakest possible integer type (the greatest integer type on the lattice).
-    fn parse_lattice_json(
+    /// Parse lattice definition from lattice
+    pub fn parse_lattice_json_to_lattice_def(
         lattice_json: &str,
-    ) -> anyhow::Result<(EnumeratedNamedLattice, TypeVariable)> {
+    ) -> anyhow::Result<LatticeDefinition> {
         let lattice_fl = std::fs::File::open(lattice_json)?;
         let lattice_def: LatticeDefinition = serde_json::from_reader(lattice_fl)
             .map_err(|e| anyhow::Error::from(e).context("lattice json"))?;
+        Ok(lattice_def)
+    }
+
+    /// Parses the lattice to a [EnumeratedLattice] and the type variable representing the weakest possible integer type (the greatest integer type on the lattice).
+    pub fn parse_lattice_json(
+        lattice_json: &str,
+        additional_lattices: Vec<LatticeDefinition>,
+    ) -> anyhow::Result<(EnumeratedNamedLattice, TypeVariable)> {
+        let mut lattice_def = Self::parse_lattice_json_to_lattice_def(lattice_json)?;
+
+        for lat in additional_lattices {
+            lattice_def = lattice_def.merge_with_other(lat)?;
+        }
+
         let named_lattice = lattice_def.generate_lattice();
         Ok((
             named_lattice,
@@ -209,7 +228,7 @@ impl InferenceJob {
     }
 
     /// Parses a set of additional subtyping constraints
-    fn parse_additional_constraints<T: InferenceParsing<AdditionalConstraint>>(
+    pub fn parse_additional_constraints<T: InferenceParsing<AdditionalConstraint>>(
         additional_constraints_file: &str,
     ) -> anyhow::Result<BTreeMap<Tid, ConstraintSet>> {
         let constraint_file =
@@ -307,7 +326,7 @@ impl InferenceJob {
         Ok(nd_context)
     }
 
-    fn get_lattice_elems(&self) -> impl Iterator<Item = TypeVariable> + '_ {
+    pub fn get_lattice_elems(&self) -> impl Iterator<Item = TypeVariable> + '_ {
         self.lattice
             .get_nds()
             .iter()
@@ -478,6 +497,20 @@ impl InferenceJob {
         }
     }
 
+    /// Infer the universal type graph, joining all sketches together.
+    pub fn infer_labeled_graph(
+        &mut self,
+        // debug_dir: &PathBuf,
+    ) -> anyhow::Result<SketchGraph<LatticeBounds<CustomLatticeElement>>> {
+        self.recover_additional_shared_returns();
+        let cons = self.get_simplified_constraints()?;
+
+        // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.
+
+        let labeled_graph = self.get_labeled_sketch_graph(cons)?;
+        Ok(labeled_graph)
+    }
+
     /// Applies all default analyses to compute types. First, tailcall returns are fixed, then simplified scc constraints are generated.
     /// These constraints are transformed into a sketch supergraph where each type variable is represented by a node with edges for its capabilities.
     /// These nodes are then lowered to a mapping from node to ctype.
@@ -488,12 +521,7 @@ impl InferenceJob {
         SketchGraph<LatticeBounds<CustomLatticeElement>>,
         HashMap<NodeIndex, CType>,
     )> {
-        self.recover_additional_shared_returns();
-        let cons = self.get_simplified_constraints()?;
-
-        // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.
-
-        let labeled_graph = self.get_labeled_sketch_graph(cons)?;
+        let labeled_graph = self.infer_labeled_graph()?;
 
         let lowered = self.lower_labeled_sketch_graph(&labeled_graph)?;
         Ok((labeled_graph, lowered))
@@ -508,12 +536,14 @@ impl InferenceJob {
     pub fn parse<T: InferenceParsing<AdditionalConstraint> + InferenceParsing<Tid>>(
         def: &JobDefinition,
         debug_dir: Option<String>,
+        additional_lattices: Vec<LatticeDefinition>,
     ) -> anyhow::Result<InferenceJob> {
         let bin = Self::parse_binary(&def.binary_path).with_context(|| "Trying to parse binary")?;
         let proj = Self::parse_project(&def.ir_json_path, &bin)
             .with_context(|| "Trying to parse project")?;
-        let (lat, weakest_integral_type) = Self::parse_lattice_json(&def.lattice_json)
-            .with_context(|| "Trying to parse lattice")?;
+        let (lat, weakest_integral_type) =
+            Self::parse_lattice_json(&def.lattice_json, additional_lattices)
+                .with_context(|| "Trying to parse lattice")?;
         let additional_constraints =
             Self::parse_additional_constraints::<T>(&def.additional_constraints_file)
                 .with_context(|| "Trying to parse additional constraints")?;

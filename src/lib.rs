@@ -46,9 +46,6 @@ pub mod pb_constraints {
 /// simplified constraints, and lowered types.
 pub mod inference_job;
 
-/// Implements comparison operations over type sketches to record metrics on conservativeness and precision
-pub mod evaluation;
-
 // Integration tests
 #[cfg(test)]
 mod tests {
@@ -176,9 +173,12 @@ mod tests {
 
     fn run_test_case(tc: TestCase) {
         init();
-        let mut job =
-            InferenceJob::parse::<JsonDef>(&tc.job_def, std::env::var("BTI_DEBUG_DIR").ok())
-                .unwrap();
+        let mut job = InferenceJob::parse::<JsonDef>(
+            &tc.job_def,
+            std::env::var("BTI_DEBUG_DIR").ok(),
+            vec![],
+        )
+        .unwrap();
         job.recover_additional_shared_returns();
 
         let expected_values = ExpectedOutputs::try_from(tc.expected_outputs)

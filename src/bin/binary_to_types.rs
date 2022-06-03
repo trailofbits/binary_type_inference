@@ -71,9 +71,9 @@ fn main() -> anyhow::Result<()> {
 
     let dbg_dir = matches.value_of("debug_out_dir").map(|x| x.to_owned());
     let mut if_job = if matches.is_present("human_readable_input") {
-        InferenceJob::parse::<JsonDef>(&job_def, dbg_dir)
+        InferenceJob::parse::<JsonDef>(&job_def, dbg_dir, vec![])
     } else {
-        InferenceJob::parse::<ProtobufDef>(&job_def, dbg_dir)
+        InferenceJob::parse::<ProtobufDef>(&job_def, dbg_dir, vec![])
     }?;
 
     let (grph, ctypes) = if_job.infer_ctypes()?;

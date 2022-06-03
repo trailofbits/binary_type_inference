@@ -14,19 +14,20 @@ use petgraph::{
 };
 
 use petgraph::visit::EdgeRef;
+use serde::{Deserialize, Serialize};
 
 use super::{explore_paths, find_node};
 
 // TODO(ian): use this abstraction for the transducer
 /// A mapping graph allows the lookup of nodes by a hashable element. A node can also be queried for which hashable element it represents.
-#[derive(Clone)]
-pub struct MappingGraph<W, N, E> {
+#[derive(Clone, Serialize, Deserialize)]
+pub struct MappingGraph<W, N: Ord + Hash + Eq, E> {
     grph: StableDiGraph<W, E>,
     nodes: HashMap<N, NodeIndex>,
     reprs_to_graph_node: HashMap<NodeIndex, BTreeSet<N>>,
 }
 
-impl<W, N: Debug, E> MappingGraph<W, N, E> {
+impl<W, N: Ord + Hash + Eq + Debug, E> MappingGraph<W, N, E> {
     /// Produces an unlabeled mapping graph from a DFA, actually we should just take the stable digraph here.
     pub fn from_dfa_and_labeling(dfa: StableDiGraph<W, E>) -> MappingGraph<W, N, E> {
         MappingGraph {
@@ -62,7 +63,7 @@ impl<W, N, E> MappingGraph<W, N, E>
 where
     W: Clone,
     E: Clone,
-    N: Clone + std::cmp::Eq + Hash,
+    N: Clone + std::cmp::Eq + Hash + Ord,
 {
     /// Get the set of [NodeIndex] reachable from the start index along forward edges.
     pub fn get_reachable_idxs(&self, idx: NodeIndex) -> BTreeSet<NodeIndex> {
