@@ -1063,7 +1063,7 @@ where
                             *orig_loc,
                             pth.iter(),
                         );
-                        let repr_scc = associated_scc_tids.clone();
+                        let repr_scc = associated_scc_tids;
 
                         let from_scc_repr = self.get_built_sketch_from_scc(&callsite_loc.scc);
                         let maybe_from_node = find_node(
@@ -1193,7 +1193,7 @@ where
     fn collect_aliases_for_scc(
         &self,
         condensed: &Graph<Vec<Tid>, (), Directed>,
-        associated_scc_tids: &Vec<Tid>,
+        associated_scc_tids: &[Tid],
         target_idx: NodeIndex,
     ) -> BTreeMap<TypeLocation, TypeLocation> {
         let orig_repr = self.get_built_sketch_from_scc(associated_scc_tids);
@@ -1221,7 +1221,7 @@ where
                 (
                     TypeLocation::SCCLoc(SCCLocation {
                         target_path: *src_idx,
-                        scc: associated_scc_tids.clone(),
+                        scc: associated_scc_tids.to_vec(),
                     }),
                     TypeLocation::GlobalLoc(GlobalLocation {
                         globvar: gdtv.get_base_variable().clone(),
