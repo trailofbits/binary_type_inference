@@ -13,11 +13,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub fn immutably_push<P>(pb: &PathBuf, new_path: P) -> PathBuf
+pub fn immutably_push<P>(pb: &Path, new_path: P) -> PathBuf
 where
     P: AsRef<Path>,
 {
-    let mut npath = pb.clone();
+    let mut npath = pb.to_path_buf();
     npath.push(new_path);
     npath
 }
@@ -87,7 +87,7 @@ fn main() -> anyhow::Result<()> {
                     .into_iter()
                     .next()
                     .map(|maybe| format!("{}", maybe))
-                    .unwrap_or("".to_owned()),
+                    .unwrap_or_else(|| "".to_owned()),
                 idx.index(),
                 nd_elem.get_upper().get_name()
             )
@@ -109,12 +109,16 @@ fn main() -> anyhow::Result<()> {
 
         let mapping = if_job.get_graph_labeling(&grph);
         for (k, v) in mapping {
-            let mut tid_to_node_idx = binary_type_inference::ctypes::TidToNodeIndex::default();
-            tid_to_node_idx.node_index = v.index().try_into().unwrap();
-            let mut tid = binary_type_inference::ctypes::Tid::default();
-            tid.address = k.address.clone();
-            tid.name = k.get_str_repr().to_owned();
-            tid_to_node_idx.tid = Some(tid);
+            let tid = binary_type_inference::ctypes::Tid {
+                name: k.get_str_repr().to_owned(),
+                address: k.address.clone(),
+            };
+
+            let tid_to_node_idx = binary_type_inference::ctypes::TidToNodeIndex {
+                node_index: v.index().try_into().unwrap(),
+                tid: Some(tid),
+            };
+
             pb.type_variable_repr_nodes.push(tid_to_node_idx);
         }
 

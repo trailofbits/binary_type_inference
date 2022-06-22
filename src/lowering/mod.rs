@@ -143,7 +143,7 @@ fn translate_field(field: &constraints::Field, idx: NodeIndex) -> Option<Field> 
     })
 }
 
-fn schedule_structures(fields: &Vec<Field>) -> Vec<CType> {
+fn schedule_structures(fields: &[Field]) -> Vec<CType> {
     // So the goal here is to select the minimal partitioning of these fields into structures.
     // Here are the rules:
     // 1. A structure cannot contain two fields that overlap
@@ -151,7 +151,7 @@ fn schedule_structures(fields: &Vec<Field>) -> Vec<CType> {
 
     // This is simply interval scheduling with one caveat. If a time block overlaps but is completely contained within the ending field we can just ignore
     // That field
-    let mut sorted_fields = fields.clone();
+    let mut sorted_fields = fields.to_vec();
     sorted_fields.sort_by_key(|x| x.byte_offset);
 
     let mut hp: BinaryHeap<Classroom> = BinaryHeap::new();
@@ -238,10 +238,7 @@ fn build_alias_types<U: NamedLatticeElement>(
         .map(|e| e.target())
         .collect::<BTreeSet<_>>();
 
-    unique_tgts
-        .into_iter()
-        .map(CType::Alias)
-        .collect()
+    unique_tgts.into_iter().map(CType::Alias).collect()
 }
 
 fn build_pointer_types<U: NamedLatticeElement>(
@@ -277,9 +274,7 @@ fn collect_params<U: NamedLatticeElement>(
         .edges_directed(nd, EdgeDirection::Outgoing)
         .fold(BTreeMap::new(), |mut acc, elem| {
             if let Some(idx) = get_label_idx(elem.weight()) {
-                acc.entry(idx)
-                    .or_insert_with(Vec::new)
-                    .push(elem.target());
+                acc.entry(idx).or_insert_with(Vec::new).push(elem.target());
 
                 acc
             } else {
@@ -313,28 +308,26 @@ fn collect_params<U: NamedLatticeElement>(
 }
 
 fn param_to_protofbuf(internal_param: Parameter) -> ctypes::Parameter {
-    let mut param = ctypes::Parameter::default();
-    param.parameter_index = internal_param.index.try_into().unwrap();
-    param.r#type = Some(convert_ctype_to_protobuf(internal_param.type_index));
-    param
+    ctypes::Parameter {
+        parameter_index: internal_param.index.try_into().unwrap(),
+        r#type: Some(convert_ctype_to_protobuf(internal_param.type_index)),
+    }
 }
 
 fn field_to_protobuf(internal_field: Field) -> ctypes::Field {
-    let mut field = ctypes::Field::default();
-    field.bit_size = internal_field.bit_sz.try_into().unwrap();
-    field.byte_offset = internal_field.byte_offset.try_into().unwrap();
-    field.r#type = Some(convert_ctype_to_protobuf(internal_field.type_index));
-    field
+    ctypes::Field {
+        bit_size: internal_field.bit_sz.try_into().unwrap(),
+        byte_offset: internal_field.byte_offset.try_into().unwrap(),
+        r#type: Some(convert_ctype_to_protobuf(internal_field.type_index)),
+    }
 }
 
 /// Converts an in memory [CType] to a protobuf representation of the enum
 pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
     match ct {
-        CType::Alias(tgt) => {
-            let mut alias = ctypes::Alias::default();
-            alias.to_type = tgt.index().try_into().unwrap();
-            ctypes::c_type::InnerType::Alias(alias)
-        }
+        CType::Alias(tgt) => ctypes::c_type::InnerType::Alias(ctypes::Alias {
+            to_type: tgt.index().try_into().unwrap(),
+        }),
         CType::Function { params, return_ty } => {
             let mut func = ctypes::Function::default();
             params
@@ -351,14 +344,12 @@ pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
             ctypes::c_type::InnerType::Function(Box::new(func))
         }
         CType::Pointer { target } => {
-            let mut ptr = ctypes::Pointer::default();
-            ptr.to_type = Some(Box::new(convert_ctype_to_protobuf(*target)));
-            ctypes::c_type::InnerType::Pointer(Box::new(ptr))
+            ctypes::c_type::InnerType::Pointer(Box::new(ctypes::Pointer {
+                to_type: Some(Box::new(convert_ctype_to_protobuf(*target))),
+            }))
         }
         CType::Primitive(val) => {
-            let mut prim = ctypes::Primitive::default();
-            prim.type_constant = val;
-            ctypes::c_type::InnerType::Primitive(prim)
+            ctypes::c_type::InnerType::Primitive(ctypes::Primitive { type_constant: val })
         }
         CType::Structure(fields) => {
             let mut st = ctypes::Structure::default();
@@ -379,9 +370,9 @@ pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
     }
 }
 fn convert_ctype_to_protobuf(internal_ty: CType) -> ctypes::CType {
-    let mut ty = ctypes::CType::default();
-    ty.inner_type = Some(produce_inner_types(internal_ty));
-    ty
+    ctypes::CType {
+        inner_type: Some(produce_inner_types(internal_ty)),
+    }
 }
 
 // TODO(ian): dont unwrap u32s
@@ -438,7 +429,7 @@ impl<U: NamedLatticeElement> LoweringContext<U> {
         let mut curr_off = 0;
         for (i, arg) in orig_param_locs.iter().enumerate() {
             flds.push(Field {
-                byte_offset: usize::try_from(curr_off).expect("offset should fit in usize"),
+                byte_offset: curr_off,
                 bit_sz: arg.bytesize().as_bit_length(),
                 type_index: mp
                     .get(&i)
@@ -488,8 +479,7 @@ impl<U: NamedLatticeElement> LoweringContext<U> {
                 &self.default_lattice_elem,
             )))
         } else {
-            out_params.get(0)
-                .map(|x| Box::new(x.type_index.clone()))
+            out_params.get(0).map(|x| Box::new(x.type_index.clone()))
         };
 
         if !in_params.is_empty() || !out_params.is_empty() {
@@ -531,7 +521,6 @@ impl<U: NamedLatticeElement> LoweringContext<U> {
         total_types.extend(function_types);
 
         if total_types.len() == 1 {
-            
             total_types.into_iter().next().unwrap()
         } else {
             CType::Union(total_types.into_iter().map(Box::new).collect())

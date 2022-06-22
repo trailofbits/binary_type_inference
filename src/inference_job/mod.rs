@@ -34,7 +34,7 @@ use crate::{
     },
     solver::{
         constraint_graph::RuleContext,
-        scc_constraint_generation::{self, LatticeInfo, SCCConstraints},
+        scc_constraint_generation::{self, LatticeInfo, ProgramInfo, SCCConstraints},
         type_lattice::{
             CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLattice,
         },
@@ -143,10 +143,12 @@ pub struct JsonDef;
 
 impl<T: DeserializeOwned> InferenceParsing<T> for JsonDef {
     fn parse_collection<R: Read>(rdr: R) -> anyhow::Result<Vec<T>> {
-        
         serde_json::from_reader(rdr).map_err(anyhow::Error::from)
     }
 }
+
+type LoweredTypeMap = HashMap<NodeIndex, CType>;
+type UserDefinedSketches = SketchGraph<LatticeBounds<CustomLatticeElement>>;
 
 fn parse_collection_from_file<T: Message + Default, R: Read>(mut r: R) -> anyhow::Result<Vec<T>> {
     let mut total = Vec::new();
@@ -191,9 +193,7 @@ impl InferenceJob {
         let mut ir = crate::util::get_intermediate_representation_for_reader(json_file, bin_bytes)
             .context("parsing_project")?;
         log::info!("Retrieved IR");
-        ir.normalize()
-            .iter()
-            .for_each(crate::util::log_cwe_message);
+        ir.normalize().iter().for_each(crate::util::log_cwe_message);
         log::info!("Normalized IR");
 
         Ok(ir)
@@ -303,8 +303,7 @@ impl InferenceJob {
         let analysis_results = AnalysisResults::new(&self.binary_bytes, &rt_mem, graph, &self.proj);
 
         let (res, logs) = analysis_results.compute_function_signatures();
-        logs.iter()
-            .for_each(crate::util::log_cwe_message);
+        logs.iter().for_each(crate::util::log_cwe_message);
 
         let analysis_results = analysis_results.with_function_signatures(Some(&res));
 
@@ -341,7 +340,7 @@ impl InferenceJob {
 
     /// Fix up the returns for the project owned by this job by inserting returns
     /// Ghidra missed related to tail calls.
-    pub fn recover_additional_shared_returns<'a>(&mut self) {
+    pub fn recover_additional_shared_returns(&mut self) {
         let grph = Self::graph_from_project(&self.proj);
         let reg_context = register_map::run_analysis(&self.proj, &grph);
         let reaching_defs_start_of_block = reg_context
@@ -402,10 +401,12 @@ impl InferenceJob {
             EnumeratedNamedLattice,
             CustomLatticeElement,
         > = scc_constraint_generation::Context::new(
-            cg,
-            &grph,
+            ProgramInfo {
+                cg,
+                cfg: &grph,
+                extern_symbols: &self.proj.program.term.extern_symbols,
+            },
             node_ctxt,
-            &self.proj.program.term.extern_symbols,
             rule_context,
             &mut self.vman,
             LatticeInfo::new(
@@ -448,8 +449,8 @@ impl InferenceJob {
         let mut tot = HashMap::new();
         self.get_interesting_tids().iter().for_each(|x| {
             let tvar = crate::constraint_generation::tid_to_tvar(x);
-            if let Some(idx) = grph
-                .get_node_index_for_variable(&crate::constraints::DerivedTypeVar::new(tvar))
+            if let Some(idx) =
+                grph.get_node_index_for_variable(&crate::constraints::DerivedTypeVar::new(tvar))
             {
                 tot.insert(x.clone(), idx);
             }
@@ -471,7 +472,7 @@ impl InferenceJob {
     pub fn lower_labeled_sketch_graph(
         &self,
         sg: &SketchGraph<LatticeBounds<CustomLatticeElement>>,
-    ) -> anyhow::Result<HashMap<NodeIndex, CType>> {
+    ) -> anyhow::Result<LoweredTypeMap> {
         let id = identity_element(&self.lattice);
         let lcontext = LoweringContext::new(
             &self.get_graph_labeling(sg),
@@ -488,7 +489,7 @@ impl InferenceJob {
     /// Inserts additional constraints held by this job into the set of scc constraints.
     /// Additional constraints are now inserted during constraint generation so that pointer inference can use
     /// the additional info provided by injected constraints.
-    pub fn insert_additional_constraints(&self, scc_cons: &mut Vec<SCCConstraints>) {
+    pub fn insert_additional_constraints(&self, scc_cons: &mut [SCCConstraints]) {
         for scc in scc_cons.iter_mut() {
             for tid in scc.scc.iter() {
                 if let Some(new_cons) = self.additional_constraints.get(tid) {
@@ -518,10 +519,7 @@ impl InferenceJob {
     pub fn infer_ctypes(
         &mut self,
         // debug_dir: &PathBuf,
-    ) -> anyhow::Result<(
-        SketchGraph<LatticeBounds<CustomLatticeElement>>,
-        HashMap<NodeIndex, CType>,
-    )> {
+    ) -> anyhow::Result<(UserDefinedSketches, LoweredTypeMap)> {
         let labeled_graph = self.infer_labeled_graph()?;
 
         let lowered = self.lower_labeled_sketch_graph(&labeled_graph)?;

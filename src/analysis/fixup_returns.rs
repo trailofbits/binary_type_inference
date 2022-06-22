@@ -28,10 +28,10 @@ pub struct Context<'a> {
 
 impl Context<'_> {
     /// Creates a return analysis context from a reaching definitions mapping for this project and a project
-    pub fn new<'a>(
-        ir: &'a mut Project,
+    pub fn new(
+        ir: &mut Project,
         reaching_defs_start_of_block: HashMap<Tid, RegisterContext>,
-    ) -> Context<'a> {
+    ) -> Context<'_> {
         Context {
             reaching_defs_start_of_block,
             ir,

@@ -20,7 +20,7 @@ use super::{explore_paths, find_node};
 
 // TODO(ian): use this abstraction for the transducer
 /// A mapping graph allows the lookup of nodes by a hashable element. A node can also be queried for which hashable element it represents.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct MappingGraph<W, N: Ord + Hash + Eq, E> {
     grph: StableDiGraph<W, E>,
     nodes: HashMap<N, NodeIndex>,
@@ -123,8 +123,12 @@ impl<
 
         // Nodes are looked up by their original path. Since we always refine the original type we should be able to follow a path from the original
         // tvar in the refined tvar.
+        // NOTE(Ian): for some reason clippy really thinks we dont need to collect these edges... but down below we start removing edges
+        // we'd be holding onto a borrow of &self and trying to take a &mut self borrow.
+        #[allow(clippy::needless_collect)]
         let edges_outside_subgraph: Vec<(E, NodeIndex, Vec<E>)> =
-            explore_paths(&self.grph, orig_var_idx).flat_map(|(pth, reached_id)| {
+            explore_paths(&self.grph, orig_var_idx)
+                .flat_map(|(pth, reached_id)| {
                     let incoming_edges = self
                         .get_graph()
                         .edges_directed(reached_id, petgraph::EdgeDirection::Incoming);
@@ -173,7 +177,8 @@ impl<
             new
         };
         grph.get_graph()
-            .node_indices().flat_map(|nd| {
+            .node_indices()
+            .flat_map(|nd| {
                 let src = add_node(nd);
                 let mut tot = Vec::new();
                 for edge in grph.get_graph().edges_directed(nd, Outgoing) {
@@ -393,7 +398,8 @@ impl<
 
         let repr_mapping = groups
             .iter()
-            .enumerate().flat_map(|(repr_indx, s)| s.iter().map(move |node_idx| (node_idx, repr_indx)))
+            .enumerate()
+            .flat_map(|(repr_indx, s)| s.iter().map(move |node_idx| (node_idx, repr_indx)))
             .collect::<HashMap<_, _>>();
 
         let mut group_to_new_node = HashMap::new();
@@ -495,7 +501,8 @@ impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> MappingGr
     pub fn get_group_for_node(&self, idx: NodeIndex) -> BTreeSet<N> {
         self.reprs_to_graph_node
             .get(&idx)
-            .cloned().unwrap_or_default()
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Gets the underlying [petgraph]

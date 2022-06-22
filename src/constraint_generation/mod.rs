@@ -235,6 +235,13 @@ pub struct NodeContext<
     weakest_integral_type: TypeVariable,
 }
 
+/// Stores information about a given invocation of a subprocedure, either formal or actual (represented by a present callsite)
+struct SubprocedureInvocation<'a, T> {
+    calling_blk: Option<&'a Term<Blk>>,
+    sub: &'a Term<T>,
+    args: &'a [Arg],
+}
+
 impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: ConstantResolver>
     NodeContextMapping for NodeContext<R, P, S, C>
 {
@@ -611,8 +618,6 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
-        
-
         match &df.term {
             Def::Load { var, address } => self.apply_load(&df.tid, var, address, vman),
             Def::Store { address, value } => self.apply_store(&df.tid, value, address, vman),
@@ -656,17 +661,20 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
 
     fn make_constraints<T>(
         &self,
-        calling_blk: Option<&Term<Blk>>,
-        sub: &Term<T>,
-        args: &[Arg],
+        callsite: SubprocedureInvocation<T>,
         index_to_field_label: &impl Fn(usize) -> FieldLabel,
         arg_is_written: bool,
         displacement: i64,
         vm: &mut VariableManager,
     ) -> ConstraintSet {
         let mut start_constraints = ConstraintSet::default();
-        for (i, arg) in args.iter().enumerate() {
-            let formal_tv = Self::create_formal_tvar(calling_blk, i, index_to_field_label, sub);
+        for (i, arg) in callsite.args.iter().enumerate() {
+            let formal_tv = Self::create_formal_tvar(
+                callsite.calling_blk,
+                i,
+                index_to_field_label,
+                callsite.sub,
+            );
             let arg_tvars = self
                 .subprocedure_locators
                 .get_type_variables_and_constraints_for_arg(
@@ -697,9 +705,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
             sub.term.formal_args.len()
         );
         self.make_constraints(
-            None,
-            sub,
-            &sub.term.formal_args,
+            SubprocedureInvocation {
+                calling_blk: None,
+                sub,
+                args: &sub.term.formal_args,
+            },
             &FieldLabel::In,
             true,
             0,
@@ -710,9 +720,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
     /// make each formal the subtype of the addressing info for this parameter within the current state
     fn handle_return_formals(&self, sub: &Term<Sub>, vman: &mut VariableManager) -> ConstraintSet {
         self.make_constraints(
-            None,
-            sub,
-            &sub.term.formal_rets,
+            SubprocedureInvocation {
+                calling_blk: None,
+                sub,
+                args: &sub.term.formal_rets,
+            },
             &FieldLabel::Out,
             false,
             0,
@@ -731,12 +743,12 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         vman: &mut VariableManager,
         return_address_displacement: i64,
     ) -> ConstraintSet {
-        
-
         self.make_constraints(
-            Some(calling_blk),
-            sub,
-            &sub.term.formal_rets,
+            SubprocedureInvocation {
+                calling_blk: Some(calling_blk),
+                sub,
+                args: &sub.term.formal_rets,
+            },
             &FieldLabel::Out,
             true,
             return_address_displacement,
@@ -753,9 +765,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         return_address_displacement: i64,
     ) -> ConstraintSet {
         self.make_constraints(
-            Some(calling_blk),
-            sub,
-            &sub.term.formal_args,
+            SubprocedureInvocation {
+                calling_blk: Some(calling_blk),
+                sub,
+                args: &sub.term.formal_args,
+            },
             &FieldLabel::In,
             false,
             return_address_displacement,
@@ -771,9 +785,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         return_address_displacement: i64,
     ) -> ConstraintSet {
         self.make_constraints(
-            Some(calling_blk),
-            sub,
-            &sub.term.parameters,
+            SubprocedureInvocation {
+                calling_blk: Some(calling_blk),
+                sub,
+                args: &sub.term.parameters,
+            },
             &FieldLabel::In,
             false,
             return_address_displacement,
@@ -789,9 +805,11 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         return_address_displacement: i64,
     ) -> ConstraintSet {
         self.make_constraints(
-            Some(calling_blk),
-            sub,
-            &sub.term.return_values,
+            SubprocedureInvocation {
+                calling_blk: Some(calling_blk),
+                sub,
+                args: &sub.term.return_values,
+            },
             &FieldLabel::Out,
             true,
             return_address_displacement,

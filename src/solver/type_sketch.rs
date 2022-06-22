@@ -44,6 +44,8 @@ use super::scc_constraint_generation::SCCConstraints;
 use super::type_lattice::{NamedLattice, NamedLatticeElement};
 use std::convert::TryFrom;
 
+type CondensedCallgraph = Graph<Vec<Tid>, ()>;
+
 // an equivalence between eq nodes implies an equivalence between edge
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 struct EdgeImplication {
@@ -194,7 +196,7 @@ where
         grph.get_graph()
             .node_indices()
             .max()
-            .unwrap_or(NodeIndex::from(0))
+            .unwrap_or_else(|| NodeIndex::from(0))
             .index()
             + 1,
     );
@@ -533,7 +535,8 @@ where
         debug_dir: FileDebugLogger,
     ) -> SCCSketchsBuilder<'a, U, T> {
         let scc_signatures = scc_constraints
-            .into_iter().flat_map(|cons| {
+            .into_iter()
+            .flat_map(|cons| {
                 let repr = Rc::new(cons.constraints);
                 cons.scc.into_iter().map(move |t| (t, repr.clone()))
             })
@@ -551,7 +554,7 @@ where
         }
     }
 
-    fn build_and_label_scc_sketch(&mut self, to_reprs: &Vec<Tid>) -> anyhow::Result<()> {
+    fn build_and_label_scc_sketch(&mut self, to_reprs: &[Tid]) -> anyhow::Result<()> {
         let sig = self
             .scc_signatures
             .get(&to_reprs[0])
@@ -576,10 +579,12 @@ where
                     let ext = self
                         .scc_repr
                         .get(&var.get_base_variable().to_callee())
-                        .ok_or(anyhow::anyhow!(
-                            "An external variable must have a representation already built {}",
-                            var.get_base_variable().to_callee().to_string()
-                        ))?;
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "An external variable must have a representation already built {}",
+                                var.get_base_variable().to_callee().to_string()
+                            )
+                        })?;
 
                     if matches!(ext.copy_reachable_subgraph_into(var, grph), None) {
                         // The target graph doesnt have any constraints on the target variable.
@@ -604,7 +609,7 @@ where
         Ok(())
     }
 
-    fn get_topo_order_for_cg(&self) -> anyhow::Result<(Graph<Vec<Tid>, ()>, Vec<NodeIndex>)> {
+    fn get_topo_order_for_cg(&self) -> anyhow::Result<(CondensedCallgraph, Vec<NodeIndex>)> {
         let condensed = petgraph::algo::condensation(self.cg.clone(), false);
         petgraph::algo::toposort(&condensed, None)
             .map_err(|_| anyhow::anyhow!("cycle error"))
@@ -795,7 +800,7 @@ where
 
     fn get_built_sketch_from_scc(
         &self,
-        associated_scc_tids: &Vec<Tid>,
+        associated_scc_tids: &[Tid],
     ) -> SketchGraph<LatticeBounds<U>> {
         assert!(!associated_scc_tids.is_empty());
         let target_tvar = tid_to_tvar(associated_scc_tids.iter().next().unwrap());
@@ -840,7 +845,8 @@ where
         }
 
         let entry_idx = subtyg
-            .node_indices().find(|idx| *subtyg.node_weight(*idx).unwrap() == ent)
+            .node_indices()
+            .find(|idx| *subtyg.node_weight(*idx).unwrap() == ent)
             .ok_or(anyhow::anyhow!("No entry in sketch"))?;
 
         let nd_to_path = explore_paths(&subtyg, entry_idx)
@@ -993,7 +999,8 @@ where
         target_dtv: &DerivedTypeVar,
     ) -> Vec<(Sketch<LatticeBounds<U>>, SCCLocation)> {
         let parent_nodes = condensed_cg.neighbors_directed(scc_idx, EdgeDirection::Incoming);
-        parent_nodes.flat_map(|scc_idx| {
+        parent_nodes
+            .flat_map(|scc_idx| {
                 let wt = condensed_cg
                     .node_weight(scc_idx)
                     .expect("Should have weight for node index");
@@ -1043,7 +1050,8 @@ where
             .get_node(target_dtv)
             .expect("If we replaced in a target dtv then it should exist in the new sketch");
         callsites
-            .into_iter().flat_map(|(old_callsite_type, callsite_loc)| {
+            .into_iter()
+            .flat_map(|(old_callsite_type, callsite_loc)| {
                 let aliases = Self::find_shared_subgraphs(&old_callsite_type, callee_type)
                     .expect("should be able to compute aliases");
 
@@ -1090,7 +1098,6 @@ where
     fn refine_formal(
         &self,
         condensed: &Graph<Vec<Tid>, (), Directed>,
-        _target_scc: Vec<Tid>,
         target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
         target_dtv: DerivedTypeVar,
         target_idx: NodeIndex,
@@ -1128,14 +1135,12 @@ where
     fn refine_formal_out(
         &self,
         condensed: &Graph<Vec<Tid>, (), Directed>,
-        target_scc: Vec<Tid>,
         target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
         target_dtv: DerivedTypeVar,
         target_idx: NodeIndex,
     ) {
         self.refine_formal(
             condensed,
-            target_scc,
             target_scc_repr,
             target_dtv,
             target_idx,
@@ -1147,14 +1152,12 @@ where
     fn refine_formal_in(
         &self,
         condensed: &Graph<Vec<Tid>, (), Directed>,
-        target_scc: Vec<Tid>,
         target_scc_repr: &mut SketchGraph<LatticeBounds<U>>,
         target_dtv: DerivedTypeVar,
         target_idx: NodeIndex,
     ) {
         self.refine_formal(
             condensed,
-            target_scc,
             target_scc_repr,
             target_dtv,
             target_idx,
@@ -1174,24 +1177,12 @@ where
         //bind intersection
         let in_params = orig_repr.get_in_params();
         for dtv in in_params {
-            self.refine_formal_in(
-                condensed,
-                associated_scc_tids.clone(),
-                &mut orig_repr,
-                dtv,
-                target_idx,
-            );
+            self.refine_formal_in(condensed, &mut orig_repr, dtv, target_idx);
         }
 
         let out_params = orig_repr.get_out_params();
         for dtv in out_params {
-            self.refine_formal_out(
-                condensed,
-                associated_scc_tids.clone(),
-                &mut orig_repr,
-                dtv,
-                target_idx,
-            );
+            self.refine_formal_out(condensed, &mut orig_repr, dtv, target_idx);
         }
 
         orig_repr.simplify_pointers();
@@ -1529,12 +1520,12 @@ where
 }
 
 struct SCCOrdering {
-    condensed_scc: Graph<Vec<Tid>, ()>,
+    condensed_scc: CondensedCallgraph,
     sorted: Vec<NodeIndex>,
 }
 
 impl SCCOrdering {
-    fn iter(&self) -> impl Iterator<Item = (&Graph<Vec<Tid>, ()>, NodeIndex, &Vec<Tid>)> {
+    fn iter(&self) -> impl Iterator<Item = (&CondensedCallgraph, NodeIndex, &Vec<Tid>)> {
         self.sorted
             .iter()
             .map(|idx| (&self.condensed_scc, *idx, &self.condensed_scc[*idx]))
@@ -1768,12 +1759,14 @@ where
 }
 
 impl<U: std::cmp::PartialEq> Sketch<U> {
+    /// Gets the underlying graph that defines a sketche's language
     pub fn get_graph(&self) -> &MappingGraph<U, DerivedTypeVar, FieldLabel> {
         &self.quotient_graph
     }
 }
 
 impl<U: std::cmp::PartialEq> Sketch<U> {
+    /// Gets the node that is the entry of this sketch. All recogonized words start from this node.
     pub fn get_entry(&self) -> NodeIndex {
         *self
             .quotient_graph
@@ -1994,7 +1987,8 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         let mut edges = self
             .quotient_graph
             .get_graph()
-            .node_indices().flat_map(|nd_idx| {
+            .node_indices()
+            .flat_map(|nd_idx| {
                 let out_edges = self
                     .quotient_graph
                     .get_graph()
@@ -2032,15 +2026,21 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         }
     }
 
+    /// Produces a sketch that is the intersection of this type and some other type sketch. This operation
+    /// effectively determines the greatest lower bound (greatest subtype of these two types).
     pub fn intersect(&self, other: &Sketch<U>) -> Sketch<U> {
         self.binop_sketch(other, &U::meet, &union)
     }
 
+    /// Checks if this dfa recogonizes the empty language
     pub fn empty_language(&self) -> bool {
         let dfa = self.construct_dfa(&self.alphabet(self));
         dfa_operations::is_empty_language(&dfa)
     }
 
+    /// This is a asymmetric difference (Self-other) finding the
+    /// portion of the language in this sketch not covered by other.
+    /// lattice merging is irrelvant because the resulting nodes are distinct.
     pub fn difference(&self, other: &Sketch<U>) -> Sketch<U> {
         self.binop_sketch(
             other,
@@ -2051,6 +2051,8 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         )
     }
 
+    /// Takes the union of two sketches, finding the least upper bound. The least upper bound of
+    /// two sketches is the least supertype of these two types.
     pub fn union(&self, other: &Sketch<U>) -> Sketch<U> {
         self.binop_sketch(other, &U::join, &intersection)
     }
@@ -2139,7 +2141,8 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         let target_field_edges: BTreeSet<(EdgeIndex, Field)> = self
             .quotient_graph
             .get_graph()
-            .neighbors(nd_idx).flat_map(|n| self.field_edges(n))
+            .neighbors(nd_idx)
+            .flat_map(|n| self.field_edges(n))
             .collect();
 
         PointerTransform {
@@ -2188,7 +2191,8 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         // 1
         let new_edges: Vec<(NodeIndex, NodeIndex, Field)> = pt
             .target_field_edges
-            .iter().flat_map(|(idx, field)| {
+            .iter()
+            .flat_map(|(idx, field)| {
                 let (src, dst) = &self
                     .get_graph()
                     .get_graph()
