@@ -69,9 +69,9 @@ enum TypeLabels {
 
 #[derive(Clone, Copy, Debug)]
 enum PositionTy {
-    LhsTy,
-    RhsTy,
-    ResTy,
+    Lhs,
+    Rhs,
+    Res,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -117,9 +117,9 @@ where
 
     fn access_by_pos(add_cons: &AddConstraint, pos: PositionTy) -> &DerivedTypeVar {
         match pos {
-            PositionTy::LhsTy => &add_cons.lhs_ty,
-            PositionTy::RhsTy => &add_cons.rhs_ty,
-            PositionTy::ResTy => &add_cons.repr_ty,
+            PositionTy::Lhs => &add_cons.lhs_ty,
+            PositionTy::Rhs => &add_cons.rhs_ty,
+            PositionTy::Res => &add_cons.repr_ty,
         }
     }
 
@@ -134,61 +134,61 @@ where
         match self.add_constraint_to_pattern(add_cons) {
             // i i I
             (Some(TypeLabels::Int), Some(TypeLabels::Int), None) => vec![LabelUpdate {
-                affected_ty: PositionTy::ResTy,
+                affected_ty: PositionTy::Res,
                 type_source: vec![
-                    TypeSource::PositionTy(PositionTy::LhsTy),
-                    TypeSource::PositionTy(PositionTy::RhsTy),
+                    TypeSource::PositionTy(PositionTy::Lhs),
+                    TypeSource::PositionTy(PositionTy::Rhs),
                 ],
                 new_label: TypeLabels::Int,
             }],
             // p i P
             (Some(TypeLabels::Pointer), Some(TypeLabels::Int), None) => vec![LabelUpdate {
-                affected_ty: PositionTy::ResTy,
-                type_source: vec![TypeSource::PositionTy(PositionTy::LhsTy)],
+                affected_ty: PositionTy::Res,
+                type_source: vec![TypeSource::PositionTy(PositionTy::Lhs)],
                 new_label: TypeLabels::Pointer,
             }],
             // i p P
             (Some(TypeLabels::Int), Some(TypeLabels::Pointer), None) => vec![LabelUpdate {
-                affected_ty: PositionTy::ResTy,
-                type_source: vec![TypeSource::PositionTy(PositionTy::RhsTy)],
+                affected_ty: PositionTy::Res,
+                type_source: vec![TypeSource::PositionTy(PositionTy::Rhs)],
                 new_label: TypeLabels::Pointer,
             }],
             // p I P
             (Some(TypeLabels::Pointer), None, None) => vec![
                 LabelUpdate {
-                    affected_ty: PositionTy::ResTy,
-                    type_source: vec![TypeSource::PositionTy(PositionTy::LhsTy)],
+                    affected_ty: PositionTy::Res,
+                    type_source: vec![TypeSource::PositionTy(PositionTy::Lhs)],
                     new_label: TypeLabels::Pointer,
                 },
                 LabelUpdate {
-                    affected_ty: PositionTy::RhsTy,
+                    affected_ty: PositionTy::Rhs,
                     type_source: vec![TypeSource::WeakInt],
                     new_label: TypeLabels::Int,
                 },
             ],
             // P i p
             (None, Some(TypeLabels::Int), Some(TypeLabels::Pointer)) => vec![LabelUpdate {
-                affected_ty: PositionTy::LhsTy,
-                type_source: vec![TypeSource::PositionTy(PositionTy::ResTy)],
+                affected_ty: PositionTy::Lhs,
+                type_source: vec![TypeSource::PositionTy(PositionTy::Res)],
                 new_label: TypeLabels::Pointer,
             }],
             // I p P
             (None, Some(TypeLabels::Pointer), None) => vec![
                 LabelUpdate {
-                    affected_ty: PositionTy::LhsTy,
+                    affected_ty: PositionTy::Lhs,
                     type_source: vec![TypeSource::WeakInt],
                     new_label: TypeLabels::Int,
                 },
                 LabelUpdate {
-                    affected_ty: PositionTy::ResTy,
-                    type_source: vec![TypeSource::PositionTy(PositionTy::RhsTy)],
+                    affected_ty: PositionTy::Res,
+                    type_source: vec![TypeSource::PositionTy(PositionTy::Rhs)],
                     new_label: TypeLabels::Pointer,
                 },
             ],
             // i P p
             (Some(TypeLabels::Int), None, Some(TypeLabels::Pointer)) => vec![LabelUpdate {
-                affected_ty: PositionTy::RhsTy,
-                type_source: vec![TypeSource::PositionTy(PositionTy::ResTy)],
+                affected_ty: PositionTy::Rhs,
+                type_source: vec![TypeSource::PositionTy(PositionTy::Res)],
                 new_label: TypeLabels::Pointer,
             }],
             _ => vec![],
