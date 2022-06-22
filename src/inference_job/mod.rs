@@ -326,6 +326,7 @@ impl InferenceJob {
         Ok(nd_context)
     }
 
+    /// Gets an iterator of type variables for each type constant
     pub fn get_lattice_elems(&self) -> impl Iterator<Item = TypeVariable> + '_ {
         self.lattice
             .get_nds()
