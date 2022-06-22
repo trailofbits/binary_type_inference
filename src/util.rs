@@ -27,7 +27,7 @@ pub fn get_intermediate_representation_for_reader(
     let base_addr = cwe_checker_lib::utils::get_binary_base_address(binary)?;
     let msgs = pcode_proj.normalize();
 
-    msgs.iter().for_each(|msg| log_cwe_message(msg));
+    msgs.iter().for_each(log_cwe_message);
 
     let ir = pcode_proj.into_ir_project(base_addr);
     Ok(ir)

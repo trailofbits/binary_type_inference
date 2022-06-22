@@ -265,14 +265,14 @@ impl VariableManager {
 
     /// Creates a fresh [TypeVariable] of the form τn where n is the count of fresh variables from this manager.
     pub fn fresh(&mut self) -> TypeVariable {
-        let next_name = format!("τ{}", self.curr_id.to_string());
+        let next_name = format!("τ{}", self.curr_id);
         self.curr_id += 1;
         TypeVariable::new(next_name)
     }
 
     /// Generates a fresh [TypeVariable] in the loop breaker namespace. These are seperately counted identifiers.
     pub fn fresh_loop_breaker(&mut self) -> TypeVariable {
-        let next_name = format!("loop_breaker{}", self.curr_id.to_string());
+        let next_name = format!("loop_breaker{}", self.curr_id);
         self.curr_id += 1;
         TypeVariable::new(next_name)
     }
@@ -487,12 +487,12 @@ impl DerivedTypeVar {
 
     /// Checks if this type variable refers to the in parameter of a procedure
     pub fn refers_to_in_parameter(&self) -> bool {
-        self.labels.len() >= 1 && matches!(self.labels[0], FieldLabel::In(_))
+        !self.labels.is_empty() && matches!(self.labels[0], FieldLabel::In(_))
     }
 
     /// Checks if this type variable refers to the out parameter of a procedure
     pub fn refers_to_out_parameter(&self) -> bool {
-        self.labels.len() >= 1 && matches!(self.labels[0], FieldLabel::Out(_))
+        !self.labels.is_empty() && matches!(self.labels[0], FieldLabel::Out(_))
     }
 
     /// Checks if this dtv is exactly an in parameter. ie. "sub_1.in_0"
@@ -507,7 +507,7 @@ impl DerivedTypeVar {
 
     /// Checks if this derived type variable is exactly a global (represents a global and not its capabilities)
     pub fn is_global(&self) -> bool {
-        self.labels.len() == 0 && self.refers_to_global()
+        self.labels.is_empty() && self.refers_to_global()
     }
 
     /// Checks if this dtv is exactly an in parameter. ie. "sub_1.out_0"
@@ -582,7 +582,7 @@ impl TryFrom<pb_constraints::DerivedTypeVariable> for DerivedTypeVar {
         let labels = dtv
             .field_labels
             .into_iter()
-            .map(|f| FieldLabel::try_from(f))
+            .map(FieldLabel::try_from)
             .collect::<Result<Vec<FieldLabel>, Self::Error>>()?;
 
         Ok(DerivedTypeVar {
@@ -610,7 +610,7 @@ impl TryFrom<pb_constraints::AdditionalConstraint> for AdditionalConstraint {
         let constraint = value
             .sub_ty
             .ok_or(anyhow::anyhow!("No constraint in addsubty"))
-            .and_then(|orig_cons| SubtypeConstraint::try_from(orig_cons))?;
+            .and_then(SubtypeConstraint::try_from)?;
 
         let associated_variable = value
             .target_variable
@@ -639,11 +639,11 @@ impl TryFrom<pb_constraints::SubtypingConstraint> for SubtypeConstraint {
         let lhs = value
             .lhs
             .ok_or(anyhow::anyhow!("No lhs in dtv"))
-            .and_then(|x| DerivedTypeVar::try_from(x))?;
+            .and_then(DerivedTypeVar::try_from)?;
         let rhs = value
             .rhs
             .ok_or(anyhow::anyhow!("No rhs in dtv"))
-            .and_then(|x| DerivedTypeVar::try_from(x))?;
+            .and_then(DerivedTypeVar::try_from)?;
 
         Ok(SubtypeConstraint { lhs, rhs })
     }
@@ -686,14 +686,12 @@ impl ConstraintSet {
     /// Get all derived type variables involved in these constraints.
     pub fn variables(&self) -> impl Iterator<Item = &DerivedTypeVar> {
         self.0
-            .iter()
-            .map(|cons| match cons {
+            .iter().flat_map(|cons| match cons {
                 TyConstraint::SubTy(sty) => vec![&sty.lhs, &sty.rhs].into_iter(),
                 TyConstraint::AddCons(add_cons) => {
                     vec![&add_cons.lhs_ty, &add_cons.rhs_ty, &add_cons.repr_ty].into_iter()
                 }
             })
-            .flatten()
     }
 }
 

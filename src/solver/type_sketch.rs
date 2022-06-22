@@ -533,12 +533,10 @@ where
         debug_dir: FileDebugLogger,
     ) -> SCCSketchsBuilder<'a, U, T> {
         let scc_signatures = scc_constraints
-            .into_iter()
-            .map(|cons| {
+            .into_iter().flat_map(|cons| {
                 let repr = Rc::new(cons.constraints);
-                cons.scc.into_iter().map(move |t| (t.clone(), repr.clone()))
+                cons.scc.into_iter().map(move |t| (t, repr.clone()))
             })
-            .flatten()
             .collect::<HashMap<_, _>>();
 
         SCCSketchsBuilder {
@@ -561,7 +559,7 @@ where
 
         let is_internal_variable = to_reprs
             .iter()
-            .map(|x| constraint_generation::tid_to_tvar(x))
+            .map(constraint_generation::tid_to_tvar)
             .collect::<BTreeSet<_>>();
 
         let add_new_var =
@@ -594,7 +592,7 @@ where
         let bldr: SketchBuilder<U, T, _> =
             SketchBuilder::new(self.lattice, &self.type_lattice_elements, &add_new_var);
 
-        let orig_graph = bldr.build_and_label_constraints(&sig)?;
+        let orig_graph = bldr.build_and_label_constraints(sig)?;
 
         let sk_graph = Rc::new(orig_graph);
 
@@ -709,7 +707,7 @@ where
         // resulting labeling is tricky because we could end up referencing the in parameter within a bound type which wont actually have that dtv label since we dont copy them down.
         // We should only label base variables imo. This means we look through the scc and find the sccs base variables within the graph
         for (dtv, tgt_idx) in sg.quotient_graph.get_node_mapping().iter() {
-            if (dtv.get_field_labels().len() == 0
+            if (dtv.get_field_labels().is_empty()
                 && dtv.get_base_variable().get_cs_tag().is_none()
                 // Dont want labels for concrete types, no need to solve for them if not used.
                 && !self.type_lattice_elements.contains(dtv.get_base_variable()))
@@ -842,9 +840,7 @@ where
         }
 
         let entry_idx = subtyg
-            .node_indices()
-            .filter(|idx| *subtyg.node_weight(*idx).unwrap() == ent)
-            .next()
+            .node_indices().find(|idx| *subtyg.node_weight(*idx).unwrap() == ent)
             .ok_or(anyhow::anyhow!("No entry in sketch"))?;
 
         let nd_to_path = explore_paths(&subtyg, entry_idx)
@@ -997,12 +993,11 @@ where
         target_dtv: &DerivedTypeVar,
     ) -> Vec<(Sketch<LatticeBounds<U>>, SCCLocation)> {
         let parent_nodes = condensed_cg.neighbors_directed(scc_idx, EdgeDirection::Incoming);
-        parent_nodes
-            .map(|scc_idx| {
+        parent_nodes.flat_map(|scc_idx| {
                 let wt = condensed_cg
                     .node_weight(scc_idx)
                     .expect("Should have weight for node index");
-                let repr_graph = self.get_built_sketch_from_scc(&wt);
+                let repr_graph = self.get_built_sketch_from_scc(wt);
 
                 let sketch =
                     repr_graph.get_representing_sketchs_ignoring_callsite_tags(target_dtv.clone());
@@ -1020,7 +1015,6 @@ where
                     .collect::<Vec<_>>()
                     .into_iter()
             })
-            .flatten()
             .collect()
     }
 
@@ -1046,12 +1040,11 @@ where
 
         let orig_loc = target_scc_sketch
             .quotient_graph
-            .get_node(&target_dtv)
+            .get_node(target_dtv)
             .expect("If we replaced in a target dtv then it should exist in the new sketch");
         callsites
-            .into_iter()
-            .map(|(old_callsite_type, callsite_loc)| {
-                let aliases = Self::find_shared_subgraphs(&old_callsite_type, &callee_type)
+            .into_iter().flat_map(|(old_callsite_type, callsite_loc)| {
+                let aliases = Self::find_shared_subgraphs(&old_callsite_type, callee_type)
                     .expect("should be able to compute aliases");
 
                 aliases
@@ -1090,7 +1083,6 @@ where
                     .collect::<Vec<_>>()
                     .into_iter()
             })
-            .flatten()
             .collect()
     }
 
@@ -1127,7 +1119,7 @@ where
             .map(|merged| refinement_operator(&merged, orig_repr))
             .unwrap_or(orig_repr.clone());
 
-        call_site_type.label_dtvs(&orig_repr);
+        call_site_type.label_dtvs(orig_repr);
         // if an actual is equal to the replacement type then we can bind that parameter to the type.
 
         target_scc_repr.replace_dtv(&target_dtv, call_site_type.clone());
@@ -1357,7 +1349,7 @@ where
             .get_subgraph_entries_for_scc_loc(target_scc_loc)
             .iter()
             .filter_map(|(scc_idx, path)| {
-                self.find_child_location_by_path(to_alias, &path)
+                self.find_child_location_by_path(to_alias, path)
                     .map(|to_loc| {
                         (
                             TypeLocation::SCCLoc(SCCLocation {
@@ -1487,7 +1479,7 @@ where
                     let curr_sketch = global_sketches
                         .entry(dtv.get_base_variable().clone())
                         .or_insert_with(|| skg.clone());
-                    *curr_sketch = curr_sketch.intersect(&skg)
+                    *curr_sketch = curr_sketch.intersect(skg)
                 }
             });
     }
@@ -1810,7 +1802,7 @@ impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
                     let maybe_node = find_node(
                         other_sketch.quotient_graph.get_graph(),
                         other_sketch.get_entry(),
-                        pth_as_weights.iter().map(|e| *e),
+                        pth_as_weights.iter().copied(),
                     );
                     maybe_node.map(|other_idx| {
                         let grp = other_sketch.get_graph().get_group_for_node(other_idx);
@@ -1886,12 +1878,12 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                 let lhs = find_node(
                     self.quotient_graph.get_graph(),
                     self.get_entry(),
-                    pth_as_weights.iter().map(|e| *e),
+                    pth_as_weights.iter().copied(),
                 );
                 let rhs = find_node(
                     other_sketch.quotient_graph.get_graph(),
                     other_sketch.get_entry(),
-                    pth_as_weights.iter().map(|e| *e),
+                    pth_as_weights.iter().copied(),
                 );
                 (tgt, (lhs, rhs))
             })
@@ -2002,8 +1994,7 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         let mut edges = self
             .quotient_graph
             .get_graph()
-            .node_indices()
-            .map(|nd_idx| {
+            .node_indices().flat_map(|nd_idx| {
                 let out_edges = self
                     .quotient_graph
                     .get_graph()
@@ -2026,7 +2017,6 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                     .collect::<Vec<_>>()
                     .into_iter()
             })
-            .flatten()
             .collect::<BTreeSet<_>>();
 
         // Reject just stays reject forever.
@@ -2047,14 +2037,14 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
     }
 
     pub fn empty_language(&self) -> bool {
-        let dfa = self.construct_dfa(&self.alphabet(&self));
+        let dfa = self.construct_dfa(&self.alphabet(self));
         dfa_operations::is_empty_language(&dfa)
     }
 
     pub fn difference(&self, other: &Sketch<U>) -> Sketch<U> {
         self.binop_sketch(
             other,
-            &|uself, uother| uself.clone(),
+            &|uself, _uother| uself.clone(),
             &|self_dfa, other_dfa| {
                 dfa_operations::intersection(self_dfa, &dfa_operations::complement(other_dfa))
             },
@@ -2149,9 +2139,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         let target_field_edges: BTreeSet<(EdgeIndex, Field)> = self
             .quotient_graph
             .get_graph()
-            .neighbors(nd_idx)
-            .map(|n| self.field_edges(n))
-            .flatten()
+            .neighbors(nd_idx).flat_map(|n| self.field_edges(n))
             .collect();
 
         PointerTransform {
@@ -2200,8 +2188,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         // 1
         let new_edges: Vec<(NodeIndex, NodeIndex, Field)> = pt
             .target_field_edges
-            .iter()
-            .map(|(idx, field)| {
+            .iter().flat_map(|(idx, field)| {
                 let (src, dst) = &self
                     .get_graph()
                     .get_graph()
@@ -2222,7 +2209,6 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
                     })
                     .collect::<Vec<_>>()
             })
-            .flatten()
             .collect();
 
         // 2
@@ -2322,7 +2308,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         if target.get_base_variable().to_callee() == from_base.to_callee() {
             DerivedTypeVar::create_with_path(
                 from_base.clone(),
-                Vec::from_iter(target.get_field_labels().into_iter().cloned()),
+                Vec::from_iter(target.get_field_labels().iter().cloned()),
             )
         } else {
             target
@@ -2334,7 +2320,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
     /// where the base matches the from var.
 
     fn get_target_nodes_to_copy(&self, representing: &DerivedTypeVar) -> BTreeSet<NodeIndex> {
-        let repr = self.quotient_graph.get_node(&representing);
+        let repr = self.quotient_graph.get_node(representing);
         let mut stack: Vec<NodeIndex> = self
             .get_graph()
             .get_node_mapping()

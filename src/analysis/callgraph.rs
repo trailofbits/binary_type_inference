@@ -15,8 +15,7 @@ pub struct Context<'a> {
 impl Context<'_> {
     fn get_callees(s: &Sub) -> HashSet<Tid> {
         s.blocks
-            .iter()
-            .map(|blk| {
+            .iter().flat_map(|blk| {
                 blk.term.jmps.iter().filter_map(|jmp| {
                     if let Jmp::Call { target, .. } = &jmp.term {
                         Some(target.clone())
@@ -25,7 +24,6 @@ impl Context<'_> {
                     }
                 })
             })
-            .flatten()
             .collect()
     }
 

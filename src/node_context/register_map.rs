@@ -82,8 +82,7 @@ impl RegisterMapping for RegisterContext {
     fn access(&self, var: &Variable) -> BTreeSet<crate::constraints::TypeVariable> {
         let ts = self.mapping.get(var);
 
-        ts.map(|x| Self::generate_multi_def_constraint(var, x))
-            .unwrap_or(BTreeSet::new())
+        ts.map(|x| Self::generate_multi_def_constraint(var, x)).unwrap_or_default()
     }
 }
 

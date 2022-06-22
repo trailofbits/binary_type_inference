@@ -13,7 +13,7 @@ use std::{
     rc::Rc,
 };
 
-use super::type_sketch::SketchLabelElement;
+
 
 /// A named lattice elment can be cloned and also has a string name.
 pub trait NamedLatticeElement: Lattice + Clone {
@@ -254,9 +254,7 @@ impl LatticeDefinition {
 
         let nds: HashMap<String, CustomLatticeElement> = self
             .less_than_relations_between_handles
-            .iter()
-            .map(|x| vec![&x.0, &x.1].into_iter())
-            .flatten()
+            .iter().flat_map(|x| vec![&x.0, &x.1].into_iter())
             .map(|elem| {
                 (
                     elem.clone(),

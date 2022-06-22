@@ -84,7 +84,7 @@ impl Context<'_> {
             .map(|blk| self.get_returns_from_block(blk))
             .find(|x| x.is_some())
             .unwrap_or(Some(vec![]))
-            .unwrap_or(vec![])
+            .unwrap_or_default()
     }
 
     fn collect_returns(&self) -> HashMap<Tid, Vec<Arg>> {

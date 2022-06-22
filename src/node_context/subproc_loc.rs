@@ -37,7 +37,7 @@ impl SubprocedureLocators for ProcedureContext {
                     let var_set = reg.access(var);
                     var_set
                         .into_iter()
-                        .map(|x| ArgTvar::VariableTvar(x))
+                        .map(ArgTvar::VariableTvar)
                         .collect()
                 } else {
                     BTreeSet::new()
@@ -50,7 +50,7 @@ impl SubprocedureLocators for ProcedureContext {
                 // If it's a formal this is still valid because we add the base for that frame but the frame still points to the same 0 point.
                 // Returns are less clear
                 // TODO(ian): examine returns (returns cant be on the stack so do we care)?
-                let accessed_pointers = points_to.points_to(&address, *size);
+                let accessed_pointers = points_to.points_to(address, *size);
 
                 accessed_pointers
                     .into_iter()

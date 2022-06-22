@@ -91,7 +91,7 @@ impl Classroom {
     fn get_next_scheduluable_offset(&self) -> usize {
         self.scheduled
             .last()
-            .map(|lf| Classroom::compute_fld_upper_bound_exlcusive(lf))
+            .map(Classroom::compute_fld_upper_bound_exlcusive)
             .unwrap_or(std::usize::MIN)
     }
 
@@ -240,7 +240,7 @@ fn build_alias_types<U: NamedLatticeElement>(
 
     unique_tgts
         .into_iter()
-        .map(|tgt| CType::Alias(tgt))
+        .map(CType::Alias)
         .collect()
 }
 
@@ -278,7 +278,7 @@ fn collect_params<U: NamedLatticeElement>(
         .fold(BTreeMap::new(), |mut acc, elem| {
             if let Some(idx) = get_label_idx(elem.weight()) {
                 acc.entry(idx)
-                    .or_insert_with(|| Vec::new())
+                    .or_insert_with(Vec::new)
                     .push(elem.target());
 
                 acc
@@ -357,7 +357,7 @@ pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
         }
         CType::Primitive(val) => {
             let mut prim = ctypes::Primitive::default();
-            prim.type_constant = val.clone();
+            prim.type_constant = val;
             ctypes::c_type::InnerType::Primitive(prim)
         }
         CType::Structure(fields) => {
@@ -488,9 +488,7 @@ impl<U: NamedLatticeElement> LoweringContext<U> {
                 &self.default_lattice_elem,
             )))
         } else {
-            out_params
-                .iter()
-                .next()
+            out_params.get(0)
                 .map(|x| Box::new(x.type_index.clone()))
         };
 
@@ -533,10 +531,10 @@ impl<U: NamedLatticeElement> LoweringContext<U> {
         total_types.extend(function_types);
 
         if total_types.len() == 1 {
-            let ty = total_types.into_iter().next().unwrap();
-            ty
+            
+            total_types.into_iter().next().unwrap()
         } else {
-            CType::Union(total_types.into_iter().map(|x| Box::new(x)).collect())
+            CType::Union(total_types.into_iter().map(Box::new).collect())
         }
     }
 
