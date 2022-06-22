@@ -664,7 +664,7 @@ where
 
     fn copy_built_sketch_into_global(
         &self,
-        curr_scc: &Vec<Tid>,
+        curr_scc: &[Tid],
         location_to_index: &mut BTreeMap<TypeLocation, NodeIndex>,
         resulting_graph: &mut StableDiGraph<LatticeBounds<U>, FieldLabel>,
         resulting_labeling: &mut HashMap<DerivedTypeVar, NodeIndex>,
@@ -675,7 +675,7 @@ where
             let new_idx = resulting_graph.add_node(weight.clone());
             location_to_index.insert(
                 TypeLocation::SCCLoc(SCCLocation {
-                    scc: curr_scc.clone(),
+                    scc: curr_scc.to_vec(),
                     target_path: nd_idx,
                 }),
                 new_idx,
@@ -684,12 +684,12 @@ where
 
         for edge in sg.quotient_graph.get_graph().edge_references() {
             let source_loc = TypeLocation::SCCLoc(SCCLocation {
-                scc: curr_scc.clone(),
+                scc: curr_scc.to_vec(),
                 target_path: edge.source(),
             });
             // Todo these should probably be shared RC vecs for cheap cloning
             let maybe_dst_loc = TypeLocation::SCCLoc(SCCLocation {
-                scc: curr_scc.clone(),
+                scc: curr_scc.to_vec(),
                 target_path: edge.target(),
             });
 
@@ -723,7 +723,7 @@ where
                     dtv.clone(),
                     *location_to_index
                         .get(&TypeLocation::SCCLoc(SCCLocation {
-                            scc: curr_scc.clone(),
+                            scc: curr_scc.to_vec(),
                             target_path: *tgt_idx,
                         }))
                         .expect("All nodes should be added to the location map"),
@@ -1028,7 +1028,7 @@ where
     fn collect_aliases_for_formal(
         &self,
         condensed_cg: &Graph<Vec<Tid>, (), Directed>,
-        associated_scc_tids: &Vec<Tid>,
+        associated_scc_tids: &[Tid],
         target_scc_sketch: &SketchGraph<LatticeBounds<U>>,
         target_dtv: &DerivedTypeVar,
         scc_idx: NodeIndex,
@@ -1081,7 +1081,7 @@ where
                                         target_path: from_node,
                                     }),
                                     TypeLocation::SCCLoc(SCCLocation {
-                                        scc: repr_scc,
+                                        scc: repr_scc.to_vec(),
                                         target_path: repr_node,
                                     }),
                                 )
@@ -1124,7 +1124,7 @@ where
             .map(|(sketch, _)| sketch.clone())
             .reduce(|lhs, rhs| type_merge_operator(&lhs, &rhs))
             .map(|merged| refinement_operator(&merged, orig_repr))
-            .unwrap_or(orig_repr.clone());
+            .unwrap_or_else(|| orig_repr.clone());
 
         call_site_type.label_dtvs(orig_repr);
         // if an actual is equal to the replacement type then we can bind that parameter to the type.
@@ -1713,17 +1713,13 @@ impl<U: std::cmp::PartialEq + Clone> Sketch<U> {
         .and_then(|found_node| {
             let subgraph = self.get_graph().get_reachable_subgraph(found_node);
             // only the root should have no edges
-            let root = subgraph
-                .get_graph()
-                .node_indices()
-                .filter(|x| {
-                    subgraph
-                        .get_graph()
-                        .edges_directed(*x, Incoming)
-                        .next()
-                        .is_none()
-                })
-                .next();
+            let root = subgraph.get_graph().node_indices().find(|x| {
+                subgraph
+                    .get_graph()
+                    .edges_directed(*x, Incoming)
+                    .next()
+                    .is_none()
+            });
 
             root.map(|root| {
                 // TODO(Ian) this is so hacky but we only rely on entry computation for structural equality so this is ok ish.
@@ -1938,11 +1934,11 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         for (base_node, (o1, o2)) in mapping_from_new_node_to_representatives_in_orig.iter() {
             let self_label = o1
                 .and_then(|o1| self.quotient_graph.get_graph().node_weight(o1).cloned())
-                .unwrap_or(self.default_label.clone());
+                .unwrap_or_else(|| self.default_label.clone());
 
             let other_label = o2
                 .and_then(|o2| other.quotient_graph.get_graph().node_weight(o2).cloned())
-                .unwrap_or(self.default_label.clone());
+                .unwrap_or_else(|| self.default_label.clone());
 
             // Both nodes should recogonize the word in the case of an intersection
             //assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());

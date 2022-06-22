@@ -269,7 +269,8 @@ impl RuleContext {
     /// generates Δc so that we can generate edges
     fn generate_constraint_based_rules(&self, subty: &[&SubtypeConstraint]) -> Vec<Rule> {
         subty
-            .iter().flat_map(|s| vec![self.rule_covariant(s), self.rule_contravariant(s)])
+            .iter()
+            .flat_map(|s| vec![self.rule_covariant(s), self.rule_contravariant(s)])
             .collect()
     }
 }
@@ -568,7 +569,7 @@ impl FSA {
     }
 
     fn get_entries_to_scc(&self, idxs: &[NodeIndex]) -> BTreeSet<NodeIndex> {
-        let canidates = idxs.to_owned().into_iter().collect::<BTreeSet<_>>();
+        let canidates = idxs.iter().copied().collect::<BTreeSet<_>>();
 
         idxs.iter()
             .cloned()
@@ -698,11 +699,11 @@ impl FSA {
             .node_weight(to_replace)
             .expect("State must be valid");
 
-        let var = match &weight {
+        let var = match weight {
             // if the start or end nodes are in an scc we really screwed up
-            &FiniteState::End => unreachable!(),
-            &FiniteState::Start => unreachable!(),
-            &FiniteState::Tv(tv) => tv.base_var.variance.clone(),
+            FiniteState::End => unreachable!(),
+            FiniteState::Start => unreachable!(),
+            FiniteState::Tv(tv) => tv.base_var.variance.clone(),
         };
 
         let ivlhs = InterestingVar {
@@ -1290,7 +1291,8 @@ impl FSA {
         let mut total_edges = Self::get_direct_rule_edges(&constraint_rules)?;
 
         let indirect_edges = total_edges
-            .iter().flat_map(|e| {
+            .iter()
+            .flat_map(|e| {
                 let mut f = Self::generate_push_pop_edges_for_state(&e.src);
                 f.extend(Self::generate_push_pop_edges_for_state(&e.dst));
                 f
@@ -1300,7 +1302,8 @@ impl FSA {
         total_edges.extend(indirect_edges);
 
         let start_stop_edges = total_edges
-            .iter().flat_map(|e| {
+            .iter()
+            .flat_map(|e| {
                 Self::generate_start_and_stop_edges_for_state(&e.src)
                     .into_iter()
                     .chain(Self::generate_start_and_stop_edges_for_state(&e.dst).into_iter())
