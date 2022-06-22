@@ -211,7 +211,7 @@ where
             .iter()
             .map(|src| SubtypeConstraint {
                 lhs: tgt_ty.clone(),
-                rhs: self.get_affecting_type(add_cons, *src).clone(),
+                rhs: self.get_affecting_type(add_cons, *src),
             })
             .collect()
     }
@@ -223,14 +223,12 @@ where
             .collect::<Vec<_>>();
 
         updates
-            .iter()
-            .map(|(cons, updates)| {
+            .iter().flat_map(|(cons, updates)| {
                 updates
                     .iter()
                     .map(|update| self.apply_label_update(cons, update))
                     .collect::<Vec<_>>()
             })
-            .flatten()
             .flatten()
             .collect()
     }
@@ -351,9 +349,7 @@ fn get_formals_in(cs_set: &ConstraintSet) -> impl Iterator<Item = DerivedTypeVar
             } else {
                 None
             }
-        })
-        .map(|subty| vec![subty.lhs.clone(), subty.rhs.clone()].into_iter())
-        .flatten()
+        }).flat_map(|subty| vec![subty.lhs.clone(), subty.rhs.clone()].into_iter())
         .filter_map(|dtv| {
             if (dtv.refers_to_in_parameter() || dtv.refers_to_out_parameter())
                 && dtv.is_formal_dtv()
@@ -446,7 +442,7 @@ where
 
                 for tid in tid_filter.iter() {
                     if let Some(to_insert) = self.additional_constraints.get(tid) {
-                        basic_cons.insert_all(&to_insert);
+                        basic_cons.insert_all(to_insert);
                     }
                 }
                 let resolved_cs_set = self.lattice_def.infer_pointers(&basic_cons)?;

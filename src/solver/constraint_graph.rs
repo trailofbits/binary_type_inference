@@ -269,9 +269,7 @@ impl RuleContext {
     /// generates Δc so that we can generate edges
     fn generate_constraint_based_rules(&self, subty: &[&SubtypeConstraint]) -> Vec<Rule> {
         subty
-            .iter()
-            .map(|s| vec![self.rule_covariant(s), self.rule_contravariant(s)])
-            .flatten()
+            .iter().flat_map(|s| vec![self.rule_covariant(s), self.rule_contravariant(s)])
             .collect()
     }
 }
@@ -684,7 +682,7 @@ impl FSA {
             self.cant_pop_nodes.get(&fs.not()).cloned(),
             self.cant_pop_nodes.get(&fs).cloned(),
         ];
-        v.into_iter().filter_map(|x| x).collect()
+        v.into_iter().flatten().collect()
     }
 
     fn replace_if_exists(&mut self, idx: NodeIndex, with_tv: TypeVariable) {
@@ -1011,7 +1009,7 @@ impl FSA {
     fn get_direct_rule_edges(constraint_rules: &[Rule]) -> Result<Vec<EdgeDefinition>> {
         constraint_rules
             .iter()
-            .map(|r| Self::sub_type_edge(r))
+            .map(Self::sub_type_edge)
             .collect::<Result<Vec<EdgeDefinition>>>()
     }
 
@@ -1099,7 +1097,7 @@ impl FSA {
         ed: &EdgeIndex,
         pat_cons: &impl Fn(&FSAEdge) -> Option<&StackSymbol>,
     ) -> Option<(DerivedTypeVar, Variance)> {
-        let opt = self.grph.edge_weight(*ed).and_then(|x| pat_cons(x));
+        let opt = self.grph.edge_weight(*ed).and_then(pat_cons);
 
         if let Some(StackSymbol::InterestingVar(iv, var)) = opt {
             Some((DerivedTypeVar::new(iv.tv.clone()), var.clone()))
@@ -1292,25 +1290,21 @@ impl FSA {
         let mut total_edges = Self::get_direct_rule_edges(&constraint_rules)?;
 
         let indirect_edges = total_edges
-            .iter()
-            .map(|e| {
+            .iter().flat_map(|e| {
                 let mut f = Self::generate_push_pop_edges_for_state(&e.src);
                 f.extend(Self::generate_push_pop_edges_for_state(&e.dst));
                 f
             })
-            .flatten()
             .collect::<Vec<_>>();
 
         total_edges.extend(indirect_edges);
 
         let start_stop_edges = total_edges
-            .iter()
-            .map(|e| {
+            .iter().flat_map(|e| {
                 Self::generate_start_and_stop_edges_for_state(&e.src)
                     .into_iter()
                     .chain(Self::generate_start_and_stop_edges_for_state(&e.dst).into_iter())
             })
-            .flatten()
             .collect::<Vec<_>>();
 
         total_edges.extend(start_stop_edges);

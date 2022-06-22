@@ -146,7 +146,7 @@ fn edge_set_to_partitions<A: Alphabet>(
     for (nd_id, transitions) in edges.into_iter() {
         let set = prev_trans_map
             .entry(transitions)
-            .or_insert_with(|| BTreeSet::new());
+            .or_insert_with(BTreeSet::new);
         set.insert(nd_id);
     }
 
@@ -165,9 +165,7 @@ fn find_new_partitions<A: Alphabet>(
 fn partition_vector_to_id_map<'a>(
     it: impl Iterator<Item = &'a BTreeSet<usize>>,
 ) -> HashMap<usize, usize> {
-    it.enumerate()
-        .map(|(part_id, nd_set)| nd_set.iter().map(move |mem| (*mem, part_id)))
-        .flatten()
+    it.enumerate().flat_map(|(part_id, nd_set)| nd_set.iter().map(move |mem| (*mem, part_id)))
         .collect()
 }
 
@@ -237,12 +235,10 @@ where
     let part_id = partition_vector_to_id_map(paritions.iter());
     // I regret writing things this way, i apologize, flattens should occur earlier clones later
     let edges = paritions
-        .iter()
-        .map(|x| {
+        .iter().flat_map(|x| {
             let src_node = cont.get_node(x.clone());
             let ref_src = &src_node;
-            x.iter()
-                .map(|src| {
+            x.iter().flat_map(|src| {
                     let emp = BTreeMap::new();
                     lhs_edge_map
                         .get(src)
@@ -263,11 +259,9 @@ where
                         .collect::<Vec<_>>()
                         .into_iter()
                 })
-                .flatten()
                 .collect::<Vec<_>>()
                 .into_iter()
         })
-        .flatten()
         .collect::<BTreeSet<_>>();
 
     let ent_node = cont.get_node(
@@ -315,7 +309,7 @@ where
 {
     let new_dfa = cartesian_product_internal(lhs, rhs, false);
 
-    return minimize(&new_dfa);
+    minimize(&new_dfa)
 }
 
 fn cartesian_product_internal<T, U, A>(
@@ -408,7 +402,7 @@ where
 {
     let new_dfa = cartesian_product_internal(lhs, rhs, true);
 
-    return minimize(&new_dfa);
+    minimize(&new_dfa)
 }
 
 /// Compplement of the DFA

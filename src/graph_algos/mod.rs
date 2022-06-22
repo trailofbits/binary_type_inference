@@ -92,9 +92,9 @@ where
     G: IntoEdgesDirected,
 {
     let mut curr_node = start;
-    let mut iter = path.into_iter();
+    let iter = path;
 
-    while let Some(take_edge) = iter.next() {
+    for take_edge in iter {
         let mut edges = graph.edges_directed(curr_node, petgraph::EdgeDirection::Outgoing);
 
         if let Some(e) = edges.find(|e| e.weight() == take_edge) {

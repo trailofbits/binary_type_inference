@@ -409,7 +409,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
                 if vars.len() == 1 {
                     let repr = vars.into_iter().next().unwrap();
                     (DerivedTypeVar::new(repr), ConstraintSet::default())
-                } else if vars.len() == 0 {
+                } else if vars.is_empty() {
                     (DerivedTypeVar::new(vman.fresh()), ConstraintSet::default())
                 } else {
                     let repr = DerivedTypeVar::new(vman.fresh());
@@ -611,13 +611,13 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
     }
 
     fn handle_def(&self, df: &Term<Def>, vman: &mut VariableManager) -> ConstraintSet {
-        let cs_set = match &df.term {
+        
+
+        match &df.term {
             Def::Load { var, address } => self.apply_load(&df.tid, var, address, vman),
             Def::Store { address, value } => self.apply_store(&df.tid, value, address, vman),
             Def::Assign { var, value } => self.apply_assign(&df.tid, var, value, vman),
-        };
-
-        cs_set
+        }
     }
 
     fn argtvar_to_dtv(tvar: ArgTvar, displacement: i64) -> DerivedTypeVar {
@@ -700,7 +700,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
             None,
             sub,
             &sub.term.formal_args,
-            &|i| FieldLabel::In(i),
+            &FieldLabel::In,
             true,
             0,
             vman,
@@ -713,7 +713,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
             None,
             sub,
             &sub.term.formal_rets,
-            &|i| FieldLabel::Out(i),
+            &FieldLabel::Out,
             false,
             0,
             vman,
@@ -731,17 +731,17 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         vman: &mut VariableManager,
         return_address_displacement: i64,
     ) -> ConstraintSet {
-        let res = self.make_constraints(
+        
+
+        self.make_constraints(
             Some(calling_blk),
             sub,
             &sub.term.formal_rets,
-            &|i| FieldLabel::Out(i),
+            &FieldLabel::Out,
             true,
             return_address_displacement,
             vman,
-        );
-
-        res
+        )
     }
 
     //TODO(Ian): implement callsite cloning
@@ -756,7 +756,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
             Some(calling_blk),
             sub,
             &sub.term.formal_args,
-            &|i| FieldLabel::In(i),
+            &FieldLabel::In,
             false,
             return_address_displacement,
             vman,
@@ -774,7 +774,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
             Some(calling_blk),
             sub,
             &sub.term.parameters,
-            &|i| FieldLabel::In(i),
+            &FieldLabel::In,
             false,
             return_address_displacement,
             vman,
@@ -792,7 +792,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
             Some(calling_blk),
             sub,
             &sub.term.return_values,
-            &|i| FieldLabel::Out(i),
+            &FieldLabel::Out,
             true,
             return_address_displacement,
             vman,
@@ -1048,7 +1048,7 @@ where
                 Node::BlkEnd(blk, sub) => {
                     let mut cs = ConstraintSet::default();
 
-                    let add_cons = self.collect_extern_call_constraints(&blk, nd_cont, vman);
+                    let add_cons = self.collect_extern_call_constraints(blk, nd_cont, vman);
                     info!("Extern cons: {}\n", add_cons);
                     cs.insert_all(&add_cons);
 

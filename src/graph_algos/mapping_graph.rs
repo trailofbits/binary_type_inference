@@ -88,14 +88,14 @@ where
             .nodes
             .iter()
             .filter(|(_k, v)| reachable_idxs.contains(v))
-            .map(|(k, v)| (k.clone(), v.clone()))
+            .map(|(k, v)| (k.clone(), *v))
             .collect();
 
         let filtered_reprs = self
             .reprs_to_graph_node
             .iter()
             .filter(|(idx, _associated_nodes)| reachable_idxs.contains(idx))
-            .map(|(k, v)| (k.clone(), v.clone()))
+            .map(|(k, v)| (*k, v.clone()))
             .collect();
 
         MappingGraph {
@@ -124,8 +124,7 @@ impl<
         // Nodes are looked up by their original path. Since we always refine the original type we should be able to follow a path from the original
         // tvar in the refined tvar.
         let edges_outside_subgraph: Vec<(E, NodeIndex, Vec<E>)> =
-            explore_paths(&self.grph, orig_var_idx)
-                .map(|(pth, reached_id)| {
+            explore_paths(&self.grph, orig_var_idx).flat_map(|(pth, reached_id)| {
                     let incoming_edges = self
                         .get_graph()
                         .edges_directed(reached_id, petgraph::EdgeDirection::Incoming);
@@ -155,7 +154,6 @@ impl<
                         .collect::<Vec<_>>()
                         .into_iter()
                 })
-                .flatten()
                 .collect::<Vec<_>>();
 
         // remove reached nodes
@@ -175,8 +173,7 @@ impl<
             new
         };
         grph.get_graph()
-            .node_indices()
-            .map(|nd| {
+            .node_indices().flat_map(|nd| {
                 let src = add_node(nd);
                 let mut tot = Vec::new();
                 for edge in grph.get_graph().edges_directed(nd, Outgoing) {
@@ -186,14 +183,13 @@ impl<
                 }
                 tot.into_iter()
             })
-            .flatten()
             .collect::<Vec<_>>()
             .into_iter()
             .for_each(|(src, wt, dst)| {
                 self.grph.add_edge(src, dst, wt);
             });
 
-        assert!(old_idx_to_new_idx_mapping.len() > 0);
+        assert!(!old_idx_to_new_idx_mapping.is_empty());
         // relabel ourselves to inclue the original labels
         // We dont need to merge because the labels are received from the graph we are replacing into so any labels inside the subgraph are not elsewhere
         let mut new_labeling = self.nodes.clone();
@@ -397,9 +393,7 @@ impl<
 
         let repr_mapping = groups
             .iter()
-            .enumerate()
-            .map(|(repr_indx, s)| s.iter().map(move |node_idx| (node_idx, repr_indx)))
-            .flatten()
+            .enumerate().flat_map(|(repr_indx, s)| s.iter().map(move |node_idx| (node_idx, repr_indx)))
             .collect::<HashMap<_, _>>();
 
         let mut group_to_new_node = HashMap::new();
@@ -483,7 +477,7 @@ impl<W: std::cmp::PartialEq + Clone, N: Clone + Hash + Eq + Ord, E: Hash + Eq + 
         // construct set
         let mut new_graph = self.clone();
         new_graph.inplace_relable_representative_nodes(mapping);
-        return new_graph;
+        new_graph
     }
 }
 
@@ -501,8 +495,7 @@ impl<W: std::cmp::PartialEq, N: Clone + Hash + Eq + Ord, E: Hash + Eq> MappingGr
     pub fn get_group_for_node(&self, idx: NodeIndex) -> BTreeSet<N> {
         self.reprs_to_graph_node
             .get(&idx)
-            .cloned()
-            .unwrap_or(BTreeSet::new())
+            .cloned().unwrap_or_default()
     }
 
     /// Gets the underlying [petgraph]

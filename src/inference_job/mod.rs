@@ -98,7 +98,7 @@ where
     let coll = T::parse_collection(rdr)?;
 
     coll.into_iter()
-        .map(|x| R::try_from(x).map_err(|e| anyhow::Error::from(e)))
+        .map(|x| R::try_from(x).map_err(anyhow::Error::from))
         .collect()
 }
 
@@ -143,8 +143,8 @@ pub struct JsonDef;
 
 impl<T: DeserializeOwned> InferenceParsing<T> for JsonDef {
     fn parse_collection<R: Read>(rdr: R) -> anyhow::Result<Vec<T>> {
-        let res = serde_json::from_reader(rdr).map_err(|e| anyhow::Error::from(e));
-        res
+        
+        serde_json::from_reader(rdr).map_err(anyhow::Error::from)
     }
 }
 
@@ -193,7 +193,7 @@ impl InferenceJob {
         log::info!("Retrieved IR");
         ir.normalize()
             .iter()
-            .for_each(|v| crate::util::log_cwe_message(v));
+            .for_each(crate::util::log_cwe_message);
         log::info!("Normalized IR");
 
         Ok(ir)
@@ -239,7 +239,7 @@ impl InferenceJob {
             .into_iter()
             .fold(BTreeMap::new(), |mut acc, add_cons| {
                 acc.entry(add_cons.associated_variable)
-                    .or_insert_with(|| ConstraintSet::default())
+                    .or_insert_with(ConstraintSet::default)
                     .insert(TyConstraint::SubTy(add_cons.constraint));
                 acc
             }))
@@ -304,7 +304,7 @@ impl InferenceJob {
 
         let (res, logs) = analysis_results.compute_function_signatures();
         logs.iter()
-            .for_each(|msg| crate::util::log_cwe_message(msg));
+            .for_each(crate::util::log_cwe_message);
 
         let analysis_results = analysis_results.with_function_signatures(Some(&res));
 
@@ -347,7 +347,7 @@ impl InferenceJob {
         let reaching_defs_start_of_block = reg_context
             .iter()
             .filter_map(|(k, v)| {
-                let nd = grph[k.clone()];
+                let nd = grph[(*k)];
                 match nd {
                     Node::BlkStart(blk, _sub) => Some((blk.tid.clone(), v.clone())),
                     _ => None,
@@ -367,12 +367,12 @@ impl InferenceJob {
             only_interestings.insert(crate::constraint_generation::tid_to_tvar(x));
         });
 
-        let mut interesting_and_lattice = only_interestings.clone();
+        let mut interesting_and_lattice = only_interestings;
 
         let lattice_elems = self.get_lattice_elems();
 
         lattice_elems.for_each(|x| {
-            interesting_and_lattice.insert(x.clone());
+            interesting_and_lattice.insert(x);
         });
 
         RuleContext::new(interesting_and_lattice)
@@ -449,7 +449,7 @@ impl InferenceJob {
         self.get_interesting_tids().iter().for_each(|x| {
             let tvar = crate::constraint_generation::tid_to_tvar(x);
             if let Some(idx) = grph
-                .get_node_index_for_variable(&crate::constraints::DerivedTypeVar::new(tvar.clone()))
+                .get_node_index_for_variable(&crate::constraints::DerivedTypeVar::new(tvar))
             {
                 tot.insert(x.clone(), idx);
             }
@@ -492,7 +492,7 @@ impl InferenceJob {
         for scc in scc_cons.iter_mut() {
             for tid in scc.scc.iter() {
                 if let Some(new_cons) = self.additional_constraints.get(tid) {
-                    scc.constraints.insert_all(&new_cons);
+                    scc.constraints.insert_all(new_cons);
                 }
             }
         }
