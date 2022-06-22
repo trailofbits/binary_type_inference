@@ -663,7 +663,7 @@ impl Display for SubtypeConstraint {
 }
 
 /// A set of [SubtypeConstraint]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Default)]
 pub struct ConstraintSet(BTreeSet<TyConstraint>);
 
 impl ConstraintSet {
@@ -685,13 +685,12 @@ impl ConstraintSet {
 
     /// Get all derived type variables involved in these constraints.
     pub fn variables(&self) -> impl Iterator<Item = &DerivedTypeVar> {
-        self.0
-            .iter().flat_map(|cons| match cons {
-                TyConstraint::SubTy(sty) => vec![&sty.lhs, &sty.rhs].into_iter(),
-                TyConstraint::AddCons(add_cons) => {
-                    vec![&add_cons.lhs_ty, &add_cons.rhs_ty, &add_cons.repr_ty].into_iter()
-                }
-            })
+        self.0.iter().flat_map(|cons| match cons {
+            TyConstraint::SubTy(sty) => vec![&sty.lhs, &sty.rhs].into_iter(),
+            TyConstraint::AddCons(add_cons) => {
+                vec![&add_cons.lhs_ty, &add_cons.rhs_ty, &add_cons.repr_ty].into_iter()
+            }
+        })
     }
 }
 
@@ -770,12 +769,6 @@ impl ConstraintSet {
 impl From<BTreeSet<TyConstraint>> for ConstraintSet {
     fn from(c: BTreeSet<TyConstraint>) -> Self {
         ConstraintSet(c)
-    }
-}
-
-impl Default for ConstraintSet {
-    fn default() -> ConstraintSet {
-        ConstraintSet(BTreeSet::new())
     }
 }
 

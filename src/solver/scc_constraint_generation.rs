@@ -223,7 +223,8 @@ where
             .collect::<Vec<_>>();
 
         updates
-            .iter().flat_map(|(cons, updates)| {
+            .iter()
+            .flat_map(|(cons, updates)| {
                 updates
                     .iter()
                     .map(|update| self.apply_label_update(cons, update))
@@ -349,7 +350,8 @@ fn get_formals_in(cs_set: &ConstraintSet) -> impl Iterator<Item = DerivedTypeVar
             } else {
                 None
             }
-        }).flat_map(|subty| vec![subty.lhs.clone(), subty.rhs.clone()].into_iter())
+        })
+        .flat_map(|subty| vec![subty.lhs.clone(), subty.rhs.clone()].into_iter())
         .filter_map(|dtv| {
             if (dtv.refers_to_in_parameter() || dtv.refers_to_out_parameter())
                 && dtv.is_formal_dtv()
@@ -379,6 +381,16 @@ fn insert_missed_formals(simplified_cs_set: &mut ConstraintSet, original_cs_set:
     })
 }
 
+/// Information about a target program needed from CWE Checker to preform constraint generation and initial simplification
+pub struct ProgramInfo<'a> {
+    /// The callgraph of the program as recovered from traversing the CFG
+    pub cg: CallGraph,
+    /// The ICFG of the target program
+    pub cfg: &'a Graph<'a>,
+    /// A mapping from terms to extern symbol defs
+    pub extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
+}
+
 impl<R, P, S, C, T, U> Context<'_, '_, '_, '_, R, P, S, C, T, U>
 where
     R: RegisterMapping,
@@ -390,10 +402,8 @@ where
 {
     /// Creates a new scc constraint generation context.
     pub fn new<'a, 'b, 'c, 'd>(
-        cg: CallGraph,
-        graph: &'a Graph<'a>,
+        prog_info: ProgramInfo<'a>,
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S, C>>,
-        extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
         rule_context: RuleContext,
         vman: &'b mut VariableManager,
         lattice: LatticeInfo<'c, T, U>,
@@ -401,10 +411,10 @@ where
         additional_constraints: &'d BTreeMap<Tid, ConstraintSet>,
     ) -> Context<'a, 'b, 'c, 'd, R, P, S, C, T, U> {
         Context {
-            cg,
-            graph,
+            cg: prog_info.cg,
+            graph: prog_info.cfg,
             node_contexts,
-            extern_symbols,
+            extern_symbols: prog_info.extern_symbols,
             rule_context,
             vman,
             lattice_def: lattice,
