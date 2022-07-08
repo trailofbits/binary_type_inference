@@ -35,9 +35,16 @@ prost = "0.9.0"
 tempdir = "0.3.7"
 byteorder = "1.4.3"
 im-rc = "15.0.0"
+colored-diff = "0.2.3"
 
 [build-dependencies]
 prost-build = "0.9.0"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
+criterion = "0.3.5"
+
+
+[[bench]]
+name = "preanalysis_benchmarks"
+harness = false

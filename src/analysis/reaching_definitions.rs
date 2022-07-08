@@ -7,15 +7,120 @@ use cwe_checker_lib::{
         Arg, Blk, Def, Expression, ExternSymbol, Jmp, Project, Term, Tid, Variable,
     },
 };
-use log::error;
+
+use log::{error, info};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashSet},
+    fmt::Debug,
     vec,
 };
 use std::{
     fmt::Display,
     ops::{Deref, DerefMut},
 };
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+/// New types a domain map with a union merging strategy to insert the implicit bottom values for unmapped keys
+/// during comparison in order to match the partial order we are actually trying to ascend
+pub struct ImplicitBottomMappingDomain<K, V>(pub DomainMap<K, V, UnionMergeStrategy>)
+where
+    K: Ord + PartialOrd + Clone,
+    V: AbstractDomain;
+
+impl<K, V> AbstractDomain for ImplicitBottomMappingDomain<K, V>
+where
+    K: Ord + PartialOrd + Clone,
+    V: AbstractDomain + PartialOrd,
+{
+    fn merge(&self, other: &Self) -> Self {
+        let next = ImplicitBottomMappingDomain(self.0.merge(&other.0));
+        assert!(self.le(&next));
+        assert!(other.le(&next));
+        next
+    }
+
+    fn is_top(&self) -> bool {
+        self.0.is_top()
+    }
+}
+
+impl<K, V> Default for ImplicitBottomMappingDomain<K, V>
+where
+    K: Ord + PartialOrd + Clone,
+    V: AbstractDomain + PartialOrd,
+{
+    fn default() -> Self {
+        ImplicitBottomMappingDomain(DomainMap::from(BTreeMap::new()))
+    }
+}
+
+impl<K, V> Deref for ImplicitBottomMappingDomain<K, V>
+where
+    K: PartialOrd + Ord + Clone,
+    V: AbstractDomain,
+{
+    type Target = DomainMap<K, V, UnionMergeStrategy>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<K, V> DerefMut for ImplicitBottomMappingDomain<K, V>
+where
+    K: PartialOrd + Ord + Clone,
+    V: AbstractDomain,
+{
+    fn deref_mut(&mut self) -> &mut DomainMap<K, V, UnionMergeStrategy> {
+        &mut self.0
+    }
+}
+
+impl<K, V> PartialOrd for ImplicitBottomMappingDomain<K, V>
+where
+    K: Ord + PartialOrd + Clone,
+    V: AbstractDomain + PartialOrd,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let orderings = self
+            .0
+            .keys()
+            .chain(other.0.keys())
+            .map(|k| (self.0.get(k), other.0.get(k)))
+            .map(|(f, s)| match (f, s) {
+                (None, None) => Some(std::cmp::Ordering::Equal),
+                (None, Some(_)) => Some(std::cmp::Ordering::Less),
+                (Some(_), None) => Some(std::cmp::Ordering::Greater),
+                (Some(x), Some(y)) => x.partial_cmp(y),
+            })
+            .collect::<HashSet<Option<std::cmp::Ordering>>>();
+
+        if orderings.is_empty() {
+            return Some(std::cmp::Ordering::Equal);
+        }
+
+        if orderings.len() == 1 {
+            orderings.into_iter().next().unwrap()
+        } else if orderings.len() == 2
+            && orderings.contains(&Some(std::cmp::Ordering::Equal))
+            && orderings.contains(&Some(std::cmp::Ordering::Less))
+        {
+            Some(std::cmp::Ordering::Less)
+        } else if orderings.len() == 2
+            && orderings.contains(&Some(std::cmp::Ordering::Equal))
+            && orderings.contains(&Some(std::cmp::Ordering::Greater))
+        {
+            Some(std::cmp::Ordering::Greater)
+        } else {
+            None
+        }
+    }
+}
+
+/// Type alias of the domain of this analysis. The analysis collects mappings from variables to possible defining terms. Defining terms
+/// should only be added.
+pub type DomVal = ImplicitBottomMappingDomain<Variable, TermSet>;
 
 /// The context for a reaching definitions analysis. Reaching definitions needs both a project and a mapping from Tid to external symbols.
 /// The external symbols allow reaching definitions to appropriately update based on ABI info.
@@ -66,8 +171,24 @@ impl Display for Definition {
 
 /// The abstract domain of a reaching definitions analysis. At each program point the analysis maps
 /// a variable to a [TermSet] which is the collection of definitions that may define that variable at this program point.
-#[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TermSet(pub BTreeSet<Definition>);
+
+impl PartialOrd for TermSet {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self.is_subset(other) {
+            if other.is_subset(self) {
+                Some(std::cmp::Ordering::Equal)
+            } else {
+                Some(std::cmp::Ordering::Less)
+            }
+        } else if self.is_superset(other) {
+            Some(std::cmp::Ordering::Greater)
+        } else {
+            None
+        }
+    }
+}
 
 impl Display for TermSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -117,7 +238,7 @@ impl DerefMut for TermSet {
 }
 
 fn apply_definition_of_variable(
-    state: &mut DomainMap<Variable, TermSet, UnionMergeStrategy>,
+    state: &mut DomVal,
     defined_var: Variable,
     tid: Tid,
     create_def: impl FnOnce(Tid) -> Definition,
@@ -143,10 +264,7 @@ impl<'a> Context<'a> {
 }
 
 /// Applies a single definition term to the abstract domain for a reaching definitions analysis
-pub fn apply_def(
-    mut old_value: DomainMap<Variable, TermSet, UnionMergeStrategy>,
-    def: &Term<Def>,
-) -> DomainMap<Variable, TermSet, UnionMergeStrategy> {
+pub fn apply_def(mut old_value: DomVal, def: &Term<Def>) -> DomVal {
     match &def.term {
         Def::Assign { var, value: _ } => {
             apply_definition_of_variable(&mut old_value, var.clone(), def.tid.clone(), |x| {
@@ -165,7 +283,7 @@ pub fn apply_def(
 
 impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a> for Context<'a> {
     /// Maps a variable to terms that may define it
-    type Value = DomainMap<Variable, TermSet, UnionMergeStrategy>;
+    type Value = DomVal;
 
     fn merge(&self, value1: &Self::Value, value2: &Self::Value) -> Self::Value {
         value1.merge(value2)
@@ -176,7 +294,9 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
     }
 
     fn update_def(&self, value: &Self::Value, def: &Term<Def>) -> Option<Self::Value> {
-        Some(apply_def(value.clone(), def))
+        let next_res = apply_def(value.clone(), def);
+
+        Some(next_res)
     }
 
     /// Trust the stub and claim it defines the return
@@ -186,7 +306,9 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
             _ => None,
         };
         //TODO(ian) we need to clobber non callee saves here. Any physical register should be clobbered.
-        if let Some(extern_symb) = call_target.and_then(|tid| self.extern_symbol_map.get(tid)) {
+        let next_res = if let Some(extern_symb) =
+            call_target.and_then(|tid| self.extern_symbol_map.get(tid))
+        {
             let mut new_value = value.clone();
 
             // define the returned values, these should probably be collected by function application type inference into outs so not strictly
@@ -207,20 +329,21 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
                 }
             }
 
-            Some(new_value)
+            new_value
         } else {
             // if we dont have any info we assume it doesnt define, if we wanted to be sound here we could add it to the set, but im not sure we want to infer
             // anything about calls that we dont have stubs for
 
-            Some(value.clone())
-        }
+            value.clone()
+        };
+        Some(next_res)
     }
 
     /// A jump doesnt affect any definitions
     fn update_jump(
         &self,
         value: &Self::Value,
-        _jump: &Term<Jmp>,
+        jump: &Term<Jmp>,
         _untaken_conditional: Option<&Term<Jmp>>,
         _target: &Term<Blk>,
     ) -> Option<Self::Value> {
@@ -230,13 +353,15 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
     fn update_call(
         &self,
         value: &Self::Value,
-        _call: &Term<Jmp>,
-        _target: &Node<'_>,
+        call: &Term<Jmp>,
+        target: &Node<'_>,
         _cc: &Option<String>,
     ) -> Option<Self::Value> {
         Some(value.clone())
     }
 
+    // TODO(Ian): are defines at actual returns used for anything anymore? perhaps to pick up typing constraints in
+    // an identity function that just returns RAX without any modification?
     fn update_return(
         &self,
         value: Option<&Self::Value>,
@@ -245,9 +370,10 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         _return_term: &Term<Jmp>,
         _cc: &Option<String>,
     ) -> Option<Self::Value> {
-        let mut new_value = value
+        let old_value = value
             .cloned()
-            .unwrap_or_else(|| DomainMap::from(BTreeMap::new()));
+            .unwrap_or_else(|| ImplicitBottomMappingDomain(DomainMap::from(BTreeMap::new())));
+        let mut new_value = old_value.clone();
 
         for (idx, arg) in self
             .get_function_returns(&call_term.term)

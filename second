@@ -1,0 +1,2912 @@
+ImplicitBottomMappingDomain(
+    DomainMap {
+        inner: {
+            Variable {
+                name: "$U12880",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113315_0",
+                            address: "00113315",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U12a80",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113315_3",
+                            address: "00113315",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U12b00",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113315_4",
+                            address: "00113315",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U12c00",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113315_6",
+                            address: "00113315",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U12e80",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_9",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_9",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_9",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U12e80",
+                size: ByteSize(
+                    4,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00104e19_6",
+                            address: "00104e19",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U12e80",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_001132fa_5",
+                            address: "001132fa",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U12f00",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_10",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_10",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_10",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U12f80",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_11",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_11",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_11",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U28b00",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_6",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_6",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_6",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U29100",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_001132fa_2",
+                            address: "001132fa",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U29b00",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_22",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U3100",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_0",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_0",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_0",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U3800",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00104e14_0",
+                            address: "00104e14",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U4f00",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00104e0b_0",
+                            address: "00104e0b",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U5af00",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113318_2",
+                            address: "00113318",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$U5b200",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_001132eb_2",
+                            address: "001132eb",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ua500",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_9",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ua580",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_10",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ua600",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_11",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ua680",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_12",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ua780",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_20",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ub100",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_4",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ub180",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_5",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ub200",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_6",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ub280",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_7",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ub380",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_21",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ubd80",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_5",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_5",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_5",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Uc000",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00104e14_1",
+                            address: "00104e14",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Uc900",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113320_0",
+                            address: "00113320",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113327_0",
+                            address: "00113327",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_0011332e_0",
+                            address: "0011332e",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Uca80",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113312_0",
+                            address: "00113312",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ucb80",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113312_1",
+                            address: "00113312",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ud000",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_001132fe_0",
+                            address: "001132fe",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ud100",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_001132fe_1",
+                            address: "001132fe",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Ud880",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_0",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "$Uea00",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: true,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_001132d4_0",
+                            address: "001132d4",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "AC",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38880,
+                    ),
+                    EntryFresh(
+                        41580,
+                    ),
+                },
+            ),
+            Variable {
+                name: "AF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38881,
+                    ),
+                    EntryFresh(
+                        41581,
+                    ),
+                },
+            ),
+            Variable {
+                name: "BND0",
+                size: ByteSize(
+                    16,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38882,
+                    ),
+                    EntryFresh(
+                        41582,
+                    ),
+                },
+            ),
+            Variable {
+                name: "BND1",
+                size: ByteSize(
+                    16,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38883,
+                    ),
+                    EntryFresh(
+                        41583,
+                    ),
+                },
+            ),
+            Variable {
+                name: "BND2",
+                size: ByteSize(
+                    16,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38884,
+                    ),
+                    EntryFresh(
+                        41584,
+                    ),
+                },
+            ),
+            Variable {
+                name: "BND3",
+                size: ByteSize(
+                    16,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38885,
+                    ),
+                    EntryFresh(
+                        41585,
+                    ),
+                },
+            ),
+            Variable {
+                name: "BNDCFGS",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38886,
+                    ),
+                    EntryFresh(
+                        41586,
+                    ),
+                },
+            ),
+            Variable {
+                name: "BNDCFGU",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38887,
+                    ),
+                    EntryFresh(
+                        41587,
+                    ),
+                },
+            ),
+            Variable {
+                name: "BNDSTATUS",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38888,
+                    ),
+                    EntryFresh(
+                        41588,
+                    ),
+                },
+            ),
+            Variable {
+                name: "C0",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38889,
+                    ),
+                    EntryFresh(
+                        41589,
+                    ),
+                },
+            ),
+            Variable {
+                name: "C1",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38890,
+                    ),
+                    EntryFresh(
+                        41590,
+                    ),
+                },
+            ),
+            Variable {
+                name: "C2",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38891,
+                    ),
+                    EntryFresh(
+                        41591,
+                    ),
+                },
+            ),
+            Variable {
+                name: "C3",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38892,
+                    ),
+                    EntryFresh(
+                        41592,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_2",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_2",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_2",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR0",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38894,
+                    ),
+                    EntryFresh(
+                        41594,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR1",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38895,
+                    ),
+                    EntryFresh(
+                        41595,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR10",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38896,
+                    ),
+                    EntryFresh(
+                        41596,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR11",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38897,
+                    ),
+                    EntryFresh(
+                        41597,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR12",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38898,
+                    ),
+                    EntryFresh(
+                        41598,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR13",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38899,
+                    ),
+                    EntryFresh(
+                        41599,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR14",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38900,
+                    ),
+                    EntryFresh(
+                        41600,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR15",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38901,
+                    ),
+                    EntryFresh(
+                        41601,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR2",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38902,
+                    ),
+                    EntryFresh(
+                        41602,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR3",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38903,
+                    ),
+                    EntryFresh(
+                        41603,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR4",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38904,
+                    ),
+                    EntryFresh(
+                        41604,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR5",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38905,
+                    ),
+                    EntryFresh(
+                        41605,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR6",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38906,
+                    ),
+                    EntryFresh(
+                        41606,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR7",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38907,
+                    ),
+                    EntryFresh(
+                        41607,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR8",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38908,
+                    ),
+                    EntryFresh(
+                        41608,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CR9",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38909,
+                    ),
+                    EntryFresh(
+                        41609,
+                    ),
+                },
+            ),
+            Variable {
+                name: "CS",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38910,
+                    ),
+                    EntryFresh(
+                        41610,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38911,
+                    ),
+                    EntryFresh(
+                        41611,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR0",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38912,
+                    ),
+                    EntryFresh(
+                        41612,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR1",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38913,
+                    ),
+                    EntryFresh(
+                        41613,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR10",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38914,
+                    ),
+                    EntryFresh(
+                        41614,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR11",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38915,
+                    ),
+                    EntryFresh(
+                        41615,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR12",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38916,
+                    ),
+                    EntryFresh(
+                        41616,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR13",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38917,
+                    ),
+                    EntryFresh(
+                        41617,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR14",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38918,
+                    ),
+                    EntryFresh(
+                        41618,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR15",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38919,
+                    ),
+                    EntryFresh(
+                        41619,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR2",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38920,
+                    ),
+                    EntryFresh(
+                        41620,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR3",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38921,
+                    ),
+                    EntryFresh(
+                        41621,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR4",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38922,
+                    ),
+                    EntryFresh(
+                        41622,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR5",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38923,
+                    ),
+                    EntryFresh(
+                        41623,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR6",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38924,
+                    ),
+                    EntryFresh(
+                        41624,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR7",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38925,
+                    ),
+                    EntryFresh(
+                        41625,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR8",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38926,
+                    ),
+                    EntryFresh(
+                        41626,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DR9",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38927,
+                    ),
+                    EntryFresh(
+                        41627,
+                    ),
+                },
+            ),
+            Variable {
+                name: "DS",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38928,
+                    ),
+                    EntryFresh(
+                        41628,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ES",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38929,
+                    ),
+                    EntryFresh(
+                        41629,
+                    ),
+                },
+            ),
+            Variable {
+                name: "F1",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38930,
+                    ),
+                    EntryFresh(
+                        41630,
+                    ),
+                },
+            ),
+            Variable {
+                name: "F15",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38931,
+                    ),
+                    EntryFresh(
+                        41631,
+                    ),
+                },
+            ),
+            Variable {
+                name: "F3",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38932,
+                    ),
+                    EntryFresh(
+                        41632,
+                    ),
+                },
+            ),
+            Variable {
+                name: "F5",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38933,
+                    ),
+                    EntryFresh(
+                        41633,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FPUControlWord",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38934,
+                    ),
+                    EntryFresh(
+                        41634,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FPUDataPointer",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38935,
+                    ),
+                    EntryFresh(
+                        41635,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FPUDataSelector",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38936,
+                    ),
+                    EntryFresh(
+                        41636,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FPUInstructionPointer",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38937,
+                    ),
+                    EntryFresh(
+                        41637,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FPULastInstructionOpcode",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38938,
+                    ),
+                    EntryFresh(
+                        41638,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FPUPointerSelector",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38939,
+                    ),
+                    EntryFresh(
+                        41639,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FPUStatusWord",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38940,
+                    ),
+                    EntryFresh(
+                        41640,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FPUTagWord",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38941,
+                    ),
+                    EntryFresh(
+                        41641,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FS",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38942,
+                    ),
+                    EntryFresh(
+                        41642,
+                    ),
+                },
+            ),
+            Variable {
+                name: "FS_OFFSET",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38943,
+                    ),
+                    EntryFresh(
+                        41643,
+                    ),
+                },
+            ),
+            Variable {
+                name: "GDTR",
+                size: ByteSize(
+                    12,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38944,
+                    ),
+                    EntryFresh(
+                        41644,
+                    ),
+                },
+            ),
+            Variable {
+                name: "GS",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38945,
+                    ),
+                    EntryFresh(
+                        41645,
+                    ),
+                },
+            ),
+            Variable {
+                name: "GS_OFFSET",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38946,
+                    ),
+                    EntryFresh(
+                        41646,
+                    ),
+                },
+            ),
+            Variable {
+                name: "IA32_PL0_SSP",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38947,
+                    ),
+                    EntryFresh(
+                        41647,
+                    ),
+                },
+            ),
+            Variable {
+                name: "IA32_PL1_SSP",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38948,
+                    ),
+                    EntryFresh(
+                        41648,
+                    ),
+                },
+            ),
+            Variable {
+                name: "IA32_PL2_SSP",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38949,
+                    ),
+                    EntryFresh(
+                        41649,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ID",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38950,
+                    ),
+                    EntryFresh(
+                        41650,
+                    ),
+                },
+            ),
+            Variable {
+                name: "IDTR",
+                size: ByteSize(
+                    12,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38951,
+                    ),
+                    EntryFresh(
+                        41651,
+                    ),
+                },
+            ),
+            Variable {
+                name: "IF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38952,
+                    ),
+                    EntryFresh(
+                        41652,
+                    ),
+                },
+            ),
+            Variable {
+                name: "IOPL",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38953,
+                    ),
+                    EntryFresh(
+                        41653,
+                    ),
+                },
+            ),
+            Variable {
+                name: "LDTR",
+                size: ByteSize(
+                    14,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38954,
+                    ),
+                    EntryFresh(
+                        41654,
+                    ),
+                },
+            ),
+            Variable {
+                name: "MXCSR",
+                size: ByteSize(
+                    4,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38955,
+                    ),
+                    EntryFresh(
+                        41655,
+                    ),
+                },
+            ),
+            Variable {
+                name: "NT",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38956,
+                    ),
+                    EntryFresh(
+                        41656,
+                    ),
+                },
+            ),
+            Variable {
+                name: "OF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_4",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_4",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_4",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "PF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_12",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_12",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_12",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "R10",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38959,
+                    ),
+                    EntryFresh(
+                        41659,
+                    ),
+                },
+            ),
+            Variable {
+                name: "R11",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38960,
+                    ),
+                    EntryFresh(
+                        41660,
+                    ),
+                },
+            ),
+            Variable {
+                name: "R12",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38961,
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00104dfc_0",
+                            address: "00104dfc",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "R13",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38962,
+                    ),
+                    EntryFresh(
+                        41662,
+                    ),
+                },
+            ),
+            Variable {
+                name: "R14",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38963,
+                    ),
+                    EntryFresh(
+                        41663,
+                    ),
+                },
+            ),
+            Variable {
+                name: "R15",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38964,
+                    ),
+                    EntryFresh(
+                        41664,
+                    ),
+                },
+            ),
+            Variable {
+                name: "R8",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_001132f0_1",
+                            address: "001132f0",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "R9",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38966,
+                    ),
+                    EntryFresh(
+                        41666,
+                    ),
+                },
+            ),
+            Variable {
+                name: "RAX",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    ActualRet(
+                        Tid {
+                            id: "instr_001132e6_2",
+                            address: "001132e6",
+                        },
+                        0,
+                    ),
+                },
+            ),
+            Variable {
+                name: "RBP",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38968,
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00104e00_0",
+                            address: "00104e00",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "RBX",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113361_0",
+                            address: "00113361",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "RCX",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113304_0",
+                            address: "00113304",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_3",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "RDI",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113309_0",
+                            address: "00113309",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_8",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "RDX",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113315_8",
+                            address: "00113315",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "RF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38973,
+                    ),
+                    EntryFresh(
+                        41673,
+                    ),
+                },
+            ),
+            Variable {
+                name: "RIP",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113362_0",
+                            address: "00113362",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "RSI",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113300_1",
+                            address: "00113300",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113310_13",
+                            address: "00113310",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "RSP",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_00113362_1",
+                            address: "00113362",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "SF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_7",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_7",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_7",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "SS",
+                size: ByteSize(
+                    2,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38978,
+                    ),
+                    EntryFresh(
+                        41678,
+                    ),
+                },
+            ),
+            Variable {
+                name: "SSP",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38979,
+                    ),
+                    EntryFresh(
+                        41679,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ST0",
+                size: ByteSize(
+                    10,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38980,
+                    ),
+                    EntryFresh(
+                        41680,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ST1",
+                size: ByteSize(
+                    10,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38981,
+                    ),
+                    EntryFresh(
+                        41681,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ST2",
+                size: ByteSize(
+                    10,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38982,
+                    ),
+                    EntryFresh(
+                        41682,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ST3",
+                size: ByteSize(
+                    10,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38983,
+                    ),
+                    EntryFresh(
+                        41683,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ST4",
+                size: ByteSize(
+                    10,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38984,
+                    ),
+                    EntryFresh(
+                        41684,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ST5",
+                size: ByteSize(
+                    10,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38985,
+                    ),
+                    EntryFresh(
+                        41685,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ST6",
+                size: ByteSize(
+                    10,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38986,
+                    ),
+                    EntryFresh(
+                        41686,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ST7",
+                size: ByteSize(
+                    10,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38987,
+                    ),
+                    EntryFresh(
+                        41687,
+                    ),
+                },
+            ),
+            Variable {
+                name: "TF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38988,
+                    ),
+                    EntryFresh(
+                        41688,
+                    ),
+                },
+            ),
+            Variable {
+                name: "TR",
+                size: ByteSize(
+                    14,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38989,
+                    ),
+                    EntryFresh(
+                        41689,
+                    ),
+                },
+            ),
+            Variable {
+                name: "VIF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38990,
+                    ),
+                    EntryFresh(
+                        41690,
+                    ),
+                },
+            ),
+            Variable {
+                name: "VIP",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38991,
+                    ),
+                    EntryFresh(
+                        41691,
+                    ),
+                },
+            ),
+            Variable {
+                name: "VM",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38992,
+                    ),
+                    EntryFresh(
+                        41692,
+                    ),
+                },
+            ),
+            Variable {
+                name: "XCR0",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38993,
+                    ),
+                    EntryFresh(
+                        41693,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM0",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38994,
+                    ),
+                    EntryFresh(
+                        41694,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM1",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38995,
+                    ),
+                    EntryFresh(
+                        41695,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM10",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38996,
+                    ),
+                    EntryFresh(
+                        41696,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM11",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38997,
+                    ),
+                    EntryFresh(
+                        41697,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM12",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38998,
+                    ),
+                    EntryFresh(
+                        41698,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM13",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        38999,
+                    ),
+                    EntryFresh(
+                        41699,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM14",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39000,
+                    ),
+                    EntryFresh(
+                        41700,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM15",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39001,
+                    ),
+                    EntryFresh(
+                        41701,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM2",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39002,
+                    ),
+                    EntryFresh(
+                        41702,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM3",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39003,
+                    ),
+                    EntryFresh(
+                        41703,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM4",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39004,
+                    ),
+                    EntryFresh(
+                        41704,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM5",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39005,
+                    ),
+                    EntryFresh(
+                        41705,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM6",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39006,
+                    ),
+                    EntryFresh(
+                        41706,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM7",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39007,
+                    ),
+                    EntryFresh(
+                        41707,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM8",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39008,
+                    ),
+                    EntryFresh(
+                        41708,
+                    ),
+                },
+            ),
+            Variable {
+                name: "YMM9",
+                size: ByteSize(
+                    32,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39009,
+                    ),
+                    EntryFresh(
+                        41709,
+                    ),
+                },
+            ),
+            Variable {
+                name: "ZF",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    Normal(
+                        Tid {
+                            id: "instr_0011331c_8",
+                            address: "0011331c",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113322_8",
+                            address: "00113322",
+                        },
+                    ),
+                    Normal(
+                        Tid {
+                            id: "instr_00113329_8",
+                            address: "00113329",
+                        },
+                    ),
+                },
+            ),
+            Variable {
+                name: "contextreg",
+                size: ByteSize(
+                    4,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39011,
+                    ),
+                    EntryFresh(
+                        41711,
+                    ),
+                },
+            ),
+            Variable {
+                name: "rflags",
+                size: ByteSize(
+                    8,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39012,
+                    ),
+                    EntryFresh(
+                        41712,
+                    ),
+                },
+            ),
+            Variable {
+                name: "xmmTmp1",
+                size: ByteSize(
+                    16,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39013,
+                    ),
+                    EntryFresh(
+                        41713,
+                    ),
+                },
+            ),
+            Variable {
+                name: "xmmTmp2",
+                size: ByteSize(
+                    16,
+                ),
+                is_temp: false,
+            }: TermSet(
+                {
+                    EntryFresh(
+                        39014,
+                    ),
+                    EntryFresh(
+                        41714,
+                    ),
+                },
+            ),
+        },
+        phantom: PhantomData,
+    },
+)

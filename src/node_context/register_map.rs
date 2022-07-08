@@ -1,17 +1,19 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use std::fmt::Display;
 use std::ops::Deref;
 
 use cwe_checker_lib::abstract_domain::DomainMap;
-use cwe_checker_lib::analysis::graph::Graph;
+use cwe_checker_lib::analysis::graph::{Graph, Node};
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::intermediate_representation::{Project, Variable};
 use petgraph::graph::NodeIndex;
 use petgraph::EdgeDirection::Incoming;
 
 use crate::analysis;
-use crate::analysis::reaching_definitions::{Context, Definition, TermSet};
+use crate::analysis::reaching_definitions::{
+    Context, Definition, ImplicitBottomMappingDomain, TermSet,
+};
 use crate::constraint_generation::{self, NodeContextMapping, RegisterMapping};
 use crate::constraints::TypeVariable;
 
@@ -69,11 +71,13 @@ impl RegisterContext {
 
 impl NodeContextMapping for RegisterContext {
     fn apply_def(&self, term: &cwe_checker_lib::intermediate_representation::Term<Def>) -> Self {
-        let new_mapping =
-            analysis::reaching_definitions::apply_def(DomainMap::from(self.mapping.clone()), term);
+        let new_mapping = analysis::reaching_definitions::apply_def(
+            ImplicitBottomMappingDomain(DomainMap::from(self.mapping.clone())),
+            term,
+        );
 
         RegisterContext {
-            mapping: new_mapping.deref().clone(),
+            mapping: new_mapping.deref().deref().clone(),
         }
     }
 }
@@ -82,7 +86,8 @@ impl RegisterMapping for RegisterContext {
     fn access(&self, var: &Variable) -> BTreeSet<crate::constraints::TypeVariable> {
         let ts = self.mapping.get(var);
 
-        ts.map(|x| Self::generate_multi_def_constraint(var, x)).unwrap_or_default()
+        ts.map(|x| Self::generate_multi_def_constraint(var, x))
+            .unwrap_or_default()
     }
 }
 
@@ -112,15 +117,20 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
         .filter(|nd_idx| graph.edges_directed(*nd_idx, Incoming).count() == 0);
 
     let mut curr_id = 0;
-    for start_node_index in entry_sub_to_entry_node_map
+
+    let entry_points = entry_sub_to_entry_node_map
         .into_iter()
         .map(|(_sub_tid, ndidx)| ndidx)
         .chain(speculative_points)
-    {
+        .collect::<HashSet<_>>();
+    for start_node_index in entry_points.iter() {
         computation.set_node_value(
-            start_node_index,
+            *start_node_index,
             cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue::Value(
-                DomainMap::from(generate_fresh_definition(proj, &mut curr_id)),
+                ImplicitBottomMappingDomain(DomainMap::from(generate_fresh_definition(
+                    proj,
+                    &mut curr_id,
+                ))),
             ),
         );
     }
@@ -139,8 +149,8 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
                 call_stub
             })
             .as_ref()
-            .map(|v| (*ind, RegisterContext::new(v.deref().clone()))),
-            NodeValue::Value(v) => Some((*ind, RegisterContext::new(v.deref().clone()))),
+            .map(|v| (*ind, RegisterContext::new(v.deref().deref().clone()))),
+            NodeValue::Value(v) => Some((*ind, RegisterContext::new(v.deref().deref().clone()))),
         })
         .collect()
 }
