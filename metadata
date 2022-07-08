@@ -1,0 +1,38 @@
+        tid: Tid {
+            id: "instr_00117476_7",
+            address: "00117476",
+        },
+        term: Assign {
+            var: Variable {
+                name: "$U12f80",
+                size: ByteSize(
+                    1,
+                ),
+                is_temp: true,
+            },
+            value: BinOp {
+                op: IntAnd,
+                lhs: Var(
+                    Variable {
+                        name: "$U12f00",
+                        size: ByteSize(
+                            1,
+                        ),
+                        is_temp: true,
+                    },
+                ),
+                rhs: Const(
+                    ApInt {
+                        len: BitWidth(
+                            8,
+                        ),
+                        digits: [
+                            Digit(
+                                1,
+                            ),
+                        ],
+                    },
+                ),
+            },
+        },
+    }
