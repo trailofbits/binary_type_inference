@@ -506,7 +506,7 @@ where
                     &|| &fsa,
                 )?;
 
-                fsa.simplify_graph(self.vman);
+                fsa.simplify_graph(repr_tid.get_str_repr(), &mut self.debug_dir, self.vman);
 
                 self.debug_dir.log_to_fname(
                     &format!("{}_fsa_simplified.dot", repr_tid.get_str_repr()),

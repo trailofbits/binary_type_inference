@@ -4,6 +4,7 @@ use crate::constraints::{
     DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable, VariableManager,
     Variance,
 };
+use crate::util::FileDebugLogger;
 use alga::general::AbstractMagma;
 use anyhow::{anyhow, Result};
 
@@ -1019,12 +1020,22 @@ impl FSA {
     /// The process then removes the language where pops occur after pushes.
     /// Looping type variables are removed and represented with a fresh interesting type variable.
     /// Finally, unreachable nodes that can neither be reached from the start or end are removed.
-    pub fn simplify_graph(&mut self, vman: &mut VariableManager) {
+    pub fn simplify_graph(
+        &mut self,
+        sub_name: &str,
+        debug_dir: &mut FileDebugLogger,
+        vman: &mut VariableManager,
+    ) -> anyhow::Result<()> {
         self.saturate();
         self.intersect_with_pop_push();
         self.remove_unreachable();
+        debug_dir.log_to_fname(
+            &format!("{}_simplified_proof_with_cycles", sub_name),
+            &|| &self,
+        )?;
         self.generate_recursive_type_variables(vman);
         self.remove_unreachable();
+        Ok(())
     }
 
     /// Removes unproductive transitions in the FSA. ie. transitions of the form pop y push x where x/=y
@@ -1342,6 +1353,7 @@ mod tests {
 
     use std::{collections::BTreeSet, iter::FromIterator, vec};
 
+    use crate::util::FileDebugLogger;
     use crate::{
         constraints::{
             ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint,
@@ -2118,7 +2130,7 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
-        fsa_res.simplify_graph(&mut vman);
+        fsa_res.simplify_graph("", &mut FileDebugLogger::default(), &mut vman);
 
         let mut x_dtv = DerivedTypeVar::new(TypeVariable::new("x".to_owned()));
         x_dtv.add_field_label(FieldLabel::Store);
@@ -2155,7 +2167,7 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
-        fsa_res.simplify_graph(&mut vman);
+        fsa_res.simplify_graph("", &mut FileDebugLogger::default(), &mut vman);
 
         let mut a_dtv = DerivedTypeVar::new(TypeVariable::new("a".to_owned()));
         a_dtv.add_field_label(FieldLabel::Store);
@@ -2207,7 +2219,7 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
-        fsa_res.simplify_graph(&mut vman);
+        fsa_res.simplify_graph("", &mut FileDebugLogger::default(), &mut vman);
     }
 
     #[test]
@@ -2232,7 +2244,7 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
-        fsa_res.simplify_graph(&mut vman);
+        fsa_res.simplify_graph("", &mut FileDebugLogger::default(), &mut vman);
         let cons = fsa_res.walk_constraints();
 
         let mut expeccons = BTreeSet::new();

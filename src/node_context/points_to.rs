@@ -1,5 +1,7 @@
-use crate::constraint_generation::{NodeContextMapping, PointsToMapping, TypeVariableAccess};
-use crate::constraints::TypeVariable;
+use crate::constraint_generation::{
+    ConstantResolver, NodeContextMapping, PointsToMapping, TypeVariableAccess,
+};
+use crate::constraints::{DerivedTypeVar, TypeVariable};
 
 use anyhow::Result;
 use cwe_checker_lib::abstract_domain::{
@@ -8,7 +10,7 @@ use cwe_checker_lib::abstract_domain::{
 
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::analysis::pointer_inference;
-use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Variable};
+use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Expression, Variable};
 use cwe_checker_lib::AnalysisResults;
 
 use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
@@ -134,6 +136,25 @@ impl PointsToMapping for PointsToContext {
     ) -> std::collections::BTreeSet<TypeVariableAccess> {
         let dom_val = self.pointer_state.state.eval(address);
         self.dom_val_to_tvars(&dom_val, sz)
+    }
+
+    /// Attempts to resolve a pointer expression to a variable
+    fn get_pointer_variable(
+        &self,
+        address: &Expression,
+        constant_resolver: &impl ConstantResolver,
+    ) -> Option<DerivedTypeVar> {
+        if let Some(absolute_ptr) = self
+            .pointer_state
+            .state
+            .eval(address)
+            .get_if_absolute_value()
+        {
+            if let Ok(bv) = absolute_ptr.try_to_bitvec() {
+                return constant_resolver.maybe_resolve_constant_to_variable(&bv);
+            }
+        }
+        None
     }
 }
 
