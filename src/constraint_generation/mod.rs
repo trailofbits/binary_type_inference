@@ -87,6 +87,13 @@ pub struct TypeVariableAccess {
 pub trait PointsToMapping: NodeContextMapping {
     /// Gets the set of type variables this address expression points to.
     fn points_to(&self, address: &Expression, sz: ByteSize) -> BTreeSet<TypeVariableAccess>;
+
+    /// Attempts to resolve a pointer expression to a variable
+    fn get_pointer_variable(
+        &self,
+        address: &Expression,
+        constant_resolver: &impl ConstantResolver,
+    ) -> Option<DerivedTypeVar>;
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -119,9 +126,15 @@ pub trait ConstantResolver: NodeContextMapping {
     /// the resolver to generate guarenteed fresh ephemeral variables.
     fn resolve_constant_to_variable(
         &self,
-        target: &Bitvector,
-        vman: &mut VariableManager,
-    ) -> DerivedTypeVar;
+        target: &cwe_checker_lib::intermediate_representation::Bitvector,
+        vman: &mut crate::constraints::VariableManager,
+    ) -> crate::constraints::DerivedTypeVar {
+        self.maybe_resolve_constant_to_variable(target)
+            .unwrap_or_else(|| DerivedTypeVar::new(vman.fresh()))
+    }
+
+    /// Produces a variable only if there is an exact match, does not force resolution
+    fn maybe_resolve_constant_to_variable(&self, target: &Bitvector) -> Option<DerivedTypeVar>;
 }
 
 // TODO(ian): this should have some sort of function on it that takes a lambda and basically joins constraints together to acess the derived type variable or something to prevent
@@ -410,6 +423,13 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         defining_tvars_are_subtype_of_repr: bool,
         vman: &mut VariableManager,
     ) -> (DerivedTypeVar, ConstraintSet) {
+        if let Some(gvar) = self
+            .points_to
+            .get_pointer_variable(value, &self.constant_resolver)
+        {
+            return (gvar, ConstraintSet::default());
+        }
+
         match &value {
             Expression::Var(v2) => {
                 let vars = self.reg_map.access(v2);

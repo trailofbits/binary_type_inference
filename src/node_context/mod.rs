@@ -106,20 +106,19 @@ impl NodeContextMapping for GhidraConstantResolver {
 }
 
 impl ConstantResolver for GhidraConstantResolver {
-    fn resolve_constant_to_variable(
+    fn maybe_resolve_constant_to_variable(
         &self,
         target: &cwe_checker_lib::intermediate_representation::Bitvector,
-        vman: &mut crate::constraints::VariableManager,
-    ) -> crate::constraints::DerivedTypeVar {
-        DerivedTypeVar::new(if let Ok(tgt) = target.try_to_u64() {
-            info!("Resolving constant {:#x}", tgt);
-            self.global_map
-                .get(&tgt)
-                .map(|t| TypeVariable::new_global(t.get_str_repr().to_owned()))
-                .unwrap_or_else(|| vman.fresh())
-        } else {
-            vman.fresh()
-        })
+    ) -> Option<DerivedTypeVar> {
+        target
+            .try_to_u64()
+            .ok()
+            .and_then(|tgt| {
+                self.global_map
+                    .get(&tgt)
+                    .map(|t| TypeVariable::new_global(t.get_str_repr().to_owned()))
+            })
+            .map(|vr| DerivedTypeVar::new(vr))
     }
 }
 
