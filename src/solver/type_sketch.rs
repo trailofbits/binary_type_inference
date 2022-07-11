@@ -204,8 +204,10 @@ where
 }
 
 fn generate_quotient_groups_for_initial_set<C>(
+    to_reprs: Option<&[Tid]>,
     grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
     initial_unions: &[(NodeIndex, NodeIndex)],
+    logger: &mut FileDebugLogger,
 ) -> Vec<BTreeSet<NodeIndex>>
 where
     C: std::cmp::PartialEq,
@@ -217,11 +219,29 @@ where
     }
 
     info!("Constraint quotients {:#?}", cons.clone().into_labeling());
-    info!("Node mapping {:#?}", grph.get_node_mapping());
+
+    to_reprs.map(|tids| {
+        logger
+            .log_to_fname(
+                &format!("mapping_prior_to_quotients_{}", tids[0].get_str_repr()),
+                &|| {
+                    grph.get_node_mapping()
+                        .iter()
+                        .map(|(nd, idx)| format!("{}:{}", nd, idx.index()))
+                        .join("\n")
+                },
+            )
+            .expect("logging should succeed")
+    });
+    let mut log_lines: Vec<String> = Vec::new();
     let mut edge_implications = get_edge_set(grph);
 
     while {
         let prev_labeling = cons.clone().into_labeling();
+
+        if logger.is_logging() && to_reprs.is_some() {
+            log_lines.push(prev_labeling.iter().map(|x| x.to_string()).join(" "));
+        }
 
         for implic in edge_implications.clone().into_iter() {
             if cons.equiv(implic.eq.0.index(), implic.eq.1.index()) {
@@ -232,6 +252,13 @@ where
 
         cons.clone().into_labeling() != prev_labeling
     } {}
+
+    to_reprs.map(|tids| {
+        logger.log_to_fname(
+            &format!("quotient_group_steps_{}", tids[0].get_str_repr()),
+            &|| log_lines.join("\n"),
+        )
+    });
 
     for (nd_idx, grouplab) in
         cons.clone()
@@ -270,8 +297,10 @@ where
 }
 
 fn generate_quotient_groups<C>(
+    to_reprs: Option<&[Tid]>,
     grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
     cons: &ConstraintSet,
+    logger: &mut FileDebugLogger,
 ) -> Vec<BTreeSet<NodeIndex>>
 where
     C: std::cmp::PartialEq,
@@ -289,7 +318,7 @@ where
         })
         .collect();
 
-    generate_quotient_groups_for_initial_set(grph, &init_unions)
+    generate_quotient_groups_for_initial_set(to_reprs, grph, &init_unions, logger)
 }
 
 /// The identity operation described for Lattice bounds
@@ -328,6 +357,7 @@ pub struct SketchBuilder<'a, U, T, V> {
     type_lattice_elements: &'a HashSet<TypeVariable>,
     add_new_var: &'a V,
     element_type: PhantomData<U>,
+    debug_log: FileDebugLogger,
 }
 
 impl<'a, U, T, V> SketchBuilder<'a, U, T, V>
@@ -415,13 +445,15 @@ where
 
     fn build_without_pointer_simplification(
         &self,
+        to_reprs: Option<&[Tid]>,
         sig: &ConstraintSet,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
         let mut nd_graph: MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel> =
             MappingGraph::new();
 
         self.add_nodes_and_initial_edges(sig, &mut nd_graph)?;
-        let qgroups = generate_quotient_groups(&nd_graph, sig);
+        let qgroups =
+            generate_quotient_groups(to_reprs, &nd_graph, sig, &mut (self.debug_log.clone()));
 
         let mut quoted_graph = nd_graph.quoetient_graph(&qgroups);
         assert!(quoted_graph.get_graph().node_count() == qgroups.len());
@@ -436,17 +468,34 @@ where
         Ok(orig_sk_graph)
     }
 
+    fn build_and_label_constraints_with_representation(
+        &self,
+        to_reprs: Option<&[Tid]>,
+        sig: &ConstraintSet,
+    ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
+        let mut orig_sk_graph = self.build_without_pointer_simplification(to_reprs, sig)?;
+
+        orig_sk_graph.simplify_pointers();
+
+        Ok(orig_sk_graph)
+    }
+
+    /// Build and label constraints representing to_repr.
+    pub fn build_and_label_constraints_representing(
+        &self,
+        to_reprs: &[Tid],
+        sig: &ConstraintSet,
+    ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
+        self.build_and_label_constraints_with_representation(Some(to_reprs), sig)
+    }
+
     /// Build a sketchgraph from a [ConstraintSet] and label
     /// the graph with which type variable each node represents as well as type lattice bounds.
     pub fn build_and_label_constraints(
         &self,
         sig: &ConstraintSet,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
-        let mut orig_sk_graph = self.build_without_pointer_simplification(sig)?;
-
-        orig_sk_graph.simplify_pointers();
-
-        Ok(orig_sk_graph)
+        self.build_and_label_constraints_with_representation(None, sig)
     }
 
     /// Creates a new [SketchBuilder] from lattice information as well a function that adds a derived type variable to a mapping graph
@@ -454,12 +503,14 @@ where
         lattice: &'a T,
         type_lattice_elements: &'a HashSet<TypeVariable>,
         add_new_var: &'a V,
+        debug_logger: FileDebugLogger,
     ) -> SketchBuilder<'a, U, T, V> {
         SketchBuilder {
             lattice,
             type_lattice_elements,
             add_new_var,
             element_type: PhantomData,
+            debug_log: debug_logger,
         }
     }
 }
@@ -594,10 +645,14 @@ where
 
                 Ok(())
             };
-        let bldr: SketchBuilder<U, T, _> =
-            SketchBuilder::new(self.lattice, &self.type_lattice_elements, &add_new_var);
+        let bldr: SketchBuilder<U, T, _> = SketchBuilder::new(
+            self.lattice,
+            &self.type_lattice_elements,
+            &add_new_var,
+            self.debug_dir.clone(),
+        );
 
-        let orig_graph = bldr.build_and_label_constraints(sig)?;
+        let orig_graph = bldr.build_and_label_constraints_representing(to_reprs, sig)?;
 
         let sk_graph = Rc::new(orig_graph);
 
@@ -1954,7 +2009,12 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
             .relable_representative_nodes(HashMap::from([(self.representing.clone(), entry)]));
         // At this point we have a new graph but it's not guarenteed to be a DFA so the last thing to do is quotient it.
         // We dont need to make anything equal via constraints that's already done, we just let edges sets do the work
-        let quot_groups = generate_quotient_groups::<U>(&weight_mapping, &ConstraintSet::default());
+        let quot_groups = generate_quotient_groups::<U>(
+            None,
+            &weight_mapping,
+            &ConstraintSet::default(),
+            &mut FileDebugLogger::default(),
+        );
         let quot_graph = relab.quoetient_graph(&quot_groups);
 
         Sketch {
@@ -2243,8 +2303,12 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
         }
 
         // 5
-        let qgroups =
-            generate_quotient_groups_for_initial_set(self.get_graph(), init_unions.as_ref());
+        let qgroups = generate_quotient_groups_for_initial_set(
+            None,
+            self.get_graph(),
+            init_unions.as_ref(),
+            &mut FileDebugLogger::default(),
+        );
         self.quotient_graph = self.quotient_graph.quoetient_graph(&qgroups);
     }
 
@@ -3040,7 +3104,7 @@ mod test {
             insert_dtv(&lat, mpgrph, dtv.clone());
             Ok(())
         };
-        let skb = SketchBuilder::new(&lat, &nd_set, &add_new_var);
+        let skb = SketchBuilder::new(&lat, &nd_set, &add_new_var, FileDebugLogger::default());
 
         let lookup_cons_set = parse_cons_set(
             "
@@ -3055,7 +3119,7 @@ mod test {
         );
 
         let mut simplified_sketch = skb
-            .build_without_pointer_simplification(&lookup_cons_set)
+            .build_without_pointer_simplification(Some(&[]), &lookup_cons_set)
             .expect("Should be able to build");
         println!("{}", simplified_sketch);
         let pt = simplified_sketch.find_pointer_simplification();
@@ -3122,7 +3186,7 @@ mod test {
             insert_dtv(&lat, mpgrph, dtv.clone());
             Ok(())
         };
-        let skb = SketchBuilder::new(&lat, &nd_set, &add_new_var);
+        let skb = SketchBuilder::new(&lat, &nd_set, &add_new_var, FileDebugLogger::default());
 
         let lookup_cons_set = parse_cons_set(
             "
@@ -3138,7 +3202,7 @@ mod test {
         );
 
         let mut simplified_sketch = skb
-            .build_without_pointer_simplification(&lookup_cons_set)
+            .build_without_pointer_simplification(Some(&[]), &lookup_cons_set)
             .expect("Should be able to build");
         println!("{}", simplified_sketch);
         let pt = simplified_sketch.find_pointer_simplification();

@@ -86,6 +86,10 @@ impl FileDebugLogger {
         }
         Ok(())
     }
+
+    pub fn is_logging(&self) -> bool {
+        self.debug_dir.is_some()
+    }
 }
 
 #[cfg(test)]

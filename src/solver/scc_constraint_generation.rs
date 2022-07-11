@@ -298,7 +298,11 @@ where
     }
 
     /// Constructs a new constraint set that infers wether an argument of an addition constraint is a pointer or an integer based on some inference rules.
-    pub fn infer_pointers(&self, orig_cs_set: &ConstraintSet) -> anyhow::Result<ConstraintSet> {
+    pub fn infer_pointers(
+        &self,
+        orig_cs_set: &ConstraintSet,
+        debug_dir: &FileDebugLogger,
+    ) -> anyhow::Result<ConstraintSet> {
         let mut next_cs_set = orig_cs_set.clone();
 
         let add_constraints = next_cs_set
@@ -314,12 +318,16 @@ where
 
         while {
             let mut curr_set = next_cs_set.clone();
-            let sg =
-                SketchBuilder::new(self.lattice, &self.type_lattice_elements, &|dtv, mpgrph| {
+            let sg = SketchBuilder::new(
+                self.lattice,
+                &self.type_lattice_elements,
+                &|dtv, mpgrph| {
                     insert_dtv(self.lattice, mpgrph, dtv.clone());
                     Ok(())
-                })
-                .build_and_label_constraints(&next_cs_set)?;
+                },
+                debug_dir.clone(),
+            )
+            .build_and_label_constraints(&next_cs_set)?;
             let mut base_labels = self.get_initial_labeling(&sg);
 
             let mut irules = InferenceRules {
@@ -455,7 +463,9 @@ where
                         basic_cons.insert_all(to_insert);
                     }
                 }
-                let resolved_cs_set = self.lattice_def.infer_pointers(&basic_cons)?;
+                let resolved_cs_set = self
+                    .lattice_def
+                    .infer_pointers(&basic_cons, &self.debug_dir)?;
 
                 let diff = ConstraintSet::from(
                     resolved_cs_set
@@ -506,7 +516,7 @@ where
                     &|| &fsa,
                 )?;
 
-                fsa.simplify_graph(repr_tid.get_str_repr(), &mut self.debug_dir, self.vman);
+                fsa.simplify_graph(repr_tid.get_str_repr(), &mut self.debug_dir, self.vman)?;
 
                 self.debug_dir.log_to_fname(
                     &format!("{}_fsa_simplified.dot", repr_tid.get_str_repr()),
@@ -544,6 +554,7 @@ mod test {
             parse_constraint_set, DerivedTypeVar, SubtypeConstraint, TyConstraint, TypeVariable,
         },
         solver::type_lattice::{LatticeDefinition, NamedLattice},
+        util::FileDebugLogger,
     };
 
     use super::LatticeInfo;
@@ -581,7 +592,7 @@ mod test {
             .get_elem("weakint")
             .expect("should be part of lattice");
         let new_set = LatticeInfo::new(&lattice, elems, weak_int)
-            .infer_pointers(&cs_set)
+            .infer_pointers(&cs_set, &FileDebugLogger::default())
             .expect("shouldnt error");
         assert!(
             new_set.contains(&TyConstraint::SubTy(SubtypeConstraint::new(
