@@ -240,7 +240,23 @@ where
         let prev_labeling = cons.clone().into_labeling();
 
         if logger.is_logging() && to_reprs.is_some() {
-            log_lines.push(prev_labeling.iter().map(|x| x.to_string()).join(" "));
+            for (_, grp) in prev_labeling
+                .iter()
+                .enumerate()
+                .map(|(ndid, gid)| (*gid, ndid))
+                .into_group_map()
+                .into_iter()
+            {
+                log_lines.push(format!(
+                    "{{ {} }}",
+                    grp.into_iter()
+                        .map(|ndid| grph.get_group_for_node(NodeIndex::new(ndid)).into_iter())
+                        .flatten()
+                        .map(|dtv| format!("{}", dtv))
+                        .join(","),
+                ));
+            }
+            log_lines.push("".to_owned());
         }
 
         for implic in edge_implications.clone().into_iter() {
