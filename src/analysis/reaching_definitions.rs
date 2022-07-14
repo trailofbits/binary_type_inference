@@ -284,10 +284,9 @@ pub fn apply_return(
     call_term: &Term<Jmp>,
     program: &Term<Program>,
 ) -> DomVal {
-    let old_value = curr_value
+    let mut new_value = curr_value
         .cloned()
         .unwrap_or_else(|| ImplicitBottomMappingDomain(DomainMap::from(BTreeMap::new())));
-    let mut new_value = old_value.clone();
 
     for (idx, arg) in get_function_returns(&call_term.term, program)
         .iter()
