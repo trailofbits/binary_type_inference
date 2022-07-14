@@ -9,7 +9,7 @@ use cwe_checker_lib::{
     intermediate_representation::{Program, Tid},
     AnalysisResults,
 };
-use log::info;
+
 use petgraph::graph::NodeIndex;
 
 use crate::{
@@ -106,10 +106,10 @@ impl NodeContextMapping for GhidraConstantResolver {
 
     fn apply_return_node(
         &self,
-        call_term: &cwe_checker_lib::intermediate_representation::Term<
+        _call_term: &cwe_checker_lib::intermediate_representation::Term<
             cwe_checker_lib::intermediate_representation::Jmp,
         >,
-        return_term: &cwe_checker_lib::intermediate_representation::Term<
+        _return_term: &cwe_checker_lib::intermediate_representation::Term<
             cwe_checker_lib::intermediate_representation::Jmp,
         >,
     ) -> Self {
