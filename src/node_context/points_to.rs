@@ -50,6 +50,21 @@ impl NodeContextMapping for PointerState {
             rt_mem: self.rt_mem.clone(),
         }
     }
+
+    fn apply_return_node(
+        &self,
+        call_term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Jmp,
+        >,
+        return_term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Jmp,
+        >,
+    ) -> Self {
+        // TODO(Ian): This is only ok because "generally" pointer returns arent a thing. Revisit this. What we need to do to fast forward the pointer state
+        // is call the update_return method on the pointer inference context but that is a private structure in cwe checker. We could expose it and store the context as
+        // an Rc in every node but that isnt ideal.
+        self.clone()
+    }
 }
 
 /// Holds a pointer_inference state for a node in order to mantain a type variable mapping for pointers.
@@ -123,6 +138,21 @@ impl NodeContextMapping for PointsToContext {
         let new_ptr_state = self.pointer_state.apply_def(term);
 
         PointsToContext::new(new_ptr_state, self.stack_pointer.clone())
+    }
+
+    fn apply_return_node(
+        &self,
+        call_term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Jmp,
+        >,
+        return_term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Jmp,
+        >,
+    ) -> Self {
+        PointsToContext {
+            pointer_state: self.pointer_state.apply_return_node(call_term, return_term),
+            stack_pointer: self.stack_pointer.clone(),
+        }
     }
 }
 

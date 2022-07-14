@@ -4,7 +4,7 @@ use cwe_checker_lib::{
     abstract_domain::{AbstractDomain, DomainMap, UnionMergeStrategy},
     analysis::graph::{Graph, Node},
     intermediate_representation::{
-        Arg, Blk, Def, Expression, ExternSymbol, Jmp, Project, Term, Tid, Variable,
+        Arg, Blk, Def, Expression, ExternSymbol, Jmp, Program, Project, Term, Tid, Variable,
     },
 };
 
@@ -248,18 +248,16 @@ fn apply_definition_of_variable(
     state.insert(defined_var, definers);
 }
 
-impl<'a> Context<'a> {
-    fn get_function_returns(&self, jmp: &Jmp) -> Vec<Arg> {
-        if let Jmp::Call { target, .. } = jmp {
-            for (_, sub) in self.project.program.term.subs.iter() {
-                if sub.tid == *target {
-                    return sub.term.formal_rets.clone();
-                }
+fn get_function_returns(jmp: &Jmp, program: &Term<Program>) -> Vec<Arg> {
+    if let Jmp::Call { target, .. } = jmp {
+        for (_, sub) in program.term.subs.iter() {
+            if sub.tid == *target {
+                return sub.term.formal_rets.clone();
             }
-            return vec![];
-        } else {
-            vec![]
         }
+        return vec![];
+    } else {
+        vec![]
     }
 }
 
@@ -279,6 +277,42 @@ pub fn apply_def(mut old_value: DomVal, def: &Term<Def>) -> DomVal {
         Def::Store { .. } => (),
     };
     old_value
+}
+
+pub fn apply_return(
+    curr_value: Option<&DomVal>,
+    call_term: &Term<Jmp>,
+    program: &Term<Program>,
+) -> DomVal {
+    let old_value = curr_value
+        .cloned()
+        .unwrap_or_else(|| ImplicitBottomMappingDomain(DomainMap::from(BTreeMap::new())));
+    let mut new_value = old_value.clone();
+
+    for (idx, arg) in get_function_returns(&call_term.term, program)
+        .iter()
+        .enumerate()
+    {
+        match arg {
+            Arg::Register { expr, .. } => {
+                if idx != 0 {
+                    error!("For call: {:?} multiple formal returns", call_term);
+                }
+
+                if let Expression::Var(var) = expr {
+                    apply_definition_of_variable(
+                        &mut new_value,
+                        var.clone(),
+                        call_term.tid.clone(),
+                        |x| Definition::ActualRet(x, idx),
+                    );
+                }
+            }
+            Arg::Stack { .. } => (), // These type vars are managed by the points-to analysis
+        }
+    }
+
+    new_value
 }
 
 impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a> for Context<'a> {
@@ -370,36 +404,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         _return_term: &Term<Jmp>,
         _cc: &Option<String>,
     ) -> Option<Self::Value> {
-        let old_value = value
-            .cloned()
-            .unwrap_or_else(|| ImplicitBottomMappingDomain(DomainMap::from(BTreeMap::new())));
-        let mut new_value = old_value.clone();
-
-        for (idx, arg) in self
-            .get_function_returns(&call_term.term)
-            .iter()
-            .enumerate()
-        {
-            match arg {
-                Arg::Register { expr, .. } => {
-                    if idx != 0 {
-                        error!("For call: {:?} multiple formal returns", call_term);
-                    }
-
-                    if let Expression::Var(var) = expr {
-                        apply_definition_of_variable(
-                            &mut new_value,
-                            var.clone(),
-                            call_term.tid.clone(),
-                            |x| Definition::ActualRet(x, idx),
-                        );
-                    }
-                }
-                Arg::Stack { .. } => (), // These type vars are managed by the points-to analysis
-            }
-        }
-
-        Some(new_value)
+        Some(apply_return(value, call_term, &self.project.program))
     }
 
     fn specialize_conditional(

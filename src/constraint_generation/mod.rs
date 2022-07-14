@@ -62,6 +62,7 @@ pub fn arg_tvar(index: usize, target_sub: &Tid) -> TypeVariable {
 pub trait NodeContextMapping: Clone {
     /// Applys the given definition term to the state to compute the state after this def's affects have been applied to the state.
     fn apply_def(&self, term: &Term<Def>) -> Self;
+    fn apply_return_node(&self, call_term: &Term<Jmp>, return_term: &Term<Jmp>) -> Self;
 }
 
 /// Maps a variable (register) to it's representing type variable at this time step in the program. This type variable is some representation of
@@ -263,6 +264,18 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         let p = self.points_to.apply_def(term);
         let s = self.subprocedure_locators.apply_def(term);
         let c = self.constant_resolver.apply_def(term);
+        NodeContext::new(r, p, s, c, self.weakest_integral_type.clone())
+    }
+
+    fn apply_return_node(&self, call_term: &Term<Jmp>, return_term: &Term<Jmp>) -> Self {
+        let r = self.reg_map.apply_return_node(call_term, return_term);
+        let p = self.points_to.apply_return_node(call_term, return_term);
+        let s = self
+            .subprocedure_locators
+            .apply_return_node(call_term, return_term);
+        let c = self
+            .constant_resolver
+            .apply_return_node(call_term, return_term);
         NodeContext::new(r, p, s, c, self.weakest_integral_type.clone())
     }
 }
@@ -1050,7 +1063,7 @@ where
                 }
                 Node::CallReturn {
                     call: (call_blk, calling_proc),
-                    return_: (_returned_to_blk, return_proc),
+                    return_: (return_from_block, return_proc),
                 } => {
                     info!(
                         "Call-return caller: {}, return {}",
@@ -1061,18 +1074,29 @@ where
                     // Could do this on blk start maybe, incoming edges type thing
 
                     let mut total_cons = ConstraintSet::default();
-                    for e in self.graph.edges_directed(nd_ind, EdgeDirection::Outgoing) {
-                        let tgt = e.target();
+                    //for e in self.graph.edges_directed(nd_ind, EdgeDirection::Outgoing) {
+                    //    let tgt = e.target();
 
-                        if self.should_generate_for_block(self.graph[tgt]) {
-                            if let Some(child_ctxt) = self.node_contexts.get(&tgt) {
-                                total_cons.insert_all(&child_ctxt.handle_return_actual(
+                    //  let post_cond = nd_cont.apply_return();
+
+                    for e in self
+                        .graph
+                        .edges_directed(nd_ind, EdgeDirection::Outgoing)
+                        .filter(|x| self.should_generate_for_block(self.graph[x.target()]))
+                    {
+                        // Call Return should always have a single return combine
+                        match e.weight() {
+                            Edge::ReturnCombine(call_site) => {
+                                let post_cond = nd_cont
+                                    .apply_return_node(call_site, &return_from_block.term.jmps[0]);
+                                total_cons.insert_all(&post_cond.handle_return_actual(
                                     call_blk,
                                     return_proc,
                                     vman,
                                     0,
                                 ));
                             }
+                            _ => panic!("Malformed CFG"),
                         }
                     }
 

@@ -2,17 +2,18 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use std::fmt::Display;
 use std::ops::Deref;
+use std::rc::Rc;
 
 use cwe_checker_lib::abstract_domain::DomainMap;
 use cwe_checker_lib::analysis::graph::{Graph, Node};
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
-use cwe_checker_lib::intermediate_representation::{Project, Variable};
+use cwe_checker_lib::intermediate_representation::{Program, Project, Term, Variable};
 use petgraph::graph::NodeIndex;
 use petgraph::EdgeDirection::Incoming;
 
 use crate::analysis;
 use crate::analysis::reaching_definitions::{
-    Context, Definition, ImplicitBottomMappingDomain, TermSet,
+    self, Context, Definition, ImplicitBottomMappingDomain, TermSet,
 };
 use crate::constraint_generation::{self, NodeContextMapping, RegisterMapping};
 use crate::constraints::TypeVariable;
@@ -24,6 +25,7 @@ use cwe_checker_lib::intermediate_representation::Def;
 #[derive(Clone)]
 pub struct RegisterContext {
     mapping: BTreeMap<Variable, TermSet>,
+    program: Rc<Term<Program>>,
 }
 
 impl Display for RegisterContext {
@@ -37,8 +39,14 @@ impl Display for RegisterContext {
 
 impl RegisterContext {
     /// Creates a new register context that can answer register access queries from a reaching definitions [NodeValue].
-    pub fn new(mapping: BTreeMap<Variable, TermSet>) -> RegisterContext {
-        RegisterContext { mapping }
+    pub fn new(
+        mapping: BTreeMap<Variable, TermSet>,
+        program: &Rc<Term<Program>>,
+    ) -> RegisterContext {
+        RegisterContext {
+            mapping,
+            program: program.clone(),
+        }
     }
 
     fn generate_multi_def_constraint(
@@ -78,6 +86,30 @@ impl NodeContextMapping for RegisterContext {
 
         RegisterContext {
             mapping: new_mapping.deref().deref().clone(),
+            program: self.program.clone(),
+        }
+    }
+
+    fn apply_return_node(
+        &self,
+        call_term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Jmp,
+        >,
+        _return_term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Jmp,
+        >,
+    ) -> Self {
+        let new_mapping = reaching_definitions::apply_return(
+            Some(&ImplicitBottomMappingDomain(DomainMap::from(
+                self.mapping.clone(),
+            ))),
+            call_term,
+            &self.program,
+        );
+
+        RegisterContext {
+            mapping: new_mapping.deref().deref().clone(),
+            program: self.program.clone(),
         }
     }
 }
@@ -136,6 +168,7 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
     }
 
     computation.compute();
+    let prog = Rc::new(proj.program.clone());
     computation
         .node_values()
         .iter()
@@ -149,8 +182,10 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
                 call_stub
             })
             .as_ref()
-            .map(|v| (*ind, RegisterContext::new(v.deref().deref().clone()))),
-            NodeValue::Value(v) => Some((*ind, RegisterContext::new(v.deref().deref().clone()))),
+            .map(|v| (*ind, RegisterContext::new(v.deref().deref().clone(), &prog))),
+            NodeValue::Value(v) => {
+                Some((*ind, RegisterContext::new(v.deref().deref().clone(), &prog)))
+            }
         })
         .collect()
 }

@@ -81,12 +81,14 @@ impl FileDebugLogger {
         if let Some(debug_dir) = self.debug_dir.as_ref() {
             let mut pth = PathBuf::from(debug_dir);
             pth.push(fname);
+
             let mut out_file = std::fs::File::create(pth)?;
             writeln!(&mut out_file, "{}", dispalyable())?;
         }
         Ok(())
     }
 
+    /// Check if logging will have an effect, useful to prevent expensive operations that cant be conducted in the displayable closure.
     pub fn is_logging(&self) -> bool {
         self.debug_dir.is_some()
     }
