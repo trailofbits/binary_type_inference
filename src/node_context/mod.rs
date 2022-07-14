@@ -130,7 +130,7 @@ impl ConstantResolver for GhidraConstantResolver {
                     .get(&tgt)
                     .map(|t| TypeVariable::new_global(t.get_str_repr().to_owned()))
             })
-            .map(|vr| DerivedTypeVar::new(vr))
+            .map(DerivedTypeVar::new)
     }
 }
 

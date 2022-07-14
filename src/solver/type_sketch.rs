@@ -212,7 +212,7 @@ fn generate_quotient_groups_for_initial_set<C>(
 where
     C: std::cmp::PartialEq,
 {
-    to_reprs.map(|tids| {
+    if let Some(tids) = to_reprs {
         logger
             .log_to_fname(
                 &format!("mapping_prior_to_quotients_{}", tids[0].get_str_repr()),
@@ -223,8 +223,8 @@ where
                         .join("\n")
                 },
             )
-            .expect("logging should succeed")
-    });
+            .expect("logging should succeed");
+    }
     let mut cons = create_union_find_for_graph_nodes(grph);
 
     for (src, dst) in initial_unions {
@@ -250,8 +250,7 @@ where
                 log_lines.push(format!(
                     "{{ {} }}",
                     grp.into_iter()
-                        .map(|ndid| grph.get_group_for_node(NodeIndex::new(ndid)).into_iter())
-                        .flatten()
+                        .flat_map(|ndid| grph.get_group_for_node(NodeIndex::new(ndid)).into_iter())
                         .map(|dtv| format!("{}", dtv))
                         .join(","),
                 ));
@@ -269,12 +268,14 @@ where
         cons.clone().into_labeling() != prev_labeling
     } {}
 
-    to_reprs.map(|tids| {
-        logger.log_to_fname(
-            &format!("quotient_group_steps_{}", tids[0].get_str_repr()),
-            &|| log_lines.join("\n"),
-        )
-    });
+    if let Some(tids) = to_reprs {
+        logger
+            .log_to_fname(
+                &format!("quotient_group_steps_{}", tids[0].get_str_repr()),
+                &|| log_lines.join("\n"),
+            )
+            .expect("logging should succeed");
+    }
 
     for (nd_idx, grouplab) in
         cons.clone()
