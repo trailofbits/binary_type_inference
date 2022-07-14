@@ -62,6 +62,8 @@ pub fn arg_tvar(index: usize, target_sub: &Tid) -> TypeVariable {
 pub trait NodeContextMapping: Clone {
     /// Applys the given definition term to the state to compute the state after this def's affects have been applied to the state.
     fn apply_def(&self, term: &Term<Def>) -> Self;
+
+    /// Applys a return to this node computing the post condition implied by the analyses after the return targetting a given block.
     fn apply_return_node(&self, call_term: &Term<Jmp>, return_term: &Term<Jmp>) -> Self;
 }
 

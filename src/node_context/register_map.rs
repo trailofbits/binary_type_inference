@@ -5,7 +5,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use cwe_checker_lib::abstract_domain::DomainMap;
-use cwe_checker_lib::analysis::graph::{Graph, Node};
+use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
 use cwe_checker_lib::intermediate_representation::{Program, Project, Term, Variable};
 use petgraph::graph::NodeIndex;
