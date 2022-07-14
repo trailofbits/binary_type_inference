@@ -8,9 +8,8 @@ use cwe_checker_lib::{
     },
 };
 
-use log::{error, info};
+use log::error;
 use std::{
-    cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt::Debug,
     vec,
@@ -279,6 +278,7 @@ pub fn apply_def(mut old_value: DomVal, def: &Term<Def>) -> DomVal {
     old_value
 }
 
+/// Applies a return to the fall through of a call term to the passed value.
 pub fn apply_return(
     curr_value: Option<&DomVal>,
     call_term: &Term<Jmp>,
@@ -377,7 +377,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
     fn update_jump(
         &self,
         value: &Self::Value,
-        jump: &Term<Jmp>,
+        _jump: &Term<Jmp>,
         _untaken_conditional: Option<&Term<Jmp>>,
         _target: &Term<Blk>,
     ) -> Option<Self::Value> {
@@ -387,8 +387,8 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
     fn update_call(
         &self,
         value: &Self::Value,
-        call: &Term<Jmp>,
-        target: &Node<'_>,
+        _call: &Term<Jmp>,
+        _target: &Node<'_>,
         _cc: &Option<String>,
     ) -> Option<Self::Value> {
         Some(value.clone())
