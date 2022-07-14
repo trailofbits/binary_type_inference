@@ -103,6 +103,18 @@ impl NodeContextMapping for GhidraConstantResolver {
     ) -> Self {
         self.clone()
     }
+
+    fn apply_return_node(
+        &self,
+        call_term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Jmp,
+        >,
+        return_term: &cwe_checker_lib::intermediate_representation::Term<
+            cwe_checker_lib::intermediate_representation::Jmp,
+        >,
+    ) -> Self {
+        self.clone()
+    }
 }
 
 impl ConstantResolver for GhidraConstantResolver {

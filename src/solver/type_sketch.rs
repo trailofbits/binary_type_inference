@@ -212,14 +212,6 @@ fn generate_quotient_groups_for_initial_set<C>(
 where
     C: std::cmp::PartialEq,
 {
-    let mut cons = create_union_find_for_graph_nodes(grph);
-
-    for (src, dst) in initial_unions {
-        cons.union(src.index(), dst.index());
-    }
-
-    info!("Constraint quotients {:#?}", cons.clone().into_labeling());
-
     to_reprs.map(|tids| {
         logger
             .log_to_fname(
@@ -233,6 +225,14 @@ where
             )
             .expect("logging should succeed")
     });
+    let mut cons = create_union_find_for_graph_nodes(grph);
+
+    for (src, dst) in initial_unions {
+        cons.union(src.index(), dst.index());
+    }
+
+    info!("Constraint quotients {:#?}", cons.clone().into_labeling());
+
     let mut log_lines: Vec<String> = Vec::new();
     let mut edge_implications = get_edge_set(grph);
 
@@ -333,6 +333,24 @@ where
             }
         })
         .collect();
+
+    if let Some(reprs) = to_reprs {
+        logger
+            .log_to_fname(&format!("{}_constraint_node_mapping", reprs[0]), &|| {
+                cons.iter()
+                    .filter_map(|c| {
+                        if let TyConstraint::SubTy(sty) = c {
+                            let lt_node = grph.get_node(&sty.lhs).unwrap();
+                            let gt_node = grph.get_node(&sty.rhs).unwrap();
+                            Some(format!("{} {}:{}", sty, lt_node.index(), gt_node.index()))
+                        } else {
+                            None
+                        }
+                    })
+                    .join("\n")
+            })
+            .expect("Should be able to log");
+    }
 
     generate_quotient_groups_for_initial_set(to_reprs, grph, &init_unions, logger)
 }
@@ -3135,7 +3153,7 @@ mod test {
         );
 
         let mut simplified_sketch = skb
-            .build_without_pointer_simplification(Some(&[]), &lookup_cons_set)
+            .build_without_pointer_simplification(None, &lookup_cons_set)
             .expect("Should be able to build");
         println!("{}", simplified_sketch);
         let pt = simplified_sketch.find_pointer_simplification();
@@ -3218,7 +3236,7 @@ mod test {
         );
 
         let mut simplified_sketch = skb
-            .build_without_pointer_simplification(Some(&[]), &lookup_cons_set)
+            .build_without_pointer_simplification(None, &lookup_cons_set)
             .expect("Should be able to build");
         println!("{}", simplified_sketch);
         let pt = simplified_sketch.find_pointer_simplification();
