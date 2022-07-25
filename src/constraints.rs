@@ -424,6 +424,11 @@ impl Display for DerivedTypeVar {
 }
 
 impl DerivedTypeVar {
+    /// Substitutes the base type variables in this dtv with a new tv.
+    pub fn substitute_base(&mut self, tv: TypeVariable) {
+        self.var = tv;
+    }
+
     /// Determines if this variable has a type capability involving a constant addition of an offset
     pub fn has_add_field(&self) -> bool {
         self.get_field_labels()
