@@ -399,6 +399,30 @@ pub struct ProgramInfo<'a> {
     pub extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
 }
 
+fn remove_cs_tags_for_tids_in_dtv(dtv: &mut DerivedTypeVar, tid_set: &HashSet<Tid>) {
+    let bs = dtv.get_base_variable();
+    if bs.get_cs_tag().is_some()
+        && tid_set
+            .iter()
+            .any(|x| x.get_str_repr() == bs.to_callee().get_name())
+    {
+        dtv.substitute_base(bs.to_callee());
+    }
+}
+
+fn remove_cs_tags_for_tids_in_constraint(cons: &mut TyConstraint, tid_set: &HashSet<Tid>) {
+    match cons {
+        TyConstraint::SubTy(sty) => {
+            remove_cs_tags_for_tids_in_dtv(&mut sty.lhs, tid_set);
+            remove_cs_tags_for_tids_in_dtv(&mut sty.rhs, tid_set);
+        }
+        TyConstraint::AddCons(add_cons) => {
+            remove_cs_tags_for_tids_in_dtv(&mut add_cons.lhs_ty, tid_set);
+            remove_cs_tags_for_tids_in_dtv(&mut add_cons.rhs_ty, tid_set);
+            remove_cs_tags_for_tids_in_dtv(&mut add_cons.repr_ty, tid_set);
+        }
+    }
+}
 impl<R, P, S, C, T, U> Context<'_, '_, '_, '_, R, P, S, C, T, U>
 where
     R: RegisterMapping,
@@ -456,7 +480,18 @@ where
                     Some(tid_filter.clone()),
                 );
 
-                let mut basic_cons = cont.generate_constraints(self.vman);
+                let genned_cons = cont.generate_constraints(self.vman);
+                // remove basic block tags for internal variable references.
+                let mut basic_cons = ConstraintSet::from(
+                    genned_cons
+                        .iter()
+                        .map(|old_c| {
+                            let mut newc = old_c.clone();
+                            remove_cs_tags_for_tids_in_constraint(&mut newc, &tid_filter);
+                            newc
+                        })
+                        .collect::<BTreeSet<_>>(),
+                );
 
                 for tid in tid_filter.iter() {
                     if let Some(to_insert) = self.additional_constraints.get(tid) {
