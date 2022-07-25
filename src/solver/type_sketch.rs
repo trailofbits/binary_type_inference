@@ -700,7 +700,7 @@ where
     }
 
     fn get_topo_order_for_cg(&self) -> anyhow::Result<(CondensedCallgraph, Vec<NodeIndex>)> {
-        let condensed = petgraph::algo::condensation(self.cg.clone(), false);
+        let condensed = petgraph::algo::condensation(self.cg.clone(), true);
         petgraph::algo::toposort(&condensed, None)
             .map_err(|_| anyhow::anyhow!("cycle error"))
             .with_context(|| "Constructing topological sort of codensed sccs for sketch building")
