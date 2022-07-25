@@ -2130,7 +2130,9 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
-        fsa_res.simplify_graph("", &mut FileDebugLogger::default(), &mut vman);
+        fsa_res
+            .simplify_graph("", &mut FileDebugLogger::default(), &mut vman)
+            .expect("simplification should not fail.");
 
         let mut x_dtv = DerivedTypeVar::new(TypeVariable::new("x".to_owned()));
         x_dtv.add_field_label(FieldLabel::Store);
@@ -2167,7 +2169,9 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
-        fsa_res.simplify_graph("", &mut FileDebugLogger::default(), &mut vman);
+        fsa_res
+            .simplify_graph("", &mut FileDebugLogger::default(), &mut vman)
+            .expect("simplification should not fail");
 
         let mut a_dtv = DerivedTypeVar::new(TypeVariable::new("a".to_owned()));
         a_dtv.add_field_label(FieldLabel::Store);
@@ -2219,7 +2223,9 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
-        fsa_res.simplify_graph("", &mut FileDebugLogger::default(), &mut vman);
+        fsa_res
+            .simplify_graph("", &mut FileDebugLogger::default(), &mut vman)
+            .expect("simplification should not fail");
     }
 
     #[test]
@@ -2244,7 +2250,9 @@ mod tests {
 
         let mut fsa_res = FSA::new(&cs_set, &rc).unwrap();
         let mut vman = VariableManager::new();
-        fsa_res.simplify_graph("", &mut FileDebugLogger::default(), &mut vman);
+        fsa_res
+            .simplify_graph("", &mut FileDebugLogger::default(), &mut vman)
+            .expect("simplification should not fail");
         let cons = fsa_res.walk_constraints();
 
         let mut expeccons = BTreeSet::new();

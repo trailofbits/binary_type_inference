@@ -7,9 +7,8 @@ use std::rc::Rc;
 use cwe_checker_lib::abstract_domain::DomainMap;
 use cwe_checker_lib::analysis::graph::Graph;
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
-use cwe_checker_lib::intermediate_representation::{Program, Project, Term, Variable};
+use cwe_checker_lib::intermediate_representation::{Project, Variable};
 use petgraph::graph::NodeIndex;
-use petgraph::EdgeDirection::Incoming;
 
 use crate::analysis;
 use crate::analysis::reaching_definitions::{
@@ -174,10 +173,16 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
                 call_stub
             })
             .as_ref()
-            .map(|v| (*ind, RegisterContext::new(v.deref().deref().clone(), &shared_project))),
-            NodeValue::Value(v) => {
-                Some((*ind, RegisterContext::new(v.deref().deref().clone(), &shared_project)))
-            }
+            .map(|v| {
+                (
+                    *ind,
+                    RegisterContext::new(v.deref().deref().clone(), &shared_project),
+                )
+            }),
+            NodeValue::Value(v) => Some((
+                *ind,
+                RegisterContext::new(v.deref().deref().clone(), &shared_project),
+            )),
         })
         .collect()
 }
