@@ -3,14 +3,7 @@ extern crate binary_type_inference;
 use binary_type_inference::node_context::register_map;
 use binary_type_inference::util;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use cwe_checker_lib::analysis::graph::{Edge, Graph, Node};
-use im_rc::HashMap;
-use petgraph::dot::Dot;
-use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::visit::EdgeRef;
-use petgraph::EdgeDirection;
-use std::collections::BTreeSet;
-use std::io::Write;
+
 fn init() {
     let _ = env_logger::builder().is_test(true).try_init();
 }
