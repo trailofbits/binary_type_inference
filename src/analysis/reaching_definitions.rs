@@ -385,7 +385,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
 
     fn update_call(
         &self,
-        value: &Self::Value,
+        _value: &Self::Value,
         _call: &Term<Jmp>,
         _target: &Node<'_>,
         _cc: &Option<String>,
@@ -397,13 +397,17 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
     // an identity function that just returns RAX without any modification?
     fn update_return(
         &self,
-        value: Option<&Self::Value>,
-        _value_before_call: Option<&Self::Value>,
+        _value: Option<&Self::Value>,
+        value_before_call: Option<&Self::Value>,
         call_term: &Term<Jmp>,
         _return_term: &Term<Jmp>,
         _cc: &Option<String>,
     ) -> Option<Self::Value> {
-        Some(apply_return(value, call_term, &self.project.program))
+        Some(apply_return(
+            value_before_call,
+            call_term,
+            &self.project.program,
+        ))
     }
 
     fn specialize_conditional(
