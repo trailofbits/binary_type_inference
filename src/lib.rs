@@ -55,7 +55,8 @@ mod tests {
     };
 
     use crate::{
-        constraints::DerivedTypeVar,
+        constraints::{self, DerivedTypeVar},
+        inference_job::{self, ProtobufDef},
         solver::{type_lattice::CustomLatticeElement, type_sketch::SketchGraph},
     };
     use crate::{
@@ -64,7 +65,7 @@ mod tests {
         lowering::CType,
         solver::type_sketch::LatticeBounds,
     };
-    use cwe_checker_lib::intermediate_representation::Tid;
+    use cwe_checker_lib::intermediate_representation::{self, Tid};
     use petgraph::graph::NodeIndex;
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
@@ -171,14 +172,15 @@ mod tests {
         });
     }
 
-    fn run_test_case(tc: TestCase) {
+    fn run_test_case<P>(tc: TestCase)
+    where
+        P: inference_job::InferenceParsing<constraints::AdditionalConstraint>,
+        P: inference_job::InferenceParsing<intermediate_representation::Tid>,
+    {
         init();
-        let mut job = InferenceJob::parse::<JsonDef>(
-            &tc.job_def,
-            std::env::var("BTI_DEBUG_DIR").ok(),
-            vec![],
-        )
-        .unwrap();
+        let mut job =
+            InferenceJob::parse::<P>(&tc.job_def, std::env::var("BTI_DEBUG_DIR").ok(), vec![])
+                .unwrap();
         job.recover_additional_shared_returns();
 
         let expected_values = ExpectedOutputs::try_from(tc.expected_outputs)
@@ -366,7 +368,7 @@ mod tests {
             .set_interesting_tids_file("list_test_interesting_tids.json".to_owned())
             .set_expec_constraint_simplification("list_test_expected_simplified.json".to_string());
         // TODO(ian): comaprisons on types arent actually useful since ordering can change .set_expec_ctype_mapping("list_test_expected_types.json".to_string());
-        run_test_case(bldr.build());
+        run_test_case::<JsonDef>(bldr.build());
     }
 
     #[test]
@@ -378,7 +380,7 @@ mod tests {
             .set_lattice_json("new_moosl_lattice.json".to_owned())
             .set_interesting_tids_file("full_mooosl_tid_list.json".to_owned())
             .set_expec_constraint_gen("complete_mooosl_expected.json".to_owned());
-        run_test_case(bldr.build());
+        run_test_case::<JsonDef>(bldr.build());
     }
 
     #[test]
@@ -389,7 +391,7 @@ mod tests {
             .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
             .set_lattice_json("mooosl_test_lattice.json".to_owned())
             .set_interesting_tids_file("full_mooosl_tid_list.json".to_owned());
-        run_test_case(bldr.build());
+        run_test_case::<JsonDef>(bldr.build());
     }
 
     #[test]
@@ -400,6 +402,17 @@ mod tests {
             .set_additional_constraints("composite_return/additional_cons.json".to_owned())
             .set_lattice_json("composite_return/lattice.json".to_owned())
             .set_interesting_tids_file("composite_return/interesting_tids.json".to_owned());
-        run_test_case(bldr.build());
+        run_test_case::<JsonDef>(bldr.build());
+    }
+
+    #[test]
+    fn recursion_regression_test() {
+        let mut bldr = TestCaseBuilder::new();
+        bldr.set_binary_path("simple_recursion/simple_recursion".to_owned())
+            .set_ir_json_path("simple_recursion/ir.json".to_owned())
+            .set_additional_constraints("simple_recursion/additional_constraints.pb".to_owned())
+            .set_lattice_json("simple_recursion/lattice.json".to_owned())
+            .set_interesting_tids_file("simple_recursion/interesting_tids.pb".to_owned());
+        run_test_case::<ProtobufDef>(bldr.build());
     }
 }
