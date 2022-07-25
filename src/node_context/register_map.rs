@@ -144,16 +144,11 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
     let entry_sub_to_entry_node_map =
         cwe_checker_lib::analysis::graph::get_entry_nodes_of_subs(graph);
 
-    let speculative_points = graph
-        .node_indices()
-        .filter(|nd_idx| graph.edges_directed(*nd_idx, Incoming).count() == 0);
-
     let mut curr_id = 0;
 
     let entry_points = entry_sub_to_entry_node_map
         .into_iter()
         .map(|(_sub_tid, ndidx)| ndidx)
-        .chain(speculative_points)
         .collect::<HashSet<_>>();
     for start_node_index in entry_points.iter() {
         computation.set_node_value(
