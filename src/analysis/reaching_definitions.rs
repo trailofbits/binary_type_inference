@@ -390,7 +390,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         _target: &Node<'_>,
         _cc: &Option<String>,
     ) -> Option<Self::Value> {
-        Some(value.clone())
+        None
     }
 
     // TODO(Ian): are defines at actual returns used for anything anymore? perhaps to pick up typing constraints in
