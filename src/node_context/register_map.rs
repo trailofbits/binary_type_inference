@@ -25,7 +25,7 @@ use cwe_checker_lib::intermediate_representation::Def;
 #[derive(Clone)]
 pub struct RegisterContext {
     mapping: BTreeMap<Variable, TermSet>,
-    program: Rc<Term<Program>>,
+    project: Rc<Project>,
 }
 
 impl Display for RegisterContext {
@@ -39,13 +39,10 @@ impl Display for RegisterContext {
 
 impl RegisterContext {
     /// Creates a new register context that can answer register access queries from a reaching definitions [NodeValue].
-    pub fn new(
-        mapping: BTreeMap<Variable, TermSet>,
-        program: &Rc<Term<Program>>,
-    ) -> RegisterContext {
+    pub fn new(mapping: BTreeMap<Variable, TermSet>, project: &Rc<Project>) -> RegisterContext {
         RegisterContext {
             mapping,
-            program: program.clone(),
+            project: project.clone(),
         }
     }
 
@@ -86,7 +83,7 @@ impl NodeContextMapping for RegisterContext {
 
         RegisterContext {
             mapping: new_mapping.deref().deref().clone(),
-            program: self.program.clone(),
+            project: self.project.clone(),
         }
     }
 
@@ -104,12 +101,12 @@ impl NodeContextMapping for RegisterContext {
                 self.mapping.clone(),
             ))),
             call_term,
-            &self.program,
+            &self.project,
         );
 
         RegisterContext {
             mapping: new_mapping.deref().deref().clone(),
-            program: self.program.clone(),
+            project: self.project.clone(),
         }
     }
 }
@@ -163,7 +160,7 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
     }
 
     computation.compute();
-    let prog = Rc::new(proj.program.clone());
+    let shared_project = Rc::new(proj.clone());
     computation
         .node_values()
         .iter()
@@ -177,9 +174,9 @@ pub fn run_analysis(proj: &Project, graph: &Graph) -> HashMap<NodeIndex, Registe
                 call_stub
             })
             .as_ref()
-            .map(|v| (*ind, RegisterContext::new(v.deref().deref().clone(), &prog))),
+            .map(|v| (*ind, RegisterContext::new(v.deref().deref().clone(), &shared_project))),
             NodeValue::Value(v) => {
-                Some((*ind, RegisterContext::new(v.deref().deref().clone(), &prog)))
+                Some((*ind, RegisterContext::new(v.deref().deref().clone(), &shared_project)))
             }
         })
         .collect()
