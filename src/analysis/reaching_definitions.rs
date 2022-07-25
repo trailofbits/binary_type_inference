@@ -4,7 +4,8 @@ use cwe_checker_lib::{
     abstract_domain::{AbstractDomain, DomainMap, UnionMergeStrategy},
     analysis::graph::{Graph, Node},
     intermediate_representation::{
-        Arg, Blk, Def, Expression, ExternSymbol, Jmp, Program, Project, Term, Tid, Variable,
+        Arg, Blk, CallingConvention, Def, Expression, ExternSymbol, Jmp, Program, Project, Term,
+        Tid, Variable,
     },
 };
 
@@ -236,6 +237,10 @@ impl DerefMut for TermSet {
     }
 }
 
+fn kill_definition_of_variable(state: &mut DomVal, defined_var: &Variable) {
+    state.remove(&defined_var);
+}
+
 fn apply_definition_of_variable(
     state: &mut DomVal,
     defined_var: Variable,
@@ -278,37 +283,81 @@ pub fn apply_def(mut old_value: DomVal, def: &Term<Def>) -> DomVal {
     old_value
 }
 
+fn get_jump_target(call_term: &Term<Jmp>) -> Option<&Tid> {
+    if let Jmp::Call { target, return_: _ } = &call_term.term {
+        Some(target)
+    } else {
+        None
+    }
+}
+
+fn get_cc_for_jmp<'a>(proj: &'a Project, call_term: &Term<Jmp>) -> Option<&'a CallingConvention> {
+    get_jump_target(call_term).and_then(|target| {
+        proj.get_specific_calling_convention(
+            &proj
+                .program
+                .term
+                .subs
+                .get(target)
+                .and_then(|s| s.term.calling_convention.clone()),
+        )
+    })
+}
+
 /// Applies a return to the fall through of a call term to the passed value.
 pub fn apply_return(
     curr_value: Option<&DomVal>,
     call_term: &Term<Jmp>,
-    program: &Term<Program>,
+    project: &Project,
 ) -> DomVal {
     let mut new_value = curr_value
         .cloned()
         .unwrap_or_else(|| ImplicitBottomMappingDomain(DomainMap::from(BTreeMap::new())));
 
-    for (idx, arg) in get_function_returns(&call_term.term, program)
-        .iter()
+    let register_returns = get_function_returns(&call_term.term, &project.program)
+        .into_iter()
         .enumerate()
-    {
-        match arg {
+        .filter_map(|(idx, x)| match x {
             Arg::Register { expr, .. } => {
-                if idx != 0 {
-                    error!("For call: {:?} multiple formal returns", call_term);
-                }
-
                 if let Expression::Var(var) = expr {
-                    apply_definition_of_variable(
-                        &mut new_value,
-                        var.clone(),
-                        call_term.tid.clone(),
-                        |x| Definition::ActualRet(x, idx),
-                    );
+                    Some((idx, var))
+                } else {
+                    None
                 }
             }
-            Arg::Stack { .. } => (), // These type vars are managed by the points-to analysis
+            Arg::Stack { .. } => None,
+        })
+        .collect::<BTreeSet<_>>();
+
+    // These are registers that are defined by the function but are not returns, in this case we kill them
+    let cc_killed = get_cc_for_jmp(project, call_term).map(|cc| {
+        let saves = cc
+            .callee_saved_register
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+
+        let reg_returns_set = register_returns
+            .iter()
+            .map(|(_, v)| v)
+            .collect::<BTreeSet<_>>();
+
+        project
+            .register_set
+            .iter()
+            .filter(move |x| !saves.contains(x) && !reg_returns_set.contains(x))
+    });
+
+    if let Some(cc_killed) = cc_killed {
+        for killed in cc_killed {
+            kill_definition_of_variable(&mut new_value, killed)
         }
+    }
+
+    for (idx, var) in register_returns.iter() {
+        apply_definition_of_variable(&mut new_value, var.clone(), call_term.tid.clone(), |x| {
+            Definition::ActualRet(x, *idx)
+        });
     }
 
     new_value
@@ -403,11 +452,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         _return_term: &Term<Jmp>,
         _cc: &Option<String>,
     ) -> Option<Self::Value> {
-        Some(apply_return(
-            value_before_call,
-            call_term,
-            &self.project.program,
-        ))
+        Some(apply_return(value_before_call, call_term, &self.project))
     }
 
     fn specialize_conditional(
