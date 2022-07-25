@@ -9,7 +9,6 @@ use cwe_checker_lib::{
     },
 };
 
-use log::error;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt::Debug,
