@@ -492,15 +492,6 @@ where
                         })
                         .collect::<BTreeSet<_>>(),
                 );
-                let repr_tid = tid_filter
-                    .iter()
-                    .next()
-                    .expect("every scc must have a node");
-
-                self.debug_dir.log_to_fname(
-                    &format!("{}_original_subty_constraints", repr_tid.get_str_repr()),
-                    &|| &basic_cons,
-                )?;
 
                 for tid in tid_filter.iter() {
                     if let Some(to_insert) = self.additional_constraints.get(tid) {
@@ -518,6 +509,11 @@ where
                         .cloned()
                         .collect::<BTreeSet<_>>(),
                 );
+
+                let repr_tid = tid_filter
+                    .iter()
+                    .next()
+                    .expect("every scc must have a node");
 
                 self.debug_dir
                     .log_to_fname(&format!("{}_ptr_diff", repr_tid.get_str_repr()), &|| &diff)?;
