@@ -181,6 +181,10 @@ impl InferenceJob {
         &self.lattice
     }
 
+    pub fn get_file_logger(&self) -> FileDebugLogger {
+        self.debug_dir.clone()
+    }
+
     /// Parses a binary to its bytes.
     pub fn parse_binary(bin_path: &str) -> anyhow::Result<Vec<u8>> {
         std::fs::read(bin_path).map_err(|err| anyhow::Error::from(err).context("parsing_binary"))

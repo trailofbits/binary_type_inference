@@ -577,17 +577,22 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         representation = simplify_path(&representation);
 
         for acc in tv_access.iter() {
-            let mut dt_repr = DerivedTypeVar::new(acc.ty_var.clone());
-            if let Some(off) = acc.offset {
-                dt_repr.add_field_label(FieldLabel::Field(Field::new(off, acc.sz.as_bit_length())));
-            }
+            if acc.offset.is_some() {
+                let mut dt_repr = DerivedTypeVar::new(acc.ty_var.clone());
+                if let Some(off) = acc.offset {
+                    dt_repr.add_field_label(FieldLabel::Field(Field::new(
+                        off,
+                        acc.sz.as_bit_length(),
+                    )));
+                }
 
-            let new_cons = if address_is_subtype {
-                SubtypeConstraint::new(representation.clone(), dt_repr)
-            } else {
-                SubtypeConstraint::new(dt_repr, representation.clone())
-            };
-            cons.insert(TyConstraint::SubTy(new_cons));
+                let new_cons = if address_is_subtype {
+                    SubtypeConstraint::new(representation.clone(), dt_repr)
+                } else {
+                    SubtypeConstraint::new(dt_repr, representation.clone())
+                };
+                cons.insert(TyConstraint::SubTy(new_cons));
+            }
         }
 
         BaseValueDomain {
