@@ -503,7 +503,6 @@ where
                 )?;
 
                 for tid in tid_filter.iter() {
-                    println!("Working on {}", tid);
                     if let Some(to_insert) = self.additional_constraints.get(tid) {
                         basic_cons.insert_all(to_insert);
                     }
