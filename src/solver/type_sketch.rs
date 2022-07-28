@@ -1208,17 +1208,7 @@ where
         ) -> Sketch<LatticeBounds<U>>,
     ) {
         let orig_reprs = target_scc_repr.get_representing_sketch(target_dtv.clone());
-        println!("Refining formal: {}", target_dtv);
-        if orig_reprs.len() != 1 {
-            target_scc_repr
-                .get_graph()
-                .get_node_mapping()
-                .iter()
-                .filter(|(nd, _)| {
-                    nd.get_base_variable().to_callee() == target_dtv.get_base_variable().to_callee()
-                })
-                .for_each(|(x, _)| println!("{}", x));
-        }
+
         // There should only be one representation of a formal in an SCC
         assert_eq!(orig_reprs.len(), 1);
         let (_orig_loc, orig_repr) = &orig_reprs[0];
