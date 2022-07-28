@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt::{Debug, Display},
     hash::Hash,
 };
@@ -160,6 +160,39 @@ impl<
                 })
                 .collect::<Vec<_>>();
 
+        // we also collect all node labeling that existed in the subgraph to make sure the end up labeled at the end
+        #[allow(clippy::needless_collect)]
+        let old_label_to_old_idx: BTreeMap<N, NodeIndex> = explore_paths(&self.grph, orig_var_idx)
+            .flat_map(|(pth, ndidx)| {
+                let grph = &grph;
+                let key = &key;
+                let pth: Vec<E> = pth
+                    .iter()
+                    .map(|eidx| {
+                        self.grph
+                            .edge_weight(*eidx)
+                            .expect("eid should be valid")
+                            .clone()
+                    })
+                    .collect();
+
+                let agroup = self.get_group_for_node(ndidx);
+                agroup.into_iter().filter_map(move |dtv| {
+                    if let Some(tgt_nd) = find_node(
+                        grph.get_graph(),
+                        *grph
+                            .get_node(key)
+                            .expect("Should find target replacement node in replacement"),
+                        pth.iter(),
+                    ) {
+                        Some((dtv, tgt_nd))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+
         // remove reached nodes
         nodes.iter().for_each(|nd| {
             self.remove_node_by_idx(*nd);
@@ -205,6 +238,15 @@ impl<
                 new_labeling.insert(n, *new_idx);
             }
         }
+
+        for (lab, old_idx) in old_label_to_old_idx.into_iter() {
+            if let Some(new_idx) = old_idx_to_new_idx_mapping.get(&old_idx) {
+                if !new_labeling.contains_key(&lab) {
+                    new_labeling.insert(lab, *new_idx);
+                }
+            }
+        }
+
         self.inplace_relable_representative_nodes(new_labeling);
 
         // add edges into subgraph
