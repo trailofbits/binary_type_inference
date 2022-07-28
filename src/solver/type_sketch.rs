@@ -1229,7 +1229,7 @@ where
             .get_graph()
             .get_graph()
             .edge_references()
-            .all(|e| e.source() != e.target()));
+            .all(|e| matches!(e.weight(), FieldLabel::Add(_)) || e.source() != e.target()));
 
         // if an actual is equal to the replacement type then we can bind that parameter to the type.
         target_scc_repr.replace_dtv(&target_dtv, call_site_type.clone());
@@ -1238,7 +1238,7 @@ where
             .get_graph()
             .get_graph()
             .edge_references()
-            .all(|e| e.source() != e.target()));
+            .all(|e| matches!(e.weight(), FieldLabel::Add(_)) || e.source() != e.target()));
     }
 
     fn refine_formal_out(
