@@ -231,61 +231,6 @@ where
         cons.union(src.index(), dst.index());
     }
 
-    let labs = cons.clone().into_labeling();
-    for e in grph.get_graph().edge_references() {
-        if !matches!(e.weight(), FieldLabel::Add(_))
-            && cons.equiv(e.source().index(), e.target().index())
-        {
-            println!(
-                "{} equiv to {} is an issue",
-                e.source().index(),
-                e.target().index()
-            );
-
-            println!(
-                "Group for src: {}",
-                grph.get_group_for_node(e.source())
-                    .into_iter()
-                    .map(|x| format!("{}", x))
-                    .join(","),
-            );
-
-            println!(
-                "Group for tgt: {}",
-                grph.get_group_for_node(e.target())
-                    .into_iter()
-                    .map(|x| format!("{}", x))
-                    .join(","),
-            );
-
-            println!("Edge weight: {}", e.weight());
-
-            let affected_group = cons.find(e.source().index());
-
-            labs.iter()
-                .enumerate()
-                .filter_map(|(item, repr)| {
-                    if *repr == affected_group {
-                        Some(item)
-                    } else {
-                        None
-                    }
-                })
-                .map(|tgt_elem| {
-                    grph.get_group_for_node(NodeIndex::new(tgt_elem))
-                        .into_iter()
-                })
-                .flatten()
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .for_each(|x| println!("Affected: {}", x));
-        }
-        assert!(
-            matches!(e.weight(), FieldLabel::Add(_))
-                || !cons.equiv(e.source().index(), e.target().index())
-        );
-    }
-
     info!("Constraint quotients {:#?}", cons.clone().into_labeling());
 
     let mut log_lines: Vec<String> = Vec::new();
