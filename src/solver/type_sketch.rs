@@ -231,6 +231,61 @@ where
         cons.union(src.index(), dst.index());
     }
 
+    let labs = cons.clone().into_labeling();
+    for e in grph.get_graph().edge_references() {
+        if !matches!(e.weight(), FieldLabel::Add(_))
+            && cons.equiv(e.source().index(), e.target().index())
+        {
+            println!(
+                "{} equiv to {} is an issue",
+                e.source().index(),
+                e.target().index()
+            );
+
+            println!(
+                "Group for src: {}",
+                grph.get_group_for_node(e.source())
+                    .into_iter()
+                    .map(|x| format!("{}", x))
+                    .join(","),
+            );
+
+            println!(
+                "Group for tgt: {}",
+                grph.get_group_for_node(e.target())
+                    .into_iter()
+                    .map(|x| format!("{}", x))
+                    .join(","),
+            );
+
+            println!("Edge weight: {}", e.weight());
+
+            let affected_group = cons.find(e.source().index());
+
+            labs.iter()
+                .enumerate()
+                .filter_map(|(item, repr)| {
+                    if *repr == affected_group {
+                        Some(item)
+                    } else {
+                        None
+                    }
+                })
+                .map(|tgt_elem| {
+                    grph.get_group_for_node(NodeIndex::new(tgt_elem))
+                        .into_iter()
+                })
+                .flatten()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .for_each(|x| println!("Affected: {}", x));
+        }
+        assert!(
+            matches!(e.weight(), FieldLabel::Add(_))
+                || !cons.equiv(e.source().index(), e.target().index())
+        );
+    }
+
     info!("Constraint quotients {:#?}", cons.clone().into_labeling());
 
     let mut log_lines: Vec<String> = Vec::new();
@@ -487,6 +542,11 @@ where
             MappingGraph::new();
 
         self.add_nodes_and_initial_edges(sig, &mut nd_graph)?;
+        assert!(!nd_graph
+            .get_graph()
+            .edge_references()
+            .any(|e| e.source() == e.target()));
+
         let qgroups =
             generate_quotient_groups(to_reprs, &nd_graph, sig, &mut (self.debug_log.clone()));
 
@@ -509,8 +569,9 @@ where
         sig: &ConstraintSet,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
         let mut orig_sk_graph = self.build_without_pointer_simplification(to_reprs, sig)?;
-
+        assert!(!orig_sk_graph.has_reflexive_edge_that_is_not_add());
         orig_sk_graph.simplify_pointers();
+        assert!(!orig_sk_graph.has_reflexive_edge_that_is_not_add());
 
         Ok(orig_sk_graph)
     }
@@ -744,6 +805,7 @@ where
         }
 
         self.display_sketches("before_polybind")?;
+
         self.bind_polymorphic_types()?;
         self.apply_global_instantiations()?;
         self.collect_aliases()?;
@@ -1217,9 +1279,21 @@ where
             .unwrap_or_else(|| orig_repr.clone());
 
         call_site_type.label_dtvs(orig_repr);
-        // if an actual is equal to the replacement type then we can bind that parameter to the type.
 
+        assert!(call_site_type
+            .get_graph()
+            .get_graph()
+            .edge_references()
+            .all(|e| e.source() != e.target()));
+
+        // if an actual is equal to the replacement type then we can bind that parameter to the type.
         target_scc_repr.replace_dtv(&target_dtv, call_site_type.clone());
+
+        assert!(target_scc_repr
+            .get_graph()
+            .get_graph()
+            .edge_references()
+            .all(|e| e.source() != e.target()));
     }
 
     fn refine_formal_out(
@@ -1262,6 +1336,7 @@ where
         associated_scc_tids: &Vec<Tid>,
         target_idx: NodeIndex,
     ) {
+        println!("Refining formals for {:?}", associated_scc_tids);
         let mut orig_repr = self.get_built_sketch_from_scc(associated_scc_tids);
         // for each in parameter without a callsite tag:
         //bind intersection
@@ -2154,6 +2229,18 @@ struct PointerTransform {
     pub pointer_node: NodeIndex,
     pub source_edges: BTreeSet<(EdgeIndex, i64)>,
     pub target_field_edges: BTreeSet<(EdgeIndex, Field)>,
+}
+
+impl<T> SketchGraph<T>
+where
+    T: std::cmp::PartialEq,
+{
+    fn has_reflexive_edge_that_is_not_add(&self) -> bool {
+        self.get_graph()
+            .get_graph()
+            .edge_references()
+            .any(|e| e.source() == e.target() && !matches!(e.weight(), FieldLabel::Add(_)))
+    }
 }
 
 impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
