@@ -545,7 +545,7 @@ where
         assert!(!nd_graph
             .get_graph()
             .edge_references()
-            .any(|e| e.source() == e.target()));
+            .any(|e| !matches!(e.weight(), FieldLabel::Add(_)) && e.source() == e.target()));
 
         let qgroups =
             generate_quotient_groups(to_reprs, &nd_graph, sig, &mut (self.debug_log.clone()));
