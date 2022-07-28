@@ -181,6 +181,7 @@ impl InferenceJob {
         &self.lattice
     }
 
+    /// Gets the logger struct associated with this job.
     pub fn get_file_logger(&self) -> FileDebugLogger {
         self.debug_dir.clone()
     }
