@@ -237,7 +237,7 @@ impl DerefMut for TermSet {
 }
 
 fn kill_definition_of_variable(state: &mut DomVal, defined_var: &Variable) {
-    state.remove(&defined_var);
+    state.remove(defined_var);
 }
 
 fn apply_definition_of_variable(
@@ -451,7 +451,7 @@ impl<'a> cwe_checker_lib::analysis::forward_interprocedural_fixpoint::Context<'a
         _return_term: &Term<Jmp>,
         _cc: &Option<String>,
     ) -> Option<Self::Value> {
-        Some(apply_return(value_before_call, call_term, &self.project))
+        Some(apply_return(value_before_call, call_term, self.project))
     }
 
     fn specialize_conditional(

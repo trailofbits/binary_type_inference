@@ -178,17 +178,14 @@ impl<
 
                 let agroup = self.get_group_for_node(ndidx);
                 agroup.into_iter().filter_map(move |dtv| {
-                    if let Some(tgt_nd) = find_node(
+                    find_node(
                         grph.get_graph(),
                         *grph
                             .get_node(key)
                             .expect("Should find target replacement node in replacement"),
                         pth.iter(),
-                    ) {
-                        Some((dtv, tgt_nd))
-                    } else {
-                        None
-                    }
+                    )
+                    .map(|tgt_nd| (dtv, tgt_nd))
                 })
             })
             .collect();
@@ -241,9 +238,7 @@ impl<
 
         for (lab, old_idx) in old_label_to_old_idx.into_iter() {
             if let Some(new_idx) = old_idx_to_new_idx_mapping.get(&old_idx) {
-                if !new_labeling.contains_key(&lab) {
-                    new_labeling.insert(lab, *new_idx);
-                }
+                new_labeling.entry(lab).or_insert(*new_idx);
             }
         }
 
