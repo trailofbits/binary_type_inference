@@ -1948,10 +1948,13 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
             .into_iter()
             .filter(|idx| !accepts.contains(idx))
         {
-            let nd_idx = mp
-                .get(&reject_idx)
-                .expect("all indicies should be contained in the mapping");
-            grph.remove_node(*nd_idx);
+            // it's ok to not remove a reject entry because if an entry is reject then nothing can reach it, and it can reach nothing
+            if reject_idx != dfa.entry() {
+                let nd_idx = mp
+                    .get(&reject_idx)
+                    .expect("all indicies should be contained in the mapping");
+                grph.remove_node(*nd_idx);
+            }
         }
 
         (
@@ -2041,6 +2044,7 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
             self.find_representative_nodes_for_new_nodes(entry, &grph, other);
 
         let mut weight_mapping = MappingGraph::from_dfa_and_labeling(grph);
+
         for (base_node, (o1, o2)) in mapping_from_new_node_to_representatives_in_orig.iter() {
             let self_label = o1
                 .and_then(|o1| self.quotient_graph.get_graph().node_weight(o1).cloned())
@@ -2054,6 +2058,7 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
             //assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
 
             let new_label = lattice_op(&self_label, &other_label);
+            assert!(weight_mapping.get_graph().contains_node(*base_node));
             *weight_mapping
                 .get_graph_mut()
                 .node_weight_mut(*base_node)
