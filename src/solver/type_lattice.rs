@@ -13,8 +13,6 @@ use std::{
     rc::Rc,
 };
 
-
-
 /// A named lattice elment can be cloned and also has a string name.
 pub trait NamedLatticeElement: Lattice + Clone {
     /// The name of this lattice element.
@@ -254,7 +252,8 @@ impl LatticeDefinition {
 
         let nds: HashMap<String, CustomLatticeElement> = self
             .less_than_relations_between_handles
-            .iter().flat_map(|x| vec![&x.0, &x.1].into_iter())
+            .iter()
+            .flat_map(|x| vec![&x.0, &x.1].into_iter())
             .map(|elem| {
                 (
                     elem.clone(),

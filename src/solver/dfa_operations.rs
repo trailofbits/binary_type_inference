@@ -165,7 +165,8 @@ fn find_new_partitions<A: Alphabet>(
 fn partition_vector_to_id_map<'a>(
     it: impl Iterator<Item = &'a BTreeSet<usize>>,
 ) -> HashMap<usize, usize> {
-    it.enumerate().flat_map(|(part_id, nd_set)| nd_set.iter().map(move |mem| (*mem, part_id)))
+    it.enumerate()
+        .flat_map(|(part_id, nd_set)| nd_set.iter().map(move |mem| (*mem, part_id)))
         .collect()
 }
 
@@ -235,10 +236,12 @@ where
     let part_id = partition_vector_to_id_map(paritions.iter());
     // I regret writing things this way, i apologize, flattens should occur earlier clones later
     let edges = paritions
-        .iter().flat_map(|x| {
+        .iter()
+        .flat_map(|x| {
             let src_node = cont.get_node(x.clone());
             let ref_src = &src_node;
-            x.iter().flat_map(|src| {
+            x.iter()
+                .flat_map(|src| {
                     let emp = BTreeMap::new();
                     lhs_edge_map
                         .get(src)
@@ -322,6 +325,8 @@ where
     T: DFA<A>,
     U: DFA<A>,
 {
+    assert!(!lhs.all_indices().is_empty());
+    assert!(!rhs.all_indices().is_empty());
     let mut cont = IdContext::default();
 
     let lhs_edge_map = create_edge_map(lhs);
@@ -378,11 +383,13 @@ where
         laccept.chain(r_accept).collect()
     };
 
-    let all_indeces = lhs_idxs
+    let all_indeces: BTreeSet<usize> = lhs_idxs
         .iter()
         .cartesian_product(rhs_idxs)
         .map(|(lhs, rhs)| cont.get_node((*lhs, rhs)))
         .collect();
+
+    assert!(!all_indeces.is_empty());
 
     ExplicitDFA {
         ent_id,
@@ -441,7 +448,7 @@ mod test {
 
     use crate::solver::dfa_operations::{cartesian_product_internal, minimize, DFA};
 
-    use super::{Alphabet, ExplicitDFA};
+    use super::{intersection, Alphabet, ExplicitDFA};
 
     #[test]
     fn test_null_intersection() {
@@ -477,6 +484,28 @@ mod test {
         // just need an accept and then a reject
         assert_eq!(min.all_indices().len(), 2);
         assert_eq!(min.accept_indices().len(), 1);
+    }
+
+    #[test]
+    fn test_empty_intersection() {
+        let lhs = ExplicitDFA::<usize> {
+            ent_id: 0,
+            edges: BTreeSet::from([(0, 10, 1), (1, 10, 0)]),
+            accept_indexes: BTreeSet::from([1]),
+            all_indeces: BTreeSet::from([0, 1]),
+        };
+
+        let rhs = ExplicitDFA::<usize> {
+            ent_id: 0,
+            edges: BTreeSet::from([(0, 10, 1), (1, 10, 0)]),
+            accept_indexes: BTreeSet::from([]),
+            all_indeces: BTreeSet::from([0, 1]),
+        };
+
+        let res = intersection(&lhs, &rhs);
+        assert_eq!(res.accept_indices().len(), 0);
+        assert_eq!(res.all_indices().len(), 1);
+        assert_eq!(res.dfa_edges().len(), 1);
     }
 
     #[test]
