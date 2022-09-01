@@ -21,7 +21,8 @@ use super::{
 use crate::{
     analysis::callgraph::{self, CallGraph},
     constraint_generation::{
-        self, ConstantResolver, NodeContext, PointsToMapping, RegisterMapping, SubprocedureLocators,
+        self, tid_to_tvar, ConstantResolver, NodeContext, PointsToMapping, RegisterMapping,
+        SubprocedureLocators,
     },
     constraints::{
         AddConstraint, ConstraintSet, DerivedTypeVar, FieldLabel, SubtypeConstraint, TyConstraint,
@@ -43,7 +44,6 @@ where
     graph: &'a Graph<'a>,
     node_contexts: HashMap<NodeIndex, NodeContext<R, P, S, C>>,
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
-    rule_context: RuleContext,
     vman: &'b mut VariableManager,
     lattice_def: LatticeInfo<'c, T, U>,
     debug_dir: FileDebugLogger,
@@ -58,7 +58,7 @@ pub struct SCCConstraints {
     /// The subprocedure terms that make up this scc
     pub scc: Vec<Tid>,
     /// The constraints for this scc.
-    pub constraints: ConstraintSet,
+    pub constraints: BTreeSet<SubtypeConstraint>,
 }
 
 // There are only two types in the world :)
@@ -328,7 +328,18 @@ where
                 },
                 debug_dir.clone(),
             )
-            .build_and_label_constraints(&next_cs_set)?;
+            .build_and_label_constraints(
+                &next_cs_set
+                    .iter()
+                    .filter_map(|x| {
+                        if let TyConstraint::SubTy(sty) = x {
+                            Some(sty.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+            )?;
             let mut base_labels = self.get_initial_labeling(&sg);
 
             let mut irules = InferenceRules {
@@ -424,6 +435,44 @@ fn remove_cs_tags_for_tids_in_constraint(cons: &mut TyConstraint, tid_set: &Hash
         }
     }
 }
+
+/// Identifies formals that are not in the scc by finding formals with a cs_tag
+fn identify_called_formals(cs_set: &ConstraintSet) -> BTreeSet<(TypeVariable, Tid)> {
+    cs_set
+        .iter()
+        .flat_map(|x| match x {
+            TyConstraint::SubTy(sty) => vec![&sty.lhs, &sty.rhs].into_iter(),
+            TyConstraint::AddCons(acons) => {
+                vec![&acons.lhs_ty, &acons.rhs_ty, &acons.repr_ty].into_iter()
+            }
+        })
+        .map(|dtv| dtv.get_base_variable())
+        .filter_map(|basev| {
+            if let Some(cs_tag) = basev.get_cs_tag() {
+                Some((basev.to_callee(), cs_tag.clone()))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn instantiate_callee_signatures(
+    curr_set: &mut ConstraintSet,
+    state: &HashMap<TypeVariable, Rc<Signature>>,
+) {
+    for (ty, cs_tag) in identify_called_formals(curr_set) {
+        curr_set.extend(
+            state
+                .get(&ty)
+                .expect("A callee should have a sig")
+                .instantiate(cs_tag)
+                .into_iter()
+                .map(|x| TyConstraint::SubTy(x)),
+        )
+    }
+}
+
 impl<R, P, S, C, T, U> Context<'_, '_, '_, '_, R, P, S, C, T, U>
 where
     R: RegisterMapping,
@@ -437,7 +486,6 @@ where
     pub fn new<'a, 'b, 'c, 'd>(
         prog_info: ProgramInfo<'a>,
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S, C>>,
-        rule_context: RuleContext,
         vman: &'b mut VariableManager,
         lattice: LatticeInfo<'c, T, U>,
         debug_dir: FileDebugLogger,
@@ -448,7 +496,6 @@ where
             graph: prog_info.cfg,
             node_contexts,
             extern_symbols: prog_info.extern_symbols,
-            rule_context,
             vman,
             lattice_def: lattice,
             debug_dir,
@@ -459,7 +506,7 @@ where
     fn simplify_signature(
         &mut self,
         scc: &Vec<Tid>,
-        state: &HashMap<&Tid, Rc<Signature>>,
+        state: &HashMap<TypeVariable, Rc<Signature>>,
     ) -> anyhow::Result<Signature> {
         let tid_filter: HashSet<Tid> = scc.iter().cloned().collect();
         let cont = constraint_generation::Context::new(
@@ -481,6 +528,8 @@ where
                 })
                 .collect::<BTreeSet<_>>(),
         );
+
+        instantiate_callee_signatures(&mut basic_cons, state);
 
         for tid in tid_filter.iter() {
             if let Some(to_insert) = self.additional_constraints.get(tid) {
@@ -512,14 +561,21 @@ where
             &|| &resolved_cs_set,
         )?;
 
-        let mut new_rcontext = self.rule_context.clone();
+        let new_interesting_vars = tid_filter
+            .iter()
+            .map(|tid| tid_to_tvar(tid))
+            .chain(
+                resolved_cs_set
+                    .variables()
+                    .filter(|x| x.get_base_variable().is_global())
+                    .map(|global| global.get_base_variable().clone()),
+            )
+            .chain(self.lattice_def.type_lattice_elements.iter().cloned());
+
+        let new_rcontext = RuleContext::new(new_interesting_vars.collect());
 
         // TODO(Ian): I dislike this collaboration but constraint generation is when we discover which globals we are going to need. Ideally when we lift constraint
         // generation out we can seperate this out.
-        resolved_cs_set
-            .variables()
-            .filter(|x| x.get_base_variable().is_global())
-            .for_each(|global| new_rcontext.insert_variable(global.get_base_variable().clone()));
 
         self.debug_dir.log_to_fname(
             &format!("{}_modified_interesting_vars", repr_tid.get_str_repr()),
@@ -564,22 +620,14 @@ where
     /// Runs the computation, generating FSA simplified scc constraints for each.
     /// Temporary sketches are created to propogate pointer information.
     pub fn get_simplified_constraints(&mut self) -> anyhow::Result<Vec<SCCConstraints>> {
-        self.debug_dir.log_to_fname("interesting_vars", &|| {
-            self.rule_context
-                .get_interesting()
-                .iter()
-                .map(|var| var.get_name())
-                .join("\n")
-        })?;
-
         let condensed_cg = callgraph::CGOrdering::new(&self.cg)?;
-        /// holds a shared reference to the sig for an scc from each callee so the callee can be looked up
-        let mut state: HashMap<&Tid, Rc<Signature>> = HashMap::new();
+        // holds a shared reference to the sig for an scc from each callee so the callee can be looked up
+        let mut state: HashMap<TypeVariable, Rc<Signature>> = HashMap::new();
         for nd in condensed_cg.get_reverse_topo() {
             let scc = &condensed_cg.condensed_cg[nd];
             let sig = Rc::from(self.simplify_signature(&scc, &state)?);
             for tid in scc {
-                state.insert(tid, sig.clone());
+                state.insert(tid_to_tvar(tid), sig.clone());
             }
         }
 
@@ -589,7 +637,9 @@ where
             .into_iter()
             .map(|x| SCCConstraints {
                 constraints: state
-                    .get(x.iter().next().expect("should not have empty scc"))
+                    .get(&tid_to_tvar(
+                        x.iter().next().expect("should not have empty scc"),
+                    ))
                     .expect("all sccs should have a sig")
                     .cs_set
                     .clone(),
@@ -599,13 +649,32 @@ where
     }
 }
 
+/// Signatures present an external view of a function as type constants, formals, and globals as base variables
 struct Signature {
-    cs_set: ConstraintSet,
+    cs_set: BTreeSet<SubtypeConstraint>,
 }
 
 impl Signature {
-    pub fn instantiate(&mut self, cs_tag: Tid) -> ConstraintSet {
-        todo!()
+    fn retag_dtv(dtv: &mut DerivedTypeVar, new_tag: Tid) {
+        // filter globals and type constants
+        if dtv.is_formal_dtv() && (dtv.refers_to_in_parameter() || dtv.refers_to_out_parameter()) {
+            dtv.substitute_base(TypeVariable::with_tag(
+                dtv.get_base_variable().get_name().to_owned(),
+                new_tag,
+            ));
+        }
+    }
+
+    pub fn instantiate(&self, cs_tag: Tid) -> BTreeSet<SubtypeConstraint> {
+        self.cs_set
+            .iter()
+            .cloned()
+            .map(|mut x| {
+                Self::retag_dtv(&mut x.lhs, cs_tag.clone());
+                Self::retag_dtv(&mut x.rhs, cs_tag.clone());
+                x
+            })
+            .collect()
     }
 }
 

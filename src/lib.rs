@@ -197,17 +197,7 @@ mod tests {
             .iter()
             .map(|c| DeserSCCCons {
                 scc: c.scc.clone(),
-                constraints: c
-                    .constraints
-                    .iter()
-                    .filter_map(|x| {
-                        if let TyConstraint::SubTy(s) = x {
-                            Some(s.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect(),
+                constraints: c.constraints.iter().cloned().collect(),
             })
             .collect::<Vec<_>>();
 

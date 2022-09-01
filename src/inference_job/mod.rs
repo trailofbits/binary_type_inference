@@ -356,6 +356,7 @@ impl InferenceJob {
 
     /// Get the contextual information needed for the weighted pushdown automata rules
     /// including interesting variables and type lattice information.
+    #[deprecated]
     pub fn get_rule_context(&self) -> RuleContext {
         let mut only_interestings = BTreeSet::new();
 
@@ -388,7 +389,6 @@ impl InferenceJob {
 
         let cg = callgraph::CGContext::new(&self.proj).get_graph();
 
-        let rule_context = self.get_rule_context();
         let lattice_elems = self.get_lattice_elems().collect();
         let mut context: scc_constraint_generation::Context<
             _,
@@ -404,7 +404,6 @@ impl InferenceJob {
                 extern_symbols: &self.proj.program.term.extern_symbols,
             },
             node_ctxt,
-            rule_context,
             &mut self.vman,
             LatticeInfo::new(
                 &self.lattice,
@@ -478,22 +477,6 @@ impl InferenceJob {
         );
 
         lcontext.collect_ctypes(sg)
-    }
-
-    #[deprecated(
-        note = "Additional constraints are now inserted during constraint generation, it is not recommended to insert them again."
-    )]
-    /// Inserts additional constraints held by this job into the set of scc constraints.
-    /// Additional constraints are now inserted during constraint generation so that pointer inference can use
-    /// the additional info provided by injected constraints.
-    pub fn insert_additional_constraints(&self, scc_cons: &mut [SCCConstraints]) {
-        for scc in scc_cons.iter_mut() {
-            for tid in scc.scc.iter() {
-                if let Some(new_cons) = self.additional_constraints.get(tid) {
-                    scc.constraints.insert_all(new_cons);
-                }
-            }
-        }
     }
 
     /// Infer the universal type graph, joining all sketches together.
