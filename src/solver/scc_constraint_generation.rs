@@ -614,7 +614,17 @@ where
             &|| &cons,
         )?;
 
-        todo!()
+        let sub_cons = cons
+            .iter()
+            .filter_map(|x| {
+                if let TyConstraint::SubTy(x) = x {
+                    Some(x.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Ok(Signature { cs_set: sub_cons })
     }
 
     /// Runs the computation, generating FSA simplified scc constraints for each.
