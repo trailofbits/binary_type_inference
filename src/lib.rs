@@ -3,6 +3,10 @@
 //! Utilizes the [CWE checker pointer analysis](cwe_checker_lib::analysis::pointer_inference), reaching definitions, and parameter analysis from ghidra
 //! to generate subtyping constraints of the form used in [retypd](https://github.com/GrammaTech/retypd).
 #![warn(missing_docs)]
+
+#[macro_use]
+extern crate lazy_static;
+
 /// Custom fixpoint analyses used by type inference.
 pub mod analysis;
 
