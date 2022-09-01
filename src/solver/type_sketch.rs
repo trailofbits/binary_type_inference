@@ -10,7 +10,7 @@ use std::{collections::HashMap, hash::Hash};
 use alga::general::{AbstractMagma, Additive, JoinSemilattice, Lattice, MeetSemilattice};
 use anyhow::Context;
 
-use cwe_checker_lib::intermediate_representation::Tid;
+use cwe_checker_lib::intermediate_representation::{Sub, Tid};
 
 use itertools::Itertools;
 use log::info;
@@ -31,7 +31,7 @@ use EdgeDirection::Outgoing;
 use crate::analysis::callgraph::{self, CallGraph};
 use crate::constraint_generation::{self, tid_to_tvar};
 use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, Field, FieldLabel, TyConstraint, TypeVariable,
+    ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable,
 };
 
 use crate::graph_algos::mapping_graph::MappingGraph;
@@ -314,7 +314,7 @@ where
 fn generate_quotient_groups<C>(
     to_reprs: Option<&[Tid]>,
     grph: &MappingGraph<C, DerivedTypeVar, FieldLabel>,
-    cons: &ConstraintSet,
+    cons: &BTreeSet<SubtypeConstraint>,
     logger: &mut FileDebugLogger,
 ) -> Vec<BTreeSet<NodeIndex>>
 where
@@ -322,14 +322,11 @@ where
 {
     let init_unions: Vec<(NodeIndex, NodeIndex)> = cons
         .iter()
-        .filter_map(|c| {
-            if let TyConstraint::SubTy(sty) = c {
-                let lt_node = grph.get_node(&sty.lhs).unwrap();
-                let gt_node = grph.get_node(&sty.rhs).unwrap();
-                Some((*lt_node, *gt_node))
-            } else {
-                None
-            }
+        .map(|sty| {
+            {}
+            let lt_node = grph.get_node(&sty.lhs).unwrap();
+            let gt_node = grph.get_node(&sty.rhs).unwrap();
+            (*lt_node, *gt_node)
         })
         .collect();
 
@@ -337,14 +334,10 @@ where
         logger
             .log_to_fname(&format!("{}_constraint_node_mapping", reprs[0]), &|| {
                 cons.iter()
-                    .filter_map(|c| {
-                        if let TyConstraint::SubTy(sty) = c {
-                            let lt_node = grph.get_node(&sty.lhs).unwrap();
-                            let gt_node = grph.get_node(&sty.rhs).unwrap();
-                            Some(format!("{} {}:{}", sty, lt_node.index(), gt_node.index()))
-                        } else {
-                            None
-                        }
+                    .map(|sty| {
+                        let lt_node = grph.get_node(&sty.lhs).unwrap();
+                        let gt_node = grph.get_node(&sty.rhs).unwrap();
+                        format!("{} {}:{}", sty, lt_node.index(), gt_node.index())
                     })
                     .join("\n")
             })
@@ -404,14 +397,12 @@ where
 {
     fn add_nodes_and_initial_edges(
         &self,
-        cs_set: &ConstraintSet,
+        cs_set: &BTreeSet<SubtypeConstraint>,
         nd_graph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
     ) -> anyhow::Result<()> {
-        for constraint in cs_set.iter() {
-            if let TyConstraint::SubTy(sty) = constraint {
-                (self.add_new_var)(&sty.lhs, nd_graph)?;
-                (self.add_new_var)(&sty.rhs, nd_graph)?;
-            }
+        for sty in cs_set.iter() {
+            (self.add_new_var)(&sty.lhs, nd_graph)?;
+            (self.add_new_var)(&sty.rhs, nd_graph)?;
         }
 
         Ok(())
@@ -439,47 +430,38 @@ where
     fn label_by(
         &self,
         grph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>,
-        cons: &ConstraintSet,
+        cons: &BTreeSet<SubtypeConstraint>,
     ) {
-        cons.iter()
-            .filter_map(|x| {
-                if let TyConstraint::SubTy(sy) = x {
-                    Some(sy)
-                } else {
-                    None
-                }
-            })
-            .for_each(|subty| {
-                if self.dtv_is_uninterpreted_lattice(&subty.lhs)
-                    && grph.get_node(&subty.rhs).is_some()
-                {
-                    Self::update_lattice_node(
-                        grph,
-                        self.lattice
-                            .get_elem(&subty.lhs.get_base_variable().get_name())
-                            .unwrap(),
-                        &subty.rhs,
-                        |x: &U, y: &LatticeBounds<U>| y.refine_lower(x),
-                    );
-                } else if self.dtv_is_uninterpreted_lattice(&subty.rhs)
-                    && grph.get_node(&subty.lhs).is_some()
-                {
-                    Self::update_lattice_node(
-                        grph,
-                        self.lattice
-                            .get_elem(&subty.rhs.get_base_variable().get_name())
-                            .unwrap(),
-                        &subty.lhs,
-                        |x: &U, y: &LatticeBounds<U>| y.refine_upper(x),
-                    );
-                }
-            });
+        cons.iter().for_each(|subty| {
+            if self.dtv_is_uninterpreted_lattice(&subty.lhs) && grph.get_node(&subty.rhs).is_some()
+            {
+                Self::update_lattice_node(
+                    grph,
+                    self.lattice
+                        .get_elem(&subty.lhs.get_base_variable().get_name())
+                        .unwrap(),
+                    &subty.rhs,
+                    |x: &U, y: &LatticeBounds<U>| y.refine_lower(x),
+                );
+            } else if self.dtv_is_uninterpreted_lattice(&subty.rhs)
+                && grph.get_node(&subty.lhs).is_some()
+            {
+                Self::update_lattice_node(
+                    grph,
+                    self.lattice
+                        .get_elem(&subty.rhs.get_base_variable().get_name())
+                        .unwrap(),
+                    &subty.lhs,
+                    |x: &U, y: &LatticeBounds<U>| y.refine_upper(x),
+                );
+            }
+        });
     }
 
     fn build_without_pointer_simplification(
         &self,
         to_reprs: Option<&[Tid]>,
-        sig: &ConstraintSet,
+        sig: &BTreeSet<SubtypeConstraint>,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
         let mut nd_graph: MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel> =
             MappingGraph::new();
@@ -509,7 +491,7 @@ where
     fn build_and_label_constraints_with_representation(
         &self,
         to_reprs: Option<&[Tid]>,
-        sig: &ConstraintSet,
+        sig: &BTreeSet<SubtypeConstraint>,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
         let mut orig_sk_graph = self.build_without_pointer_simplification(to_reprs, sig)?;
         assert!(!orig_sk_graph.has_reflexive_edge_that_is_not_add());
@@ -523,7 +505,7 @@ where
     pub fn build_and_label_constraints_representing(
         &self,
         to_reprs: &[Tid],
-        sig: &ConstraintSet,
+        sig: &BTreeSet<SubtypeConstraint>,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
         self.build_and_label_constraints_with_representation(Some(to_reprs), sig)
     }
@@ -532,7 +514,7 @@ where
     /// the graph with which type variable each node represents as well as type lattice bounds.
     pub fn build_and_label_constraints(
         &self,
-        sig: &ConstraintSet,
+        sig: &BTreeSet<SubtypeConstraint>,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
         self.build_and_label_constraints_with_representation(None, sig)
     }
@@ -590,7 +572,7 @@ impl TypeLocation {
 /// The reachable subgraph of the callee is copied up to the caller. Callee nodes are labeled.
 pub struct SCCSketchsBuilder<'a, U: NamedLatticeElement, T: NamedLattice<U>> {
     // Allows us to map any tid to the correct constraintset
-    scc_signatures: HashMap<Tid, Rc<ConstraintSet>>,
+    scc_signatures: HashMap<Tid, Rc<BTreeSet<SubtypeConstraint>>>,
     // Collects a shared sketchgraph representing the functions in the SCC
     scc_repr: HashMap<TypeVariable, Rc<SketchGraph<LatticeBounds<U>>>>,
     global_repr: HashMap<TypeVariable, (NodeIndex, Sketch<LatticeBounds<U>>)>,
@@ -650,40 +632,19 @@ where
             .get(&to_reprs[0])
             .expect("scc should have a sig");
 
-        let is_internal_variable = to_reprs
-            .iter()
-            .map(constraint_generation::tid_to_tvar)
-            .collect::<BTreeSet<_>>();
+        //let is_internal_variable = to_reprs
+        //    .iter()
+        //    .map(constraint_generation::tid_to_tvar)
+        //    .collect::<BTreeSet<_>>();
 
         let add_new_var =
             |var: &DerivedTypeVar,
              grph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>|
              -> anyhow::Result<()> {
-                if is_internal_variable.contains(var.get_base_variable())
-                || self.type_lattice_elements.contains(var.get_base_variable())
-                // TODO(Ian): evaluate this and where cs tags are inserted
-                || var.get_base_variable().get_cs_tag().is_none()
-                {
-                    insert_dtv(self.lattice, grph, var.clone());
-                } else {
-                    let ext = self
-                        .scc_repr
-                        .get(&var.get_base_variable().to_callee())
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "An external variable must have a representation already built {}",
-                                var.get_base_variable().to_callee().to_string()
-                            )
-                        })?;
-
-                    if matches!(ext.copy_reachable_subgraph_into(var, grph), None) {
-                        // The target graph doesnt have any constraints on the target variable.
-                        insert_dtv(self.lattice, grph, var.clone());
-                    }
-                }
-
+                insert_dtv(self.lattice, grph, var.clone());
                 Ok(())
             };
+
         let bldr: SketchBuilder<U, T, _> = SketchBuilder::new(
             self.lattice,
             &self.type_lattice_elements,
@@ -2038,7 +1999,7 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         let quot_groups = generate_quotient_groups::<U>(
             None,
             &weight_mapping,
-            &ConstraintSet::default(),
+            &BTreeSet::default(),
             &mut FileDebugLogger::default(),
         );
         let quot_graph = relab.quoetient_graph(&quot_groups);
@@ -2495,6 +2456,7 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
 
 #[cfg(test)]
 mod test {
+    /*
     use std::collections::HashSet;
 
     use cwe_checker_lib::intermediate_representation::Tid;
@@ -2860,16 +2822,16 @@ mod test {
         //σ{}@{}
         let caller1_scc = parse_cons_set(
             "
-        sub_caller1.in_0.load.load <= int 
+        sub_caller1.in_0.load.load <= int
         bottom <= sub_caller1.in_0.store
-        sub_caller1.in_0 <= sub_id:0.in_0 
+        sub_caller1.in_0 <= sub_id:0.in_0
         ",
         );
 
         let caller2_scc = parse_cons_set(
             "
-        sub_caller2.in_0.load.load <= int 
-        sub_caller2.in_0 <= sub_id:1.in_0 
+        sub_caller2.in_0.load.load <= int
+        sub_caller2.in_0 <= sub_id:1.in_0
         ",
         );
 
@@ -3020,9 +2982,9 @@ mod test {
         let caller_scc = parse_cons_set(
             "
         sub_caller.in_0 <= sub_id:0.in_0
-        sub_id:0.out <= sub_caller.out.σ8@0  
+        sub_id:0.out <= sub_caller.out.σ8@0
         sub_caller.in_1 <= sub_id:1.in_0
-        sub_id:1.out <= sub_caller.out.σ32@1  
+        sub_id:1.out <= sub_caller.out.σ32@1
         sub_caller.in_0 <= char
         sub_caller.in_1 <= int
         ",
@@ -3232,7 +3194,7 @@ mod test {
         eight.store <= eleven
         eight.load <= eleven
         eleven.σ64@0 <= six
-        six.+40 <= eight 
+        six.+40 <= eight
         six.load <= zero
         zero.σ64@40 <= six
         zero.σ64@0 <= seven
@@ -3250,5 +3212,5 @@ mod test {
             simplified_sketch.apply_pointer_transform(pt);
             println!("{}", simplified_sketch);
         }
-    }
+    }*/
 }
