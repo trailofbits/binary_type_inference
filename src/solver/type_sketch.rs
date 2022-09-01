@@ -28,7 +28,7 @@ use petgraph::{
 use serde::{Deserialize, Serialize};
 use EdgeDirection::Outgoing;
 
-use crate::analysis::callgraph::CallGraph;
+use crate::analysis::callgraph::{self, CallGraph};
 use crate::constraint_generation::{self, tid_to_tvar};
 use crate::constraints::{
     ConstraintSet, DerivedTypeVar, Field, FieldLabel, TyConstraint, TypeVariable,
@@ -43,8 +43,6 @@ use super::dfa_operations::{self, complement, union, Alphabet, ExplicitDFA, DFA}
 use super::scc_constraint_generation::SCCConstraints;
 use super::type_lattice::{NamedLattice, NamedLatticeElement};
 use std::convert::TryFrom;
-
-type CondensedCallgraph = Graph<Vec<Tid>, ()>;
 
 // an equivalence between eq nodes implies an equivalence between edge
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -705,14 +703,6 @@ where
         Ok(())
     }
 
-    fn get_topo_order_for_cg(&self) -> anyhow::Result<(CondensedCallgraph, Vec<NodeIndex>)> {
-        let condensed = petgraph::algo::condensation(self.cg.clone(), true);
-        petgraph::algo::toposort(&condensed, None)
-            .map_err(|_| anyhow::anyhow!("cycle error"))
-            .with_context(|| "Constructing topological sort of codensed sccs for sketch building")
-            .map(|sorted| (condensed, sorted))
-    }
-
     fn display_sketches(&self, event_time: &str) -> anyhow::Result<()> {
         for (var, repr) in self.scc_repr.iter() {
             self.debug_dir.log_to_fname(
@@ -738,11 +728,12 @@ where
     /// Builds and refines scc sketches by first translating constraint sets to sketches,
     /// then binding polymorphic types when thye can be refiend, and finally binding and refining globals.
     pub fn build(&mut self) -> anyhow::Result<()> {
-        let (condensed, mut sorted) = self.get_topo_order_for_cg()?;
-        sorted.reverse();
+        let cg_ordering = callgraph::CGOrdering::new(&self.cg)?;
+
+        let sorted = cg_ordering.get_reverse_topo();
 
         for idx in sorted {
-            let associated_tids = &condensed[idx];
+            let associated_tids = &cg_ordering.condensed_cg[idx];
             // condensation shouldnt produce a node that doesnt represent any of the original nodes
             assert!(!associated_tids.is_empty());
 
@@ -864,12 +855,12 @@ where
             &mut location_to_index,
         )?;
 
-        let (condensed, mut sorted) = self.get_topo_order_for_cg()?;
-        sorted.reverse();
+        let condensed_cg = callgraph::CGOrdering::new(&self.cg)?;
+        let sorted = condensed_cg.get_reverse_topo();
         // we go in reverse topo order so that the callee will have types if we need to bind.
 
         for idx in sorted {
-            let scc = &condensed[idx];
+            let scc = &condensed_cg.condensed_cg[idx];
             let built_sg = self.get_built_sketch_from_scc(scc);
             self.copy_built_sketch_into_global(
                 scc,
@@ -1351,15 +1342,6 @@ where
         param_aliases
     }
 
-    fn visit_sccs_in_topo_order(&self) -> anyhow::Result<SCCOrdering> {
-        let (condensed, sorted) = self.get_topo_order_for_cg()?;
-
-        Ok(SCCOrdering {
-            condensed_scc: condensed,
-            sorted,
-        })
-    }
-
     /// Finds every node in the aliased subgraph that is reached by an edge from outside the subgraph
     /// Records the path from the subgraph root to the given node
     fn get_subgraph_entries_for_scc_loc(
@@ -1478,8 +1460,7 @@ where
     }
 
     fn collect_aliases(&mut self) -> anyhow::Result<()> {
-        let ordering = self.visit_sccs_in_topo_order()?;
-
+        let ordering = callgraph::CGOrdering::new(&self.cg)?;
         ordering.iter().for_each(|(ccg, target_scc_idx, scc_tids)| {
             self.parameter_aliases.extend(
                 self.collect_aliases_for_scc(ccg, scc_tids, target_scc_idx)
@@ -1558,7 +1539,7 @@ where
     }
 
     fn bind_polymorphic_types(&mut self) -> anyhow::Result<()> {
-        let ordering = self.visit_sccs_in_topo_order()?;
+        let ordering = callgraph::CGOrdering::new(&self.cg)?;
         ordering.iter().for_each(|(ccg, target_scc_idx, scc_tids)| {
             self.refine_formals(ccg, scc_tids, target_scc_idx)
         });
@@ -1590,7 +1571,7 @@ where
     pub fn apply_global_instantiations(&mut self) -> anyhow::Result<()> {
         let var_mapping = self.collect_global_instantiations()?;
 
-        let ordering = self.visit_sccs_in_topo_order()?;
+        let ordering = callgraph::CGOrdering::new(&self.cg)?;
 
         for (_condensed, _scc_idx, scc) in ordering.iter() {
             let mut target_of_refinement = self.get_built_sketch_from_scc(scc);
@@ -1626,21 +1607,6 @@ where
         }
 
         Ok(global_sketches)
-    }
-}
-
-struct SCCOrdering {
-    condensed_scc: CondensedCallgraph,
-    sorted: Vec<NodeIndex>,
-}
-
-impl SCCOrdering {
-    fn iter(&self) -> impl Iterator<Item = (&CondensedCallgraph, NodeIndex, &Vec<Tid>)> {
-        self.sorted
-            .iter()
-            .map(|idx| (&self.condensed_scc, *idx, &self.condensed_scc[*idx]))
-            .collect::<Vec<_>>()
-            .into_iter()
     }
 }
 
