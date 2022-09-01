@@ -146,6 +146,7 @@ dependencies = [
  "im-rc",
  "indexmap",
  "itertools",
+ "lazy_static",
  "log",
  "nom",
  "num-traits",

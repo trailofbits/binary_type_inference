@@ -314,15 +314,7 @@ impl InferenceJob {
 
         let nd_context = crate::node_context::create_default_context(
             &analysis_results,
-            Config {
-                allocation_symbols: vec![
-                    "malloc".to_owned(),
-                    "calloc".to_owned(),
-                    "xmalloc".to_owned(),
-                    "realloc".to_owned(),
-                ],
-                deallocation_symbols: vec!["free".to_owned()],
-            },
+            crate::node_context::points_to::DEFAULT_PTR_CONFIG.clone(),
             self.weakest_integral_type.clone(),
             self.debug_dir.clone(),
         )?;

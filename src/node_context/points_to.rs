@@ -9,7 +9,7 @@ use cwe_checker_lib::abstract_domain::{
 };
 
 use cwe_checker_lib::analysis::interprocedural_fixpoint_generic::NodeValue;
-use cwe_checker_lib::analysis::pointer_inference;
+use cwe_checker_lib::analysis::pointer_inference::{self, Config};
 use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Expression, Variable};
 use cwe_checker_lib::AnalysisResults;
 
@@ -19,7 +19,22 @@ use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
-/// Wrpas a pointer state such that successor states can be generated.
+lazy_static! {
+    /// The default set of allocation symbols an deallocation symbols
+    pub static ref DEFAULT_PTR_CONFIG: Config = {
+        Config {
+            allocation_symbols: vec![
+                "malloc".to_owned(),
+                "calloc".to_owned(),
+                "xmalloc".to_owned(),
+                "realloc".to_owned(),
+            ],
+            deallocation_symbols: vec!["free".to_owned()],
+        }
+    };
+}
+
+/// Wraps a pointer state such that successor states can be generated.
 #[derive(Clone)]
 pub struct PointerState {
     /// The inner pointer inference state
@@ -85,6 +100,15 @@ impl PointsToContext {
 }
 
 impl PointsToContext {
+    pub fn type_variable_from_abstract_id(aid: &AbstractIdentifier) -> TypeVariable {
+        TypeVariable::new(
+            aid.to_string()
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect(),
+        )
+    }
+
     /// Based on this comment in the AbstractObjectList:
 
     /// Right now this function is only sound if for each abstract object only one ID pointing to it exists.
@@ -104,13 +128,8 @@ impl PointsToContext {
         // TODO(ian): we may want to normalize this offset to the abstract object offset
         TypeVariableAccess {
             offset: offset.try_to_offset().ok(),
-            ty_var: TypeVariable::new(
-                object_id
-                    .to_string()
-                    .chars()
-                    .filter(|c| !c.is_whitespace())
-                    .collect(),
-            ),
+            ty_var: Self::type_variable_from_abstract_id(object_id),
+
             sz,
         }
     }
@@ -246,8 +265,25 @@ pub fn run_analysis<'a>(
 #[cfg(test)]
 mod test {
 
-    /*
-    use super::run_analysis;
+    use std::path::{Path, PathBuf};
+
+    use cwe_checker_lib::{
+        abstract_domain::{AbstractDomain, TryToBitvec, TryToInterval},
+        analysis::graph::{Graph, Node},
+        intermediate_representation::{
+            BinOpType, Bitvector, Blk, ByteSize, Expression, Term, Tid, Variable,
+        },
+        utils::binary::RuntimeMemoryImage,
+        AnalysisResults,
+    };
+    use petgraph::{data, stable_graph::NodeIndex};
+
+    use crate::{
+        constraint_generation::NodeContextMapping, inference_job::InferenceJob,
+        node_context::points_to::PointsToContext,
+    };
+
+    use super::{run_analysis, DEFAULT_PTR_CONFIG};
 
     fn test_data_dir<P: AsRef<Path>>(pth: P) -> String {
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -256,143 +292,182 @@ mod test {
         d.to_string_lossy().into_owned()
     }
 
-    #[test]
-    fn regression_globals_test() {
-        let bin = InferenceJob::parse_binary(&test_data_dir("mooosl")).expect("Couldnt get binary");
-        let proj = InferenceJob::parse_project(&test_data_dir("mooosl.json"), &bin)
-            .expect("Couldnt get project");
-        let grph = InferenceJob::graph_from_project(&proj);
-
-        let rt_mem =
-            InferenceJob::get_runtime_image(&proj, &bin).expect("coudlnt build memory image");
-        let pointer_analysis = run_analysis(
-            &proj,
-            Config {
-                allocation_symbols: vec![
-                    "malloc".to_owned(),
-                    "calloc".to_owned(),
-                    "xmalloc".to_owned(),
-                    "realloc".to_owned(),
-                ],
-                deallocation_symbols: vec!["free".to_owned()],
-            },
-            &grph,
-            &rt_mem,
-        )
-        .expect("pointer analysis failed");
-
-        let (target_idx, blk) = grph
-            .node_references()
-            .filter_map(|(idx, nd)| match nd {
-                cwe_checker_lib::analysis::graph::Node::BlkStart(blk, prc) => {
-                    if blk.tid.address == "00101522" {
-                        Some((idx, blk))
-                    } else {
-                        None
-                    }
-                }
-                cwe_checker_lib::analysis::graph::Node::BlkEnd(_, _) => None,
-                cwe_checker_lib::analysis::graph::Node::CallReturn { .. } => None,
-                cwe_checker_lib::analysis::graph::Node::CallSource { .. } => None,
-            })
-            .next()
-            .expect("couldnt find tartget node");
-
-        let point_to_res = pointer_analysis.get(&target_idx).expect("expected_context");
-
-        let mut target_points_to = point_to_res.clone();
-        let mut found = false;
-        // fast forward the state to the target address
-        for def in blk.term.defs.iter() {
-            if !found {
-                found = def.tid.address == "00101540";
-            }
-
-            if !found {
-                target_points_to = point_to_res.apply_def(def);
+    fn find_ndidx_for_block<'a>(addr: &str, cfg: &Graph<'a>) -> Option<(NodeIndex, Node<'a>)> {
+        for ndidx in cfg.node_indices() {
+            let nd = cfg[ndidx];
+            if nd.get_block().tid.address == addr {
+                return Some((ndidx, nd));
             }
         }
 
-        assert!(found);
+        None
+    }
 
-        let mut fake_vman = VariableManager::new();
-        let access = target_points_to.points_to(
-            &Expression::Var(Variable {
-                name: "RAX".to_owned(),
-                size: ByteSize::new(8),
-                is_temp: false,
-            }),
-            ByteSize::new(8),
+    fn fast_forward_pointer_state_until_address_term(
+        mut ctx: PointsToContext,
+        target_tid: &str,
+        blk: &Term<Blk>,
+    ) -> PointsToContext {
+        for d in &blk.term.defs {
+            if &d.tid.address == target_tid {
+                return ctx;
+            }
+            println!("Applying def with tid: {}", d.tid);
+            println!("{:#?}", d);
+            ctx = ctx.apply_def(d);
+        }
+
+        ctx
+    }
+
+    fn check_target_stack_value(target_ctx: &PointsToContext, rt_mem: &RuntimeMemoryImage) {
+        let rbp = Variable {
+            name: "RBP".to_owned(),
+            size: ByteSize::from(8),
+            is_temp: false,
+        };
+
+        let stored_value = target_ctx
+            .pointer_state
+            .state
+            .load_value(
+                &Expression::BinOp {
+                    op: BinOpType::IntAdd,
+                    lhs: Box::new(Expression::Var(rbp)),
+                    rhs: Box::new(Expression::Const(Bitvector::from_i64(-16))),
+                },
+                ByteSize::from(8),
+                rt_mem,
+            )
+            .expect("should be able to retrieve value stored in local_18");
+
+        let (aid, offset) = stored_value.get_if_unique_target().unwrap();
+        assert_eq!(
+            PointsToContext::type_variable_from_abstract_id(aid).get_name(),
+            "instr_001015ba_2@RAX"
+        );
+
+        assert_eq!(
+            offset.try_to_offset().expect("offset should be singleton"),
+            0
         );
     }
 
     #[test]
-    fn stack_allocated_list_heads() {
-        let bin = InferenceJob::parse_binary(&test_data_dir("new_moosl_bin"))
-            .expect("Couldnt get binary");
-        let proj = InferenceJob::parse_project(&test_data_dir("new_moosl.json"), &bin)
-            .expect("Couldnt get project");
-        let grph = InferenceJob::graph_from_project(&proj);
+    fn test_mooosl_store_abstract_object() {
+        let target_bin_path = test_data_dir("mooosl");
+        let bin =
+            InferenceJob::parse_binary(&target_bin_path).expect("should be able to parse mooosl");
+        let project = InferenceJob::parse_project(&test_data_dir("mooosl.json"), &bin)
+            .expect("Should get cwe checker project");
 
-        let rt_mem =
-            InferenceJob::get_runtime_image(&proj, &bin).expect("coudlnt build memory image");
-        let pointer_analysis = run_analysis(
-            &proj,
-            Config {
-                allocation_symbols: vec![
-                    "malloc".to_owned(),
-                    "calloc".to_owned(),
-                    "xmalloc".to_owned(),
-                    "realloc".to_owned(),
-                ],
-                deallocation_symbols: vec!["free".to_owned()],
-            },
-            &grph,
-            &rt_mem,
-        )
-        .expect("pointer analysis failed");
+        let rt_mem = InferenceJob::get_runtime_image(&project, &bin)
+            .expect("Should be able to load bin bytes");
+        let cfg = InferenceJob::graph_from_project(&project);
 
-        let (target_idx, blk) = grph
-            .node_references()
-            .filter_map(|(idx, nd)| match nd {
-                cwe_checker_lib::analysis::graph::Node::BlkStart(blk, prc) => {
-                    if blk.tid.address == "00101526" {
-                        Some((idx, blk))
-                    } else {
-                        None
-                    }
-                }
-                cwe_checker_lib::analysis::graph::Node::BlkEnd(_, _) => None,
-                cwe_checker_lib::analysis::graph::Node::CallReturn { .. } => None,
-                cwe_checker_lib::analysis::graph::Node::CallSource { .. } => None,
-            })
-            .next()
-            .expect("couldnt find tartget node");
+        let analysis_results = AnalysisResults::new(&bin, &rt_mem, &cfg, &project);
 
-        let point_to_res = pointer_analysis.get(&target_idx).expect("expected_context");
+        let (res, logs) = analysis_results.compute_function_signatures();
+        logs.iter().for_each(crate::util::log_cwe_message);
 
-        let mut target_points_to = point_to_res.clone();
-        let mut found = false;
-        // fast forward the state to the target address
-        for def in blk.term.defs.iter() {
-            if !found {
-                found = def.tid.address == "00101544";
-            }
+        let analysis_results = analysis_results.with_function_signatures(Some(&res));
 
-            if !found {
-                target_points_to = point_to_res.apply_def(def);
-            }
-        }
+        let pts_to_ctx = run_analysis(&analysis_results, DEFAULT_PTR_CONFIG.clone())
+            .expect("analysis should succeed");
+        let (ndidx, nd_body) =
+            find_ndidx_for_block("001015bf", &cfg).expect("should have allocating block");
+        let ctx = pts_to_ctx
+            .get(&ndidx)
+            .expect("should have context for target");
 
-        assert!(found);
+        let rax = Variable {
+            name: "RAX".to_owned(),
+            size: ByteSize::new(8),
+            is_temp: false,
+        };
 
-        let access = target_points_to.points_to(
-            &Expression::Var(Variable {
-                name: "RAX".to_owned(),
-                size: ByteSize::new(8),
-                is_temp: false,
-            }),
-            ByteSize::new(8),
+        // we have the block that is the return from calloc so we should have an abstract loc in RAX
+        let data_dom = ctx.pointer_state.state.eval(&Expression::Var(rax.clone()));
+        assert!(data_dom.get_if_unique_target().is_some());
+        let (aid, offset) = data_dom.get_if_unique_target().unwrap();
+        assert_eq!(
+            PointsToContext::type_variable_from_abstract_id(aid).get_name(),
+            "instr_001015ba_2@RAX"
         );
-    }*/
+
+        assert_eq!(
+            offset.try_to_offset().expect("offset should be singleton"),
+            0
+        );
+
+        // check that the store into the stack gets resolved reasonably
+        let after_store_to_stack_ctx = fast_forward_pointer_state_until_address_term(
+            ctx.clone(),
+            "001015c3",
+            nd_body.get_block(),
+        );
+
+        check_target_stack_value(&after_store_to_stack_ctx, &rt_mem);
+
+        // now see if we preserve that abstract state to the actual store we want a constraint from
+        let (str_block_idx, str_block) =
+            find_ndidx_for_block("00101609", &cfg).expect("Should have storing block");
+
+        let str_ctx = pts_to_ctx
+            .get(&str_block_idx)
+            .expect("should have pts ctx for store block");
+
+        check_target_stack_value(&str_ctx, &rt_mem);
+
+        let before_store_to_field = fast_forward_pointer_state_until_address_term(
+            str_ctx.clone(),
+            "0010160f",
+            str_block.get_block(),
+        );
+
+        check_target_stack_value(&before_store_to_field, &rt_mem);
+
+        // The store in the simplified IR doesnt actually happen on RAX and happens on a tempt UC0000
+        let rax_tmp = Variable {
+            name: "$Uc000".to_owned(),
+            size: ByteSize::new(8),
+            is_temp: true,
+        };
+
+        let data_dom_rax_before_field_store = before_store_to_field
+            .pointer_state
+            .state
+            .eval(&Expression::Var(rax_tmp));
+
+        assert!(!data_dom_rax_before_field_store.is_empty());
+        assert!(!data_dom_rax_before_field_store.contains_top());
+
+        assert!(!data_dom_rax_before_field_store
+            .get_absolute_value()
+            .is_some());
+
+        assert_eq!(
+            data_dom_rax_before_field_store.get_relative_values().len(),
+            1
+        );
+
+        assert!(data_dom_rax_before_field_store
+            .get_if_unique_target()
+            .is_some());
+        let (aid_field_store, offset_field_store) = data_dom_rax_before_field_store
+            .get_if_unique_target()
+            .unwrap();
+
+        assert_eq!(
+            PointsToContext::type_variable_from_abstract_id(aid_field_store).get_name(),
+            "instr_001015ba_2@RAX"
+        );
+
+        assert_eq!(
+            offset_field_store
+                .try_to_offset()
+                .expect("offset should be singleton"),
+            0
+        );
+    }
 }
