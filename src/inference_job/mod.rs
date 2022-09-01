@@ -386,7 +386,7 @@ impl InferenceJob {
         let grph = Self::graph_from_project(&self.proj);
         let node_ctxt = self.get_node_context(&grph)?;
 
-        let cg = callgraph::Context::new(&self.proj).get_graph();
+        let cg = callgraph::CGContext::new(&self.proj).get_graph();
 
         let rule_context = self.get_rule_context();
         let lattice_elems = self.get_lattice_elems().collect();
@@ -424,7 +424,7 @@ impl InferenceJob {
         &self,
         scc_constraints: Vec<scc_constraint_generation::SCCConstraints>,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<CustomLatticeElement>>> {
-        let cg = callgraph::Context::new(&self.proj).get_graph();
+        let cg = callgraph::CGContext::new(&self.proj).get_graph();
         let _elems = self.get_lattice_elems();
         let mut bldr = SCCSketchsBuilder::new(
             cg,
