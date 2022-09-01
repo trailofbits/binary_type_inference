@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     iter::FromIterator,
+    rc::Rc,
     vec,
 };
 
@@ -18,7 +19,7 @@ use super::{
     type_sketch::{insert_dtv, LatticeBounds, SketchBuilder, SketchGraph},
 };
 use crate::{
-    analysis::callgraph::CallGraph,
+    analysis::callgraph::{self, CallGraph},
     constraint_generation::{
         self, ConstantResolver, NodeContext, PointsToMapping, RegisterMapping, SubprocedureLocators,
     },
@@ -455,6 +456,111 @@ where
         }
     }
 
+    fn simplify_signature(
+        &mut self,
+        scc: &Vec<Tid>,
+        state: &HashMap<&Tid, Rc<Signature>>,
+    ) -> anyhow::Result<Signature> {
+        let tid_filter: HashSet<Tid> = scc.iter().cloned().collect();
+        let cont = constraint_generation::Context::new(
+            self.graph,
+            &self.node_contexts,
+            self.extern_symbols,
+            Some(tid_filter.clone()),
+        );
+
+        let genned_cons = cont.generate_constraints(self.vman);
+        // remove basic block tags for internal variable references.
+        let mut basic_cons = ConstraintSet::from(
+            genned_cons
+                .iter()
+                .map(|old_c| {
+                    let mut newc = old_c.clone();
+                    remove_cs_tags_for_tids_in_constraint(&mut newc, &tid_filter);
+                    newc
+                })
+                .collect::<BTreeSet<_>>(),
+        );
+
+        for tid in tid_filter.iter() {
+            if let Some(to_insert) = self.additional_constraints.get(tid) {
+                basic_cons.insert_all(to_insert);
+            }
+        }
+
+        let resolved_cs_set = self
+            .lattice_def
+            .infer_pointers(&basic_cons, &self.debug_dir)?;
+
+        let diff = ConstraintSet::from(
+            resolved_cs_set
+                .difference(&basic_cons)
+                .cloned()
+                .collect::<BTreeSet<_>>(),
+        );
+
+        let repr_tid = tid_filter
+            .iter()
+            .next()
+            .expect("every scc must have a node");
+
+        self.debug_dir
+            .log_to_fname(&format!("{}_ptr_diff", repr_tid.get_str_repr()), &|| &diff)?;
+
+        self.debug_dir.log_to_fname(
+            &format!("{}_ptr_resolved_cons", repr_tid.get_str_repr()),
+            &|| &resolved_cs_set,
+        )?;
+
+        let mut new_rcontext = self.rule_context.clone();
+
+        // TODO(Ian): I dislike this collaboration but constraint generation is when we discover which globals we are going to need. Ideally when we lift constraint
+        // generation out we can seperate this out.
+        resolved_cs_set
+            .variables()
+            .filter(|x| x.get_base_variable().is_global())
+            .for_each(|global| new_rcontext.insert_variable(global.get_base_variable().clone()));
+
+        self.debug_dir.log_to_fname(
+            &format!("{}_modified_interesting_vars", repr_tid.get_str_repr()),
+            &|| {
+                new_rcontext
+                    .get_interesting()
+                    .iter()
+                    .map(|var| var.get_name())
+                    .join("\n")
+            },
+        )?;
+
+        let mut fsa = FSA::new(&resolved_cs_set, &new_rcontext)?;
+
+        self.debug_dir.log_to_fname(
+            &format!("{}_fsa_unsimplified.dot", repr_tid.get_str_repr()),
+            &|| &fsa,
+        )?;
+
+        fsa.simplify_graph(repr_tid.get_str_repr(), &mut self.debug_dir, self.vman)?;
+
+        self.debug_dir.log_to_fname(
+            &format!("{}_fsa_simplified.dot", repr_tid.get_str_repr()),
+            &|| &fsa,
+        )?;
+
+        let cons = fsa.walk_constraints();
+        // forget add constraints at scc barriers
+        let mut cons = cons.forget_add_constraints();
+
+        // Adds var constraint simulations so if we know about parameters but werent able to relate them to interesting variables we still remember they exist
+        insert_missed_formals(&mut cons, &resolved_cs_set);
+
+        self.debug_dir.log_to_fname(
+            &format!("{}_simplified_constraints", repr_tid.get_str_repr()),
+            &|| &cons,
+        )?;
+
+        todo!()
+    }
+
     /// Runs the computation, generating FSA simplified scc constraints for each.
     /// Temporary sketches are created to propogate pointer information.
     pub fn get_simplified_constraints(&mut self) -> anyhow::Result<Vec<SCCConstraints>> {
@@ -465,120 +571,41 @@ where
                 .map(|var| var.get_name())
                 .join("\n")
         })?;
-        let maybe_scc: anyhow::Result<Vec<SCCConstraints>> = petgraph::algo::tarjan_scc(&self.cg)
+
+        let condensed_cg = callgraph::CGOrdering::new(&self.cg)?;
+        /// holds a shared reference to the sig for an scc from each callee so the callee can be looked up
+        let mut state: HashMap<&Tid, Rc<Signature>> = HashMap::new();
+        for nd in condensed_cg.get_reverse_topo() {
+            let scc = &condensed_cg.condensed_cg[nd];
+            let sig = Rc::from(self.simplify_signature(&scc, &state)?);
+            for tid in scc {
+                state.insert(tid, sig.clone());
+            }
+        }
+
+        Ok(condensed_cg
+            .condensed_cg
+            .node_weights()
             .into_iter()
-            .map(|scc| {
-                let tid_filter: HashSet<Tid> = scc
-                    .into_iter()
-                    .map(|nd| self.cg.node_weight(nd).unwrap())
-                    .cloned()
-                    .collect();
-                let cont = constraint_generation::Context::new(
-                    self.graph,
-                    &self.node_contexts,
-                    self.extern_symbols,
-                    Some(tid_filter.clone()),
-                );
-
-                let genned_cons = cont.generate_constraints(self.vman);
-                // remove basic block tags for internal variable references.
-                let mut basic_cons = ConstraintSet::from(
-                    genned_cons
-                        .iter()
-                        .map(|old_c| {
-                            let mut newc = old_c.clone();
-                            remove_cs_tags_for_tids_in_constraint(&mut newc, &tid_filter);
-                            newc
-                        })
-                        .collect::<BTreeSet<_>>(),
-                );
-
-                for tid in tid_filter.iter() {
-                    if let Some(to_insert) = self.additional_constraints.get(tid) {
-                        basic_cons.insert_all(to_insert);
-                    }
-                }
-
-                let resolved_cs_set = self
-                    .lattice_def
-                    .infer_pointers(&basic_cons, &self.debug_dir)?;
-
-                let diff = ConstraintSet::from(
-                    resolved_cs_set
-                        .difference(&basic_cons)
-                        .cloned()
-                        .collect::<BTreeSet<_>>(),
-                );
-
-                let repr_tid = tid_filter
-                    .iter()
-                    .next()
-                    .expect("every scc must have a node");
-
-                self.debug_dir
-                    .log_to_fname(&format!("{}_ptr_diff", repr_tid.get_str_repr()), &|| &diff)?;
-
-                self.debug_dir.log_to_fname(
-                    &format!("{}_ptr_resolved_cons", repr_tid.get_str_repr()),
-                    &|| &resolved_cs_set,
-                )?;
-
-                let mut new_rcontext = self.rule_context.clone();
-
-                // TODO(Ian): I dislike this collaboration but constraint generation is when we discover which globals we are going to need. Ideally when we lift constraint
-                // generation out we can seperate this out.
-                resolved_cs_set
-                    .variables()
-                    .filter(|x| x.get_base_variable().is_global())
-                    .for_each(|global| {
-                        new_rcontext.insert_variable(global.get_base_variable().clone())
-                    });
-
-                self.debug_dir.log_to_fname(
-                    &format!("{}_modified_interesting_vars", repr_tid.get_str_repr()),
-                    &|| {
-                        new_rcontext
-                            .get_interesting()
-                            .iter()
-                            .map(|var| var.get_name())
-                            .join("\n")
-                    },
-                )?;
-
-                let mut fsa = FSA::new(&resolved_cs_set, &new_rcontext)?;
-
-                self.debug_dir.log_to_fname(
-                    &format!("{}_fsa_unsimplified.dot", repr_tid.get_str_repr()),
-                    &|| &fsa,
-                )?;
-
-                fsa.simplify_graph(repr_tid.get_str_repr(), &mut self.debug_dir, self.vman)?;
-
-                self.debug_dir.log_to_fname(
-                    &format!("{}_fsa_simplified.dot", repr_tid.get_str_repr()),
-                    &|| &fsa,
-                )?;
-
-                let cons = fsa.walk_constraints();
-                // forget add constraints at scc barriers
-                let mut cons = cons.forget_add_constraints();
-
-                // Adds var constraint simulations so if we know about parameters but werent able to relate them to interesting variables we still remember they exist
-                insert_missed_formals(&mut cons, &resolved_cs_set);
-
-                self.debug_dir.log_to_fname(
-                    &format!("{}_simplified_constraints", repr_tid.get_str_repr()),
-                    &|| &cons,
-                )?;
-
-                Ok(SCCConstraints {
-                    scc: Vec::from_iter(tid_filter.into_iter()),
-                    constraints: cons,
-                })
+            .map(|x| SCCConstraints {
+                constraints: state
+                    .get(x.iter().next().expect("should not have empty scc"))
+                    .expect("all sccs should have a sig")
+                    .cs_set
+                    .clone(),
+                scc: x.clone(),
             })
-            .collect();
+            .collect())
+    }
+}
 
-        maybe_scc
+struct Signature {
+    cs_set: ConstraintSet,
+}
+
+impl Signature {
+    pub fn instantiate(&mut self, cs_tag: Tid) -> ConstraintSet {
+        todo!()
     }
 }
 
