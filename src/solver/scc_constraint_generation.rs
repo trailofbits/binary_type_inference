@@ -46,6 +46,7 @@ where
     extern_symbols: &'a BTreeMap<Tid, ExternSymbol>,
     vman: &'b mut VariableManager,
     lattice_def: LatticeInfo<'c, T, U>,
+    all_interesting_variables: RuleContext,
     debug_dir: FileDebugLogger,
     additional_constraints: &'d BTreeMap<Tid, ConstraintSet>,
 }
@@ -488,6 +489,7 @@ where
         node_contexts: HashMap<NodeIndex, NodeContext<R, P, S, C>>,
         vman: &'b mut VariableManager,
         lattice: LatticeInfo<'c, T, U>,
+        all_interesting_variables: RuleContext,
         debug_dir: FileDebugLogger,
         additional_constraints: &'d BTreeMap<Tid, ConstraintSet>,
     ) -> Context<'a, 'b, 'c, 'd, R, P, S, C, T, U> {
@@ -499,14 +501,16 @@ where
             vman,
             lattice_def: lattice,
             debug_dir,
+            all_interesting_variables,
             additional_constraints,
         }
     }
 
-    fn simplify_signature(
+    fn simplify_scc(
         &mut self,
         scc: &Vec<Tid>,
         state: &HashMap<TypeVariable, Rc<Signature>>,
+        base_interesting_variables: BTreeSet<TypeVariable>,
     ) -> anyhow::Result<Signature> {
         let tid_filter: HashSet<Tid> = scc.iter().cloned().collect();
         let cont = constraint_generation::Context::new(
@@ -561,9 +565,11 @@ where
             &|| &resolved_cs_set,
         )?;
 
-        let new_interesting_vars = tid_filter
-            .iter()
-            .map(|tid| tid_to_tvar(tid))
+        // TODO(Ian): I dislike this collaboration but constraint generation is when we discover which globals we are going to need. Ideally when we lift constraint
+        // generation out we can seperate this out.
+        let new_interesting_vars = base_interesting_variables
+            .into_iter()
+            .chain(tid_filter.iter().map(|tid| tid_to_tvar(tid)))
             .chain(
                 resolved_cs_set
                     .variables()
@@ -573,9 +579,6 @@ where
             .chain(self.lattice_def.type_lattice_elements.iter().cloned());
 
         let new_rcontext = RuleContext::new(new_interesting_vars.collect());
-
-        // TODO(Ian): I dislike this collaboration but constraint generation is when we discover which globals we are going to need. Ideally when we lift constraint
-        // generation out we can seperate this out.
 
         self.debug_dir.log_to_fname(
             &format!("{}_modified_interesting_vars", repr_tid.get_str_repr()),
@@ -627,10 +630,48 @@ where
         Ok(Signature { cs_set: sub_cons })
     }
 
+    fn simplify_signature(
+        &mut self,
+        scc: &Vec<Tid>,
+        state: &HashMap<TypeVariable, Rc<Signature>>,
+    ) -> anyhow::Result<Signature> {
+        self.simplify_scc(scc, state, BTreeSet::new())
+    }
+
+    fn simplify_scc_cons(
+        &mut self,
+        scc: &Vec<Tid>,
+        state: &HashMap<TypeVariable, Rc<Signature>>,
+    ) -> anyhow::Result<Signature> {
+        self.simplify_scc(
+            scc,
+            state,
+            self.all_interesting_variables.get_interesting().clone(),
+        )
+    }
+
     /// Runs the computation, generating FSA simplified scc constraints for each.
     /// Temporary sketches are created to propogate pointer information.
     pub fn get_simplified_constraints(&mut self) -> anyhow::Result<Vec<SCCConstraints>> {
         let condensed_cg = callgraph::CGOrdering::new(&self.cg)?;
+        let sigs = self.get_signatures(&condensed_cg)?;
+        condensed_cg
+            .topo_order
+            .iter()
+            .map(|ndidx| {
+                let scc = &condensed_cg.condensed_cg[*ndidx];
+                self.simplify_scc_cons(scc, &sigs).map(|s| SCCConstraints {
+                    constraints: s.cs_set,
+                    scc: scc.clone(),
+                })
+            })
+            .collect()
+    }
+
+    fn get_signatures(
+        &mut self,
+        condensed_cg: &callgraph::CGOrdering,
+    ) -> anyhow::Result<HashMap<TypeVariable, Rc<Signature>>> {
         // holds a shared reference to the sig for an scc from each callee so the callee can be looked up
         let mut state: HashMap<TypeVariable, Rc<Signature>> = HashMap::new();
         for nd in condensed_cg.get_reverse_topo() {
@@ -641,21 +682,7 @@ where
             }
         }
 
-        Ok(condensed_cg
-            .condensed_cg
-            .node_weights()
-            .into_iter()
-            .map(|x| SCCConstraints {
-                constraints: state
-                    .get(&tid_to_tvar(
-                        x.iter().next().expect("should not have empty scc"),
-                    ))
-                    .expect("all sccs should have a sig")
-                    .cs_set
-                    .clone(),
-                scc: x.clone(),
-            })
-            .collect())
+        Ok(state)
     }
 }
 
