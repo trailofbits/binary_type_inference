@@ -389,10 +389,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
                 } else if Self::is_constant_one(rhs) {
                     self.evaluate_expression(lhs, defining_tvars_are_subtype_of_repr, vman)
                 } else {
-                    (
-                        DerivedTypeVar::new(self.weakest_integral_type.clone()),
-                        ConstraintSet::default(),
-                    )
+                    self.assume_weak_integral(vman)
                 }
             }
             BinOpType::IntAdd => self.eval_add(lhs, rhs, defining_tvars_are_subtype_of_repr, vman),
@@ -425,11 +422,16 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         (DerivedTypeVar::new(repr), ConstraintSet::empty())
     }
 
-    fn assume_weak_integral(&self) -> (DerivedTypeVar, ConstraintSet) {
-        (
-            DerivedTypeVar::new(self.weakest_integral_type.clone()),
-            ConstraintSet::default(),
-        )
+    fn assume_weak_integral(&self, vman: &mut VariableManager) -> (DerivedTypeVar, ConstraintSet) {
+        // we dont know the exact type of the expr but we know it's at least subtype of a weak int
+        let f = vman.fresh();
+        let dtv = DerivedTypeVar::new(f);
+        let mut cs = ConstraintSet::default();
+        cs.insert(TyConstraint::SubTy(SubtypeConstraint {
+            lhs: dtv.clone(),
+            rhs: DerivedTypeVar::new(self.weakest_integral_type.clone()),
+        }));
+        (dtv, cs)
     }
 
     fn evaluate_expression(
@@ -484,10 +486,10 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
                 arg: _,
             } => match op {
                 cwe_checker_lib::intermediate_representation::CastOpType::IntZExt => {
-                    self.assume_weak_integral()
+                    self.assume_weak_integral(vman)
                 }
                 cwe_checker_lib::intermediate_representation::CastOpType::IntSExt => {
-                    self.assume_weak_integral()
+                    self.assume_weak_integral(vman)
                 }
                 cwe_checker_lib::intermediate_representation::CastOpType::Int2Float => {
                     Self::unhandled_expr(value, vman)
@@ -496,7 +498,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
                     Self::unhandled_expr(value, vman)
                 }
                 cwe_checker_lib::intermediate_representation::CastOpType::Trunc => {
-                    self.assume_weak_integral()
+                    self.assume_weak_integral(vman)
                 }
                 cwe_checker_lib::intermediate_representation::CastOpType::PopCount => {
                     Self::unhandled_expr(value, vman)
