@@ -356,7 +356,6 @@ impl InferenceJob {
 
     /// Get the contextual information needed for the weighted pushdown automata rules
     /// including interesting variables and type lattice information.
-    #[deprecated]
     pub fn get_rule_context(&self) -> RuleContext {
         let mut only_interestings = BTreeSet::new();
 
@@ -388,7 +387,7 @@ impl InferenceJob {
         let node_ctxt = self.get_node_context(&grph)?;
 
         let cg = callgraph::CGContext::new(&self.proj).get_graph();
-
+        let rule_context = self.get_rule_context();
         let lattice_elems = self.get_lattice_elems().collect();
         let mut context: scc_constraint_generation::Context<
             _,
@@ -412,6 +411,7 @@ impl InferenceJob {
                     .get_elem(&self.weakest_integral_type.get_name())
                     .expect("the weak integer type is always in the lattice"),
             ),
+            rule_context,
             self.debug_dir.clone(),
             &self.additional_constraints,
         );

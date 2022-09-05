@@ -632,16 +632,38 @@ where
             .get(&to_reprs[0])
             .expect("scc should have a sig");
 
-        //let is_internal_variable = to_reprs
-        //    .iter()
-        //    .map(constraint_generation::tid_to_tvar)
-        //    .collect::<BTreeSet<_>>();
+        let is_internal_variable = to_reprs
+            .iter()
+            .map(constraint_generation::tid_to_tvar)
+            .collect::<BTreeSet<_>>();
 
         let add_new_var =
             |var: &DerivedTypeVar,
              grph: &mut MappingGraph<LatticeBounds<U>, DerivedTypeVar, FieldLabel>|
              -> anyhow::Result<()> {
-                insert_dtv(self.lattice, grph, var.clone());
+                if is_internal_variable.contains(var.get_base_variable())
+                || self.type_lattice_elements.contains(var.get_base_variable())
+                // TODO(Ian): evaluate this and where cs tags are inserted
+                || var.get_base_variable().get_cs_tag().is_none()
+                {
+                    insert_dtv(self.lattice, grph, var.clone());
+                } else {
+                    let ext = self
+                        .scc_repr
+                        .get(&var.get_base_variable().to_callee())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "An external variable must have a representation already built {}",
+                                var.get_base_variable().to_callee().to_string()
+                            )
+                        })?;
+
+                    if matches!(ext.copy_reachable_subgraph_into(var, grph), None) {
+                        // The target graph doesnt have any constraints on the target variable.
+                        insert_dtv(self.lattice, grph, var.clone());
+                    }
+                }
+
                 Ok(())
             };
 
