@@ -726,6 +726,7 @@ where
         self.display_sketches("before_polybind")?;
 
         self.bind_polymorphic_types()?;
+        self.display_sketches("before_global_collection")?;
         self.apply_global_instantiations()?;
         self.collect_aliases()?;
         self.save_aliased_types("after_extension")?;
@@ -1540,11 +1541,23 @@ where
                 if dtv.is_global() {
                     let sks = sg.get_representing_sketch(dtv.clone());
                     assert!(sks.len() == 1);
+
                     let (_, skg) = &sks[0];
+
+                    if dtv.get_base_variable().get_name() == "glb_00104040_DAT_00104040" {
+                        println!("skg for glb: {}", skg);
+                    }
+
                     let curr_sketch = global_sketches
                         .entry(dtv.get_base_variable().clone())
                         .or_insert_with(|| skg.clone());
-                    *curr_sketch = curr_sketch.intersect(skg)
+                    if dtv.get_base_variable().get_name() == "glb_00104040_DAT_00104040" {
+                        println!("intersect with: {}", *curr_sketch);
+                    }
+                    *curr_sketch = curr_sketch.intersect(skg);
+                    if dtv.get_base_variable().get_name() == "glb_00104040_DAT_00104040" {
+                        println!("next: {}", *curr_sketch);
+                    }
                 }
             });
     }
@@ -1926,6 +1939,7 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                     .iter()
                     .map(|e| new_graph.edge_weight(*e).expect("indices should be valid"))
                     .collect::<Vec<_>>();
+                println!("{:#?}", pth_as_weights);
                 let lhs = find_node(
                     self.quotient_graph.get_graph(),
                     self.get_entry(),
@@ -1999,14 +2013,19 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                 .and_then(|o1| self.quotient_graph.get_graph().node_weight(o1).cloned())
                 .unwrap_or_else(|| self.default_label.clone());
 
+            println!("slabel {}", self_label);
+
             let other_label = o2
                 .and_then(|o2| other.quotient_graph.get_graph().node_weight(o2).cloned())
                 .unwrap_or_else(|| self.default_label.clone());
 
+            println!("other_label {}", self_label);
             // Both nodes should recogonize the word in the case of an intersection
             //assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
 
             let new_label = lattice_op(&self_label, &other_label);
+            println!("new_label {}", new_label);
+
             assert!(weight_mapping.get_graph().contains_node(*base_node));
             *weight_mapping
                 .get_graph_mut()
@@ -2478,8 +2497,8 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
 
 #[cfg(test)]
 mod test {
-    /*
-    use std::collections::HashSet;
+
+    use std::collections::{BTreeSet, HashSet};
 
     use cwe_checker_lib::intermediate_representation::Tid;
     use petgraph::{graph::DiGraph, visit::EdgeRef, EdgeDirection::Outgoing};
@@ -2488,20 +2507,20 @@ mod test {
         analysis::callgraph::CallGraph,
         constraints::{
             parse_constraint_set, parse_derived_type_variable, ConstraintSet, DerivedTypeVar,
-            Field, FieldLabel, TypeVariable,
+            Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable,
         },
-        graph_algos::mapping_graph::MappingGraph,
+        graph_algos::{find_node, mapping_graph::MappingGraph},
         solver::{
             scc_constraint_generation::SCCConstraints,
             type_lattice::{
-                CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition,
+                CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLattice,
                 NamedLatticeElement,
             },
         },
         util::FileDebugLogger,
     };
 
-    use super::{insert_dtv, LatticeBounds, SCCSketchsBuilder, SketchBuilder};
+    use super::{insert_dtv, LatticeBounds, SCCSketchsBuilder, Sketch, SketchBuilder};
 
     #[test]
     fn test_simple_equivalence() {
@@ -2546,10 +2565,19 @@ mod test {
 
     */
 
-    fn parse_cons_set(s: &str) -> ConstraintSet {
+    fn parse_cons_set(s: &str) -> BTreeSet<SubtypeConstraint> {
         let (rem, scc_id) = parse_constraint_set(s).expect("Should parse constraints");
         assert!(rem.len() == 0);
         scc_id
+            .iter()
+            .filter_map(|c| {
+                if let TyConstraint::SubTy(c) = c {
+                    Some(c.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn init() {
@@ -3234,5 +3262,70 @@ mod test {
             simplified_sketch.apply_pointer_transform(pt);
             println!("{}", simplified_sketch);
         }
-    }*/
+    }
+
+    #[test]
+    fn test_intersection_with_nonnode_self_preserves_lat_elem() {
+        let (lat, _nd_set) = generate_simple_test_lattice_and_elems();
+        let nds = lat.get_nds();
+        let bot = lat.bot();
+        let top = lat.top();
+        let def = LatticeBounds {
+            upper_bound: top,
+            lower_bound: bot.clone(),
+        };
+
+        let representing = DerivedTypeVar::new(TypeVariable::new_global("something".to_owned()));
+
+        let mut quot = MappingGraph::new();
+        let def_node = quot.add_node(representing.clone(), def.clone());
+
+        let non_def_node = quot.add_node(
+            DerivedTypeVar::new(TypeVariable::new_global("eph".to_owned())),
+            LatticeBounds {
+                upper_bound: nds.get("int").unwrap().clone(),
+                lower_bound: bot,
+            },
+        );
+
+        quot.add_edge(def_node, non_def_node, FieldLabel::Load);
+
+        let s1 = Sketch {
+            default_label: def.clone(),
+            representing: representing.clone(),
+            quotient_graph: quot,
+        };
+
+        let mut non_overlap_quot = MappingGraph::new();
+        let def_node = non_overlap_quot.add_node(representing.clone(), def.clone());
+        let dnode_2 = non_overlap_quot.add_node(
+            DerivedTypeVar::new(TypeVariable::new_global("eph".to_owned())),
+            def.clone(),
+        );
+
+        non_overlap_quot.add_edge(def_node, dnode_2, FieldLabel::Store);
+
+        let s2 = Sketch {
+            default_label: def,
+            representing,
+            quotient_graph: non_overlap_quot,
+        };
+
+        let res = s2.intersect(&s1);
+
+        let target = find_node(
+            res.get_graph().get_graph(),
+            res.get_entry(),
+            vec![FieldLabel::Load].iter(),
+        )
+        .unwrap();
+
+        let nd = res
+            .get_graph()
+            .get_graph()
+            .node_weight(target)
+            .expect("should have same target node at path");
+
+        assert_eq!(nd.get_upper().to_string(), "int");
+    }
 }

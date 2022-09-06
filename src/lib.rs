@@ -59,7 +59,8 @@ mod tests {
     };
 
     use crate::{
-        constraints::{self, DerivedTypeVar},
+        constraints::{self, DerivedTypeVar, FieldLabel, TypeVariable},
+        graph_algos::find_node,
         inference_job::{self, ProtobufDef},
         solver::{type_lattice::CustomLatticeElement, type_sketch::SketchGraph},
     };
@@ -374,6 +375,7 @@ mod tests {
             .set_lattice_json("new_moosl_lattice.json".to_owned())
             .set_interesting_tids_file("full_mooosl_tid_list.json".to_owned())
             .set_expec_constraint_gen("complete_mooosl_expected.json".to_owned());
+
         run_test_case::<JsonDef>(bldr.build());
     }
 
@@ -381,11 +383,44 @@ mod tests {
     fn test_mooosl_globals() {
         let mut bldr = TestCaseBuilder::new();
         bldr.set_binary_path("mooosl".to_owned())
-            .set_ir_json_path("mooosl.json".to_owned())
-            .set_additional_constraints("new_moosl_additional_constraints.json".to_owned())
-            .set_lattice_json("mooosl_test_lattice.json".to_owned())
-            .set_interesting_tids_file("full_mooosl_tid_list.json".to_owned());
-        run_test_case::<JsonDef>(bldr.build());
+            .set_ir_json_path("mooosl_artifacts/ir.json".to_owned())
+            .set_additional_constraints("mooosl_artifacts/additional_constraints.pb".to_owned())
+            .set_lattice_json("mooosl_artifacts/lattice.json".to_owned())
+            .set_interesting_tids_file("mooosl_artifacts/interesting_tids.pb".to_owned())
+            .add_sketch_property(Box::new(|skg| {
+                let reprs = skg.get_representing_sketch(DerivedTypeVar::new(
+                    TypeVariable::new_global("glb_00104040_DAT_00104040".to_owned()),
+                ));
+
+                assert_eq!(reprs.len(), 1);
+
+                let (_r_idx, r_sk) = &reprs[0];
+                let target_path = vec![
+                    FieldLabel::Load,
+                    FieldLabel::Field(constraints::Field {
+                        offset: 0,
+                        size: 64,
+                    }),
+                    FieldLabel::Load,
+                    FieldLabel::Field(constraints::Field {
+                        offset: 24,
+                        size: 64,
+                    }),
+                ];
+                let tnode = find_node(
+                    r_sk.get_graph().get_graph(),
+                    r_sk.get_entry(),
+                    target_path.iter(),
+                )
+                .expect("should find target_node");
+
+                let nd = &r_sk.get_graph().get_graph()[tnode];
+                assert_eq!(
+                    nd.get_upper().to_string(),
+                    "data_type_with_id_3193700096615474490"
+                );
+            }));
+        run_test_case::<ProtobufDef>(bldr.build());
     }
 
     #[test]
