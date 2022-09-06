@@ -20065,7 +20065,7 @@
             "address": "00101436"
           },
           "term": {
-            "name": "FUN_00101436",
+            "name": "value_dump",
             "blocks": [
               {
                 "tid": {
@@ -22894,14 +22894,6 @@
                   "is_virtual": false
                 },
                 "intent": "INPUT"
-              },
-              {
-                "var": {
-                  "name": "RAX",
-                  "size": 8,
-                  "is_virtual": false
-                },
-                "intent": "OUTPUT"
               }
             ],
             "locals": [
