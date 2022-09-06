@@ -59,7 +59,7 @@ mod tests {
     };
 
     use crate::{
-        constraints::{self, DerivedTypeVar, FieldLabel, TypeVariable},
+        constraints::{self, DerivedTypeVar, Field, FieldLabel, TypeVariable},
         graph_algos::find_node,
         inference_job::{self, ProtobufDef},
         solver::{type_lattice::CustomLatticeElement, type_sketch::SketchGraph},
@@ -71,7 +71,7 @@ mod tests {
         solver::type_sketch::LatticeBounds,
     };
     use cwe_checker_lib::intermediate_representation::{self, Tid};
-    use petgraph::graph::NodeIndex;
+    use petgraph::{graph::NodeIndex, visit::EdgeRef, Direction::Outgoing};
     use pretty_assertions::assert_eq;
     use std::convert::TryFrom;
 
@@ -394,7 +394,7 @@ mod tests {
 
                 assert_eq!(reprs.len(), 1);
 
-                let (_r_idx, r_sk) = &reprs[0];
+                let (_glob_idx, r_sk) = &reprs[0];
                 let target_path = vec![
                     FieldLabel::Load,
                     FieldLabel::Field(constraints::Field {
@@ -419,7 +419,52 @@ mod tests {
                     nd.get_upper().to_string(),
                     "data_type_with_id_3193700096615474490"
                 );
+
+                // check that lookups out param has the same node index as the global sub.in should be the same as glb.load.@0_size_64
+
+                for k in skg.get_graph().get_node_mapping() {
+                    println!("has {}", k.0);
+                }
+
+                let lookup_reprs = skg.get_representing_sketch(DerivedTypeVar::new(
+                    TypeVariable::new("sub_001014fb".to_owned()),
+                ));
+
+                assert_eq!(lookup_reprs.len(), 1);
+                let (lookup_idx, _) = &lookup_reprs[0];
+                println!("lookup idx: {}", lookup_idx.index());
+                let lookup_in_idx = skg
+                    .get_graph()
+                    .get_graph()
+                    .edges_directed(*lookup_idx, Outgoing)
+                    .filter(|e| *e.weight() == FieldLabel::Out(0))
+                    .next()
+                    .expect("should have outgoing edge to out param")
+                    .target();
+
+                let glb_idx = skg
+                    .get_node_index_for_variable(&DerivedTypeVar::new(TypeVariable::new_global(
+                        "glb_00104040_DAT_00104040".to_owned(),
+                    )))
+                    .expect("should still have index");
+
+                let res = find_node(
+                    skg.get_graph().get_graph(),
+                    glb_idx,
+                    vec![
+                        FieldLabel::Load,
+                        FieldLabel::Field(Field {
+                            offset: 0,
+                            size: 64,
+                        }),
+                    ]
+                    .iter(),
+                )
+                .expect("should find global pointer load type");
+
+                assert_eq!(res, lookup_in_idx);
             }));
+
         run_test_case::<ProtobufDef>(bldr.build());
     }
 

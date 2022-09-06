@@ -14,6 +14,7 @@ use cwe_checker_lib::intermediate_representation::{Sub, Tid};
 
 use itertools::Itertools;
 use log::info;
+use petgraph::algo::scc;
 use petgraph::dot::Dot;
 use petgraph::graph::IndexType;
 use petgraph::stable_graph::StableDiGraph;
@@ -784,11 +785,11 @@ where
         // resulting labeling is tricky because we could end up referencing the in parameter within a bound type which wont actually have that dtv label since we dont copy them down.
         // We should only label base variables imo. This means we look through the scc and find the sccs base variables within the graph
         for (dtv, tgt_idx) in sg.quotient_graph.get_node_mapping().iter() {
-            if (dtv.get_field_labels().is_empty()
+            if dtv.get_field_labels().is_empty()
                 && dtv.get_base_variable().get_cs_tag().is_none()
                 // Dont want labels for concrete types, no need to solve for them if not used.
-                && !self.type_lattice_elements.contains(dtv.get_base_variable()))
-                || dtv.is_global()
+                && !self.type_lattice_elements.contains(dtv.get_base_variable())
+                && !dtv.is_global()
             // globals are pointed to their roots
             {
                 resulting_labeling.insert(
@@ -1467,6 +1468,9 @@ where
                 .get_graph()
                 .get_node(&DerivedTypeVar::new(curr_var.clone()))
             {
+                if *curr_node == scc_loc.target_path {
+                    return curr_var.get_name();
+                }
                 if let Some(path) = petgraph::algo::all_simple_paths::<Vec<_>, _>(
                     &sk.get_graph().get_graph(),
                     *curr_node,
