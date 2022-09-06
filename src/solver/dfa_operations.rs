@@ -206,100 +206,107 @@ where
         .into_iter()
         .filter(|x| reached_idxs.contains(x))
         .collect::<BTreeSet<usize>>();
-    let rejects = lhs
-        .all_indices()
+    /*let rejects = lhs
+    .all_indices()
+    .into_iter()
+    .filter(|x| !accepts.contains(x) && reached_idxs.contains(x))
+    .collect::<BTreeSet<usize>>();*/
+
+    let new_edges: BTreeSet<(usize, A, usize)> = lhs
+        .dfa_edges()
         .into_iter()
-        .filter(|x| !accepts.contains(x) && reached_idxs.contains(x))
-        .collect::<BTreeSet<usize>>();
+        .filter(|(src, _, dst)| reached_idxs.contains(src) && reached_idxs.contains(dst))
+        .map(|a| a.clone())
+        .collect();
+    /*
+        let lhs_edge_map: DFAEdgeMap<A> = create_edge_map(lhs);
 
-    let lhs_edge_map: DFAEdgeMap<A> = create_edge_map(lhs);
+        let mut paritions: Vec<BTreeSet<usize>> = vec![accepts.clone(), rejects];
 
-    let mut paritions: Vec<BTreeSet<usize>> = vec![accepts.clone(), rejects];
+        loop {
+            let mut new_partitions = Vec::new();
 
-    loop {
-        let mut new_partitions = Vec::new();
+            let old_part_ids: HashMap<usize, usize> = partition_vector_to_id_map(paritions.iter());
 
-        let old_part_ids: HashMap<usize, usize> = partition_vector_to_id_map(paritions.iter());
-
-        for part in paritions.iter() {
-            new_partitions.extend(find_new_partitions(&lhs_edge_map, &old_part_ids, part));
-        }
-
-        if new_partitions.len() <= paritions.len() {
-            break;
-        } else {
-            paritions = new_partitions;
-        }
-    }
-
-    let mut cont: IdContext<BTreeSet<usize>> = IdContext::default();
-    let part_id = partition_vector_to_id_map(paritions.iter());
-    // I regret writing things this way, i apologize, flattens should occur earlier clones later
-    let edges = paritions
-        .iter()
-        .flat_map(|x| {
-            let src_node = cont.get_node(x.clone());
-            let ref_src = &src_node;
-            x.iter()
-                .flat_map(|src| {
-                    let emp = BTreeMap::new();
-                    lhs_edge_map
-                        .get(src)
-                        .unwrap_or(&emp)
-                        .iter()
-                        .map(|(k, v)| {
-                            (
-                                *ref_src,
-                                k.clone(),
-                                cont.get_node(
-                                    paritions[*part_id
-                                        .get(v)
-                                        .expect("every node should be in a partition")]
-                                    .clone(),
-                                ),
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                        .into_iter()
-                })
-                .collect::<Vec<_>>()
-                .into_iter()
-        })
-        .collect::<BTreeSet<_>>();
-
-    let ent_node = cont.get_node(
-        paritions[*part_id
-            .get(&lhs.entry())
-            .expect("should have partition for entry")]
-        .clone(),
-    );
-
-    let all_nodes = paritions
-        .iter()
-        .filter_map(|part| {
-            if !part.is_empty() {
-                Some(cont.get_node(part.clone()))
-            } else {
-                None
+            for part in paritions.iter() {
+                new_partitions.extend(find_new_partitions(&lhs_edge_map, &old_part_ids, part));
             }
-        })
-        .collect::<BTreeSet<_>>();
 
-    let all_accept_nodes = accepts
-        .iter()
-        .map(|x| {
-            let part = *part_id
-                .get(x)
-                .expect("the accept node should be in a partition");
-            cont.get_node(paritions[part].clone())
-        })
-        .collect::<BTreeSet<_>>();
+            if new_partitions.len() <= paritions.len() {
+                break;
+            } else {
+                paritions = new_partitions;
+            }
+        }
 
+        let mut cont: IdContext<BTreeSet<usize>> = IdContext::default();
+        let part_id = partition_vector_to_id_map(paritions.iter());
+        // I regret writing things this way, i apologize, flattens should occur earlier clones later
+        let edges = paritions
+            .iter()
+            .flat_map(|x| {
+                let src_node = cont.get_node(x.clone());
+                let ref_src = &src_node;
+                x.iter()
+                    .flat_map(|src| {
+                        let emp = BTreeMap::new();
+                        lhs_edge_map
+                            .get(src)
+                            .unwrap_or(&emp)
+                            .iter()
+                            .map(|(k, v)| {
+                                (
+                                    *ref_src,
+                                    k.clone(),
+                                    cont.get_node(
+                                        paritions[*part_id
+                                            .get(v)
+                                            .expect("every node should be in a partition")]
+                                        .clone(),
+                                    ),
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .into_iter()
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+            })
+            .collect::<BTreeSet<_>>();
+
+        let ent_node = cont.get_node(
+            paritions[*part_id
+                .get(&lhs.entry())
+                .expect("should have partition for entry")]
+            .clone(),
+        );
+
+        let all_nodes = paritions
+            .iter()
+            .filter_map(|part| {
+                if !part.is_empty() {
+                    Some(cont.get_node(part.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect::<BTreeSet<_>>();
+
+        let all_accept_nodes = accepts
+            .iter()
+            .map(|x| {
+                let part = *part_id
+                    .get(x)
+                    .expect("the accept node should be in a partition");
+                cont.get_node(paritions[part].clone())
+            })
+            .collect::<BTreeSet<_>>();
+    */
     ExplicitDFA {
-        ent_id: ent_node,
-        edges,
-        accept_indexes: all_accept_nodes,
-        all_indeces: all_nodes,
+        ent_id: lhs.entry(),
+        edges: new_edges,
+        accept_indexes: accepts,
+        all_indeces: reached_idxs,
     }
 }
 
