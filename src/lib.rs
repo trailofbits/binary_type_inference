@@ -482,7 +482,7 @@ mod tests {
     #[test]
     fn recursion_regression_test() {
         let mut bldr = TestCaseBuilder::new();
-        bldr.set_binary_path("simple_recursion/simple_recursion".to_owned())
+        bldr.set_binary_path("simple_recursion/simple_recursion.so".to_owned())
             .set_ir_json_path("simple_recursion/ir.json".to_owned())
             .set_additional_constraints("simple_recursion/additional_constraints.pb".to_owned())
             .set_lattice_json("simple_recursion/lattice.json".to_owned())
