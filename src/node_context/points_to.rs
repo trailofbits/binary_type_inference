@@ -13,7 +13,7 @@ use cwe_checker_lib::analysis::pointer_inference::{self, Config};
 use cwe_checker_lib::intermediate_representation::{ByteSize, Def, Expression, Variable};
 use cwe_checker_lib::AnalysisResults;
 
-use cwe_checker_lib::utils::binary::RuntimeMemoryImage;
+use cwe_checker_lib::intermediate_representation::RuntimeMemoryImage;
 use log::warn;
 use petgraph::graph::NodeIndex;
 use std::collections::{BTreeSet, HashMap};
@@ -29,7 +29,6 @@ lazy_static! {
                 "xmalloc".to_owned(),
                 "realloc".to_owned(),
             ],
-            deallocation_symbols: vec!["free".to_owned()],
         }
     };
 }
@@ -214,7 +213,7 @@ pub fn run_analysis<'a>(
 ) -> Result<HashMap<NodeIndex, PointsToContext>> {
     let pointer_res = pointer_inference::run(analysis_results, config, false, false);
 
-    let rt_mem = Arc::new(analysis_results.runtime_memory_image.clone());
+    let rt_mem = Arc::new(analysis_results.project.runtime_memory_image.clone());
 
     let state_mapping: HashMap<NodeIndex, PointerState> = analysis_results
         .control_flow_graph
@@ -271,9 +270,9 @@ mod test {
         abstract_domain::{AbstractDomain, TryToBitvec, TryToInterval},
         analysis::graph::{Graph, Node},
         intermediate_representation::{
-            BinOpType, Bitvector, Blk, ByteSize, Expression, Term, Tid, Variable,
+            BinOpType, Bitvector, Blk, ByteSize, Expression, RuntimeMemoryImage, Term, Tid,
+            Variable,
         },
-        utils::binary::RuntimeMemoryImage,
         AnalysisResults,
     };
     use petgraph::{data, stable_graph::NodeIndex};
@@ -365,7 +364,7 @@ mod test {
             .expect("Should be able to load bin bytes");
         let cfg = InferenceJob::graph_from_project(&project);
 
-        let analysis_results = AnalysisResults::new(&bin, &rt_mem, &cfg, &project);
+        let analysis_results = AnalysisResults::new(&bin, &cfg, &project);
 
         let (res, logs) = analysis_results.compute_function_signatures();
         logs.iter().for_each(crate::util::log_cwe_message);
@@ -407,7 +406,7 @@ mod test {
             nd_body.get_block(),
         );
 
-        check_target_stack_value(&after_store_to_stack_ctx, &rt_mem);
+        check_target_stack_value(&after_store_to_stack_ctx, &project.runtime_memory_image);
 
         // now see if we preserve that abstract state to the actual store we want a constraint from
         let (str_block_idx, str_block) =
