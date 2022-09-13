@@ -669,7 +669,7 @@ impl Display for SubtypeConstraint {
 
 /// A set of [SubtypeConstraint]
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Default)]
-pub struct ConstraintSet(BTreeSet<TyConstraint>);
+pub struct ConstraintSet(pub BTreeSet<TyConstraint>);
 
 impl ConstraintSet {
     /// Removes all constraints related to adds. Adds are only useful within an SCC,
