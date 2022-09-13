@@ -356,8 +356,8 @@ mod tests {
     #[test]
     fn simple_list_tc() {
         let mut bldr = TestCaseBuilder::new();
-        bldr.set_binary_path("list_test.o".to_owned())
-            .set_ir_json_path("list_test.json".to_owned())
+        bldr.set_binary_path("list_test/list_test.so".to_owned())
+            .set_ir_json_path("list_test/ir.json".to_owned())
             .set_additional_constraints("list_test_additional_constraints.json".to_owned())
             .set_lattice_json("list_test_lattice.json".to_owned())
             .set_interesting_tids_file("list_test_interesting_tids.json".to_owned())
