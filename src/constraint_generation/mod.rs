@@ -1136,11 +1136,12 @@ where
     /// Walks all of the nodes and gather the inferred subtyping constraints.
     pub fn generate_constraints(&self, vman: &mut VariableManager) -> ConstraintSet {
         let mut cs: ConstraintSet = Default::default();
+
         for nd_ind in self.graph.node_indices() {
-            cs = ConstraintSet::from(
-                cs.union(&self.generate_constraints_for_node(nd_ind, vman))
-                    .cloned()
-                    .collect::<BTreeSet<TyConstraint>>(),
+            cs.extend(
+                self.generate_constraints_for_node(nd_ind, vman)
+                    .0
+                    .into_iter(),
             );
         }
         cs
