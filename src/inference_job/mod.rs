@@ -10,8 +10,7 @@ use cwe_checker_lib::{
         graph::{Graph, Node},
         pointer_inference::Config,
     },
-    intermediate_representation::{Arg, Project, Tid},
-    utils::binary::RuntimeMemoryImage,
+    intermediate_representation::{Arg, Project, RuntimeMemoryImage, Tid},
     AnalysisResults,
 };
 
@@ -305,7 +304,7 @@ impl InferenceJob {
     > {
         let rt_mem = Self::get_runtime_image(&self.proj, &self.binary_bytes)?;
 
-        let analysis_results = AnalysisResults::new(&self.binary_bytes, &rt_mem, graph, &self.proj);
+        let analysis_results = AnalysisResults::new(&self.binary_bytes, graph, &self.proj);
 
         let (res, logs) = analysis_results.compute_function_signatures();
         logs.iter().for_each(crate::util::log_cwe_message);

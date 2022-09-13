@@ -4,9 +4,17 @@ use cwe_checker_lib::{
     utils::log::{LogLevel, LogMessage},
 };
 use log::{debug, error, info};
-use std::{collections::HashMap, fmt::Display, io::Read, path::PathBuf};
+use std::{
+    collections::{BTreeSet, HashMap},
+    fmt::Display,
+    io::Read,
+    path::PathBuf,
+};
 
-use crate::{constraint_generation, constraints::TypeVariable};
+use crate::{
+    constraint_generation,
+    constraints::{ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable},
+};
 
 /// Convert cwe logs into our logging infra
 pub fn log_cwe_message(msg: &LogMessage) {
@@ -61,6 +69,19 @@ pub struct FileDebugLogger {
 }
 
 use std::io::Write;
+
+/// Filters add constraints to only utilize subtype constraints
+pub fn constraint_set_to_subtys(cs: &ConstraintSet) -> BTreeSet<SubtypeConstraint> {
+    cs.iter()
+        .filter_map(|x| {
+            if let TyConstraint::SubTy(x) = x {
+                Some(x.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
 
 impl FileDebugLogger {
     /// Creates a new [FileDebugLogger] that emits files into the target debug_dir.
