@@ -135,8 +135,6 @@ impl<
 
                     incoming_edges
                         .filter_map(|orig_e| {
-                            // TODO(Ian): saw a reflexive edge in the original graph... why?
-                            assert!(orig_e.source() != reached_id);
                             if nodes.contains(&orig_e.source()) {
                                 //internal _edge
                                 None

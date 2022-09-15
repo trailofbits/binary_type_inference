@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fmt::Display,
     iter::FromIterator,
     rc::Rc,
     vec,
@@ -264,6 +265,7 @@ impl<'c, T, U> LatticeInfo<'c, T, U>
 where
     T: NamedLattice<U>,
     U: NamedLatticeElement,
+    U: Display,
 {
     fn get_initial_labeling(
         &self,
@@ -481,6 +483,7 @@ where
     S: SubprocedureLocators,
     C: ConstantResolver,
     U: NamedLatticeElement,
+    U: Display,
     T: NamedLattice<U>,
 {
     /// Creates a new scc constraint generation context.
@@ -541,6 +544,25 @@ where
             }
         }
 
+        let repr_tid = tid_filter
+            .iter()
+            .next()
+            .expect("every scc must have a node");
+
+        self.debug_dir
+            .log_to_fname(&format!("{}_basic_cons", repr_tid.get_str_repr()), &|| {
+                &basic_cons
+            })?;
+
+        self.debug_dir.log_to_fname(
+            &format!("{}_basic_cons_repro_file", repr_tid.get_str_repr()),
+            &|| {
+                let s =
+                    serde_json::to_string(&basic_cons).expect("should be able to serialize cons");
+                s
+            },
+        )?;
+
         let resolved_cs_set = self
             .lattice_def
             .infer_pointers(&basic_cons, &self.debug_dir)?;
@@ -551,11 +573,6 @@ where
                 .cloned()
                 .collect::<BTreeSet<_>>(),
         );
-
-        let repr_tid = tid_filter
-            .iter()
-            .next()
-            .expect("every scc must have a node");
 
         self.debug_dir
             .log_to_fname(&format!("{}_ptr_diff", repr_tid.get_str_repr()), &|| &diff)?;

@@ -668,7 +668,7 @@ impl Display for SubtypeConstraint {
 }
 
 /// A set of [SubtypeConstraint]
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Default, Serialize, Deserialize)]
 pub struct ConstraintSet(pub BTreeSet<TyConstraint>);
 
 impl ConstraintSet {
@@ -700,7 +700,7 @@ impl ConstraintSet {
 }
 
 /// Constraints the representation type variable to the addition of two dynamic ty vars
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct AddConstraint {
     /// lhs added type repr
     pub lhs_ty: DerivedTypeVar,
@@ -733,7 +733,7 @@ impl Display for AddConstraint {
 }
 
 /// A constraint on type variables
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum TyConstraint {
     /// lhs is a subtype of rhs
     SubTy(SubtypeConstraint),
