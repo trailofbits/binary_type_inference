@@ -302,8 +302,6 @@ impl InferenceJob {
             NodeContext<RegisterContext, PointsToContext, ProcedureContext, GhidraConstantResolver>,
         >,
     > {
-        let rt_mem = Self::get_runtime_image(&self.proj, &self.binary_bytes)?;
-
         let analysis_results = AnalysisResults::new(&self.binary_bytes, graph, &self.proj);
 
         let (res, logs) = analysis_results.compute_function_signatures();

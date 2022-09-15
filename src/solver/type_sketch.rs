@@ -389,6 +389,7 @@ pub struct SketchBuilder<'a, U, T, V> {
 
 impl<'a, U, T, V> SketchBuilder<'a, U, T, V>
 where
+    U: Display,
     U: NamedLatticeElement,
     T: NamedLattice<U>,
     V: Fn(
@@ -468,10 +469,6 @@ where
             MappingGraph::new();
 
         self.add_nodes_and_initial_edges(sig, &mut nd_graph)?;
-        assert!(!nd_graph
-            .get_graph()
-            .edge_references()
-            .any(|e| !matches!(e.weight(), FieldLabel::Add(_)) && e.source() == e.target()));
 
         let qgroups =
             generate_quotient_groups(to_reprs, &nd_graph, sig, &mut (self.debug_log.clone()));
@@ -495,9 +492,11 @@ where
         sig: &BTreeSet<SubtypeConstraint>,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<U>>> {
         let mut orig_sk_graph = self.build_without_pointer_simplification(to_reprs, sig)?;
-        assert!(!orig_sk_graph.has_reflexive_edge_that_is_not_add());
         orig_sk_graph.simplify_pointers();
-        assert!(!orig_sk_graph.has_reflexive_edge_that_is_not_add());
+
+        if orig_sk_graph.has_reflexive_edge_that_is_not_add() {
+            log::warn!("Reflexive edge for reprs {:?}", to_reprs);
+        }
 
         Ok(orig_sk_graph)
     }
@@ -2502,7 +2501,10 @@ impl<T: AbstractMagma<Additive> + std::cmp::PartialEq> SketchGraph<T> {
 #[cfg(test)]
 mod test {
 
-    use std::collections::{BTreeSet, HashSet};
+    use std::{
+        collections::{BTreeSet, HashSet},
+        path::{Path, PathBuf},
+    };
 
     use cwe_checker_lib::intermediate_representation::Tid;
     use petgraph::{graph::DiGraph, visit::EdgeRef, EdgeDirection::Outgoing};
@@ -2514,6 +2516,7 @@ mod test {
             Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable,
         },
         graph_algos::{find_node, mapping_graph::MappingGraph},
+        inference_job::InferenceJob,
         solver::{
             scc_constraint_generation::SCCConstraints,
             type_lattice::{
@@ -2521,10 +2524,56 @@ mod test {
                 NamedLatticeElement,
             },
         },
-        util::FileDebugLogger,
+        util::{constraint_set_to_subtys, FileDebugLogger},
     };
 
     use super::{insert_dtv, LatticeBounds, SCCSketchsBuilder, Sketch, SketchBuilder};
+
+    fn test_data_dir<P: AsRef<Path>>(pth: P) -> String {
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("sketch_test_files");
+        d.push(pth);
+        d.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn repro_reflexive_edge() {
+        let repro_file_pth = test_data_dir("sub_0015c310_basic_cons_repro_file");
+        let fl = std::fs::File::open(repro_file_pth).expect("test data failed to open");
+        let cs: ConstraintSet = serde_json::from_reader(fl).expect("read file");
+
+        let lattice_file_path = test_data_dir("lattice.json");
+        //let lattice_json =
+        //    std::fs::read_to_string(lattice_file_path).expect("attempt to read json");
+        let (lattice, weak_integer) =
+            InferenceJob::parse_lattice_json(&lattice_file_path, vec![]).expect("parse json");
+
+        let elems = lattice
+            .get_nds()
+            .iter()
+            .map(|(name, _elem)| TypeVariable::new(name.clone()))
+            .collect::<HashSet<_>>();
+
+        let logger = FileDebugLogger::new(Some("/tmp".to_string()));
+        logger.log_to_fname(&format!("pprint_cons"), &|| &cs);
+        let skb = SketchBuilder::new(
+            &lattice,
+            &elems,
+            &|dtv, mpgrph| {
+                insert_dtv(&lattice, mpgrph, dtv.clone());
+                Ok(())
+            },
+            logger,
+        )
+        .build_and_label_constraints_with_representation(
+            Some(&[Tid::create(
+                "sub_0015c310".to_string(),
+                "0015c310".to_string(),
+            )]),
+            &constraint_set_to_subtys(&cs),
+        )
+        .expect("should succeed");
+    }
 
     #[test]
     fn test_simple_equivalence() {
