@@ -1200,20 +1200,8 @@ where
 
         call_site_type.label_dtvs(orig_repr);
 
-        assert!(call_site_type
-            .get_graph()
-            .get_graph()
-            .edge_references()
-            .all(|e| matches!(e.weight(), FieldLabel::Add(_)) || e.source() != e.target()));
-
         // if an actual is equal to the replacement type then we can bind that parameter to the type.
         target_scc_repr.replace_dtv(&target_dtv, call_site_type.clone());
-
-        assert!(target_scc_repr
-            .get_graph()
-            .get_graph()
-            .edge_references()
-            .all(|e| matches!(e.weight(), FieldLabel::Add(_)) || e.source() != e.target()));
     }
 
     fn refine_formal_out(
@@ -1972,8 +1960,8 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
     fn is_structurally_equal(&self, other: &Sketch<U>) -> bool {
         let alphabet = self.alphabet(other);
 
-        let lhs = self.construct_dfa(&alphabet);
-        let rhs = other.construct_dfa(&alphabet);
+        let lhs = self.construct_dfa(&alphabet, true);
+        let rhs = other.construct_dfa(&alphabet, true);
 
         let cex_lang = dfa_operations::union(
             &dfa_operations::intersection(&lhs, &complement(&rhs)),
@@ -1997,8 +1985,8 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         let alphabet = self.alphabet(other);
 
         let resultant_grph = dfa_op(
-            &self.construct_dfa(&alphabet),
-            &other.construct_dfa(&alphabet),
+            &self.construct_dfa(&alphabet, true),
+            &other.construct_dfa(&alphabet, true),
         );
 
         let (entry, grph) = self.create_graph_from_dfa(&resultant_grph);
@@ -2056,20 +2044,32 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
     }
 
     // Note we cant implement DFA for sketches since DFAs are expected to be complete
-    fn construct_dfa(&self, alphabet: &BTreeSet<FieldLabel>) -> ExplicitDFA<FieldLabel> {
+    fn construct_dfa(
+        &self,
+        alphabet: &BTreeSet<FieldLabel>,
+        should_include_entry_as_accept: bool,
+    ) -> ExplicitDFA<FieldLabel> {
+        let entry_idx = self.get_entry().index();
         let accept_idxs = self
             .quotient_graph
             .get_graph()
             .node_indices()
-            .map(|x| x.index())
+            .filter_map(|x| {
+                if x.index() != entry_idx || should_include_entry_as_accept {
+                    Some(x.index())
+                } else {
+                    None
+                }
+            })
             .collect::<BTreeSet<_>>();
 
         let reject_idx = accept_idxs.iter().max().cloned().unwrap_or(0) + 1;
 
         let mut reject_idxs = accept_idxs.clone();
         reject_idxs.insert(reject_idx);
-
-        let entry_idx = self.get_entry().index();
+        if !should_include_entry_as_accept {
+            reject_idxs.insert(entry_idx);
+        }
 
         let mut edges = self
             .quotient_graph
@@ -2119,9 +2119,9 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
         self.binop_sketch(other, &U::meet, &union)
     }
 
-    /// Checks if this dfa recogonizes the empty language
-    pub fn empty_language(&self) -> bool {
-        let dfa = self.construct_dfa(&self.alphabet(self));
+    /// Checks if this dfa only recoginizes epsilon
+    pub fn empty_language_or_epsilon(&self) -> bool {
+        let dfa = self.construct_dfa(&self.alphabet(self), false);
         dfa_operations::is_empty_language(&dfa)
     }
 
@@ -3380,5 +3380,61 @@ mod test {
             .expect("should have same target node at path");
 
         assert_eq!(nd.get_upper().to_string(), "int");
+    }
+
+    fn test_unit_lattice() -> (EnumeratedNamedLattice, LatticeBounds<CustomLatticeElement>) {
+        let lat = LatticeDefinition::new(
+            vec![],
+            "elem".to_string(),
+            "elem".to_string(),
+            "elem".to_string(),
+        )
+        .generate_lattice();
+        let bound = lat.get_elem("elem").unwrap();
+        (
+            lat,
+            LatticeBounds {
+                upper_bound: bound.clone(),
+                lower_bound: bound,
+            },
+        )
+    }
+    #[test]
+    fn test_underapproximate_sketch_diff() {
+        let mut grph = MappingGraph::new();
+        let (lat, elem) = test_unit_lattice();
+        let dtv = DerivedTypeVar::new(TypeVariable::new("proc".to_owned()));
+        grph.add_node(dtv.clone(), elem.clone());
+        let actual_sketch = Sketch {
+            quotient_graph: grph,
+            default_label: elem.clone(),
+            representing: dtv.clone(),
+        };
+
+        let mut large_graph = MappingGraph::new();
+        let src = large_graph.add_node(
+            DerivedTypeVar::new(TypeVariable::new("proc".to_owned())),
+            elem.clone(),
+        );
+
+        let dst = large_graph.add_node(
+            DerivedTypeVar::new(TypeVariable::new("tmp".to_owned())),
+            elem.clone(),
+        );
+
+        large_graph.add_edge(src, dst, FieldLabel::Load);
+
+        let expected_sketch = Sketch {
+            quotient_graph: large_graph,
+            default_label: elem.clone(),
+            representing: dtv.clone(),
+        };
+        let over_precise_lang = actual_sketch.difference(&expected_sketch);
+        println!("over_precise: {}", over_precise_lang);
+        assert!(over_precise_lang
+            .difference(&expected_sketch)
+            .empty_language_or_epsilon());
+        let missing_lang = expected_sketch.difference(&actual_sketch);
+        assert!(!missing_lang.empty_language_or_epsilon());
     }
 }

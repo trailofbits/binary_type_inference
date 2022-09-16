@@ -263,6 +263,13 @@ impl LatticeDefinition {
                     },
                 )
             })
+            .chain(
+                vec![
+                    (top.elem.clone(), top.clone()),
+                    (bot.elem.clone(), bot.clone()),
+                ]
+                .into_iter(),
+            )
             .collect();
 
         EnumeratedNamedLattice {
