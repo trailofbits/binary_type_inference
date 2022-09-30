@@ -204,6 +204,8 @@ impl<
                 });
             new
         };
+
+        // Here we add the subgraph in with all its internal edges
         grph.get_graph()
             .node_indices()
             .flat_map(|nd| {
@@ -211,7 +213,6 @@ impl<
                 let mut tot = Vec::new();
                 for edge in grph.get_graph().edges_directed(nd, Outgoing) {
                     let dst = add_node(edge.target());
-                    assert!(src != dst);
                     tot.push((src, edge.weight().clone(), dst));
                 }
                 tot.into_iter()
