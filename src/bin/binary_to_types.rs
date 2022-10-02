@@ -7,7 +7,7 @@ use clap::{App, Arg};
 use petgraph::dot::Dot;
 use prost::Message;
 
-use std::convert::TryInto;
+use std::convert::TryFrom;
 use std::{
     io::Write,
     path::{Path, PathBuf},
@@ -76,7 +76,7 @@ fn main() -> anyhow::Result<()> {
         InferenceJob::parse::<ProtobufDef>(&job_def, dbg_dir, vec![])
     }?;
 
-    let (grph, ctypes) = if_job.infer_ctypes()?;
+    let (grph, (node_to_type_id, type_id_to_type)) = if_job.infer_ctypes()?;
 
     let mapped_graph = grph.get_graph().get_graph().map(
         |idx, nd_elem| {
@@ -105,7 +105,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut out_file = std::fs::File::create(out_file)?;
     if !matches.is_present("human_readable_output") {
-        let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(ctypes);
+        let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(type_id_to_type);
 
         let mapping = if_job.get_graph_labeling(&grph);
         for (k, v) in mapping {
@@ -114,19 +114,21 @@ fn main() -> anyhow::Result<()> {
                 address: k.address.clone(),
             };
 
-            let tid_to_node_idx = binary_type_inference::ctypes::TidToNodeIndex {
-                node_index: v.index().try_into().unwrap(),
-                tid: Some(tid),
-            };
+            if let Some(tgt_type_id) = node_to_type_id.get(&v) {
+                let tid_to_node_idx = binary_type_inference::ctypes::TidToTypeId {
+                    type_id: u32::try_from(*tgt_type_id).unwrap(),
+                    tid: Some(tid),
+                };
 
-            pb.type_variable_repr_nodes.push(tid_to_node_idx);
+                pb.type_variable_repr_nodes.push(tid_to_node_idx);
+            }
         }
 
         let mut buf = Vec::new();
         pb.encode(&mut buf)?;
         out_file.write_all(&buf)?;
     } else {
-        serde_json::to_writer(out_file, &ctypes)?;
+        serde_json::to_writer(out_file, &type_id_to_type)?;
     }
 
     Ok(())

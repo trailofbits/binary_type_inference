@@ -146,7 +146,7 @@ impl<T: DeserializeOwned> InferenceParsing<T> for JsonDef {
     }
 }
 
-type LoweredTypeMap = HashMap<NodeIndex, CType>;
+type LoweredTypeMap = (HashMap<NodeIndex, usize>, BTreeMap<usize, CType>);
 type UserDefinedSketches = SketchGraph<LatticeBounds<CustomLatticeElement>>;
 
 fn parse_collection_from_file<T: Message + Default, R: Read>(mut r: R) -> anyhow::Result<Vec<T>> {
@@ -467,13 +467,13 @@ impl InferenceJob {
         sg: &SketchGraph<LatticeBounds<CustomLatticeElement>>,
     ) -> anyhow::Result<LoweredTypeMap> {
         let id = identity_element(&self.lattice);
-        let lcontext = LoweringContext::new(
+        LoweringContext::new(
+            sg,
             &self.get_graph_labeling(sg),
             &self.get_out_parameter_mapping(),
             id,
-        );
-
-        lcontext.collect_ctypes(sg)
+        )
+        .collect_ctypes()
     }
 
     /// Infer the universal type graph, joining all sketches together.
