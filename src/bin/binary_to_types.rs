@@ -104,12 +104,11 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut out_file = std::fs::File::create(out_file)?;
+    let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(
+        type_id_to_type,
+        &node_to_type_id,
+    );
     if !matches.is_present("human_readable_output") {
-        let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(
-            type_id_to_type,
-            &node_to_type_id,
-        );
-
         let mapping = if_job.get_graph_labeling(&grph);
         for (k, v) in mapping {
             let tid = binary_type_inference::ctypes::Tid {
@@ -133,7 +132,16 @@ fn main() -> anyhow::Result<()> {
         pb.encode(&mut buf)?;
         out_file.write_all(&buf)?;
     } else {
-        serde_json::to_writer(out_file, &type_id_to_type)?;
+        serde_json::to_writer(out_file, &pb)?;
+    }
+
+    if let Some(debug_graph_file) = matches.value_of("debug_out_dir") {
+        let mut pbuf = PathBuf::new();
+        pbuf.push(debug_graph_file);
+
+        let debug_ctype_fl =
+            std::fs::File::create(immutably_push(&pbuf, "debug_ctype_output.json"))?;
+        serde_json::to_writer(debug_ctype_fl, &pb)?;
     }
 
     Ok(())
