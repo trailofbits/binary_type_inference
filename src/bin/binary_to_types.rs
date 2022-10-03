@@ -116,7 +116,9 @@ fn main() -> anyhow::Result<()> {
 
             if let Some(tgt_type_id) = node_to_type_id.get(&v) {
                 let tid_to_node_idx = binary_type_inference::ctypes::TidToTypeId {
-                    type_id: u32::try_from(*tgt_type_id).unwrap(),
+                    type_id: Some(binary_type_inference::lowering::convert_typeid(
+                        *tgt_type_id,
+                    )),
                     tid: Some(tid),
                 };
 

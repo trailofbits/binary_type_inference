@@ -24,7 +24,7 @@ use crate::{
         AdditionalConstraint, ConstraintSet, SubtypeConstraint, TyConstraint, TypeVariable,
         VariableManager,
     },
-    lowering::{CType, LoweringContext},
+    lowering::{CType, LoweringContext, TypeId},
     node_context::{
         points_to::PointsToContext,
         register_map::{self, RegisterContext},
@@ -146,7 +146,7 @@ impl<T: DeserializeOwned> InferenceParsing<T> for JsonDef {
     }
 }
 
-type LoweredTypeMap = (HashMap<NodeIndex, usize>, BTreeMap<usize, CType>);
+type LoweredTypeMap = (HashMap<NodeIndex, TypeId>, BTreeMap<TypeId, CType>);
 type UserDefinedSketches = SketchGraph<LatticeBounds<CustomLatticeElement>>;
 
 fn parse_collection_from_file<T: Message + Default, R: Read>(mut r: R) -> anyhow::Result<Vec<T>> {
