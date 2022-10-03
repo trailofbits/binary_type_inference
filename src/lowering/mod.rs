@@ -24,6 +24,10 @@ use crate::{
 use std::collections::BinaryHeap;
 use std::convert::TryFrom;
 
+#[derive(Debug, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
+/// A unique identifier for a type
+pub struct TypeId(usize);
+
 /// Representation of a automata type lowered to a ctype
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum CType {
@@ -32,10 +36,10 @@ pub enum CType {
     /// A pointer to another ctype
     Pointer {
         /// The target type
-        target: usize,
+        target: TypeId,
     },
     /// An alias to the type of a different node
-    Alias(usize),
+    Alias(NodeIndex),
     /// Reperesents the fields of a structure. These fields are guarenteed to not overlap, however, may be out of order and require padding.
     Structure(Vec<Field>),
     /// Represents the set of parameters and return type. The parameters may be out of order or missing types. One should consider missing parameters as
@@ -43,17 +47,17 @@ pub enum CType {
         /// The parameters of the function
         params: Vec<Parameter>,
         /// The return type of the function
-        return_ty: Option<usize>,
+        return_ty: Option<TypeId>,
     },
     /// A union of several ctypes
-    Union(BTreeSet<usize>),
+    Union(BTreeSet<TypeId>),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
 /// Represents a parameter at a given index.
 pub struct Parameter {
     index: usize,
-    type_index: usize,
+    type_index: TypeId,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -61,7 +65,7 @@ pub struct Parameter {
 pub struct Field {
     byte_offset: usize,
     bit_sz: usize,
-    type_index: usize,
+    type_index: TypeId,
 }
 
 #[derive(PartialEq, Eq)]
@@ -133,11 +137,11 @@ impl PartialOrd for Classroom {
     }
 }
 
-fn translate_field(field: &constraints::Field, idx: NodeIndex) -> Option<Field> {
+fn translate_field(field: &constraints::Field, idx: TypeId) -> Option<Field> {
     usize::try_from(field.offset).ok().map(|off| Field {
         byte_offset: off,
         bit_sz: field.size,
-        type_index: idx.index(),
+        type_index: idx,
     })
 }
 
@@ -195,31 +199,6 @@ fn has_non_zero_fields<U: NamedLatticeElement>(
         })
 }
 
-fn build_structure_types<U: NamedLatticeElement>(
-    nd: NodeIndex,
-    grph: &SketchGraph<LatticeBounds<U>>,
-) -> Vec<CType> {
-    // check if this is an actual  structure
-    if !has_non_zero_fields(nd, grph) {
-        return Vec::new();
-    }
-
-    schedule_structures(
-        &grph
-            .get_graph()
-            .get_graph()
-            .edges_directed(nd, EdgeDirection::Outgoing)
-            .filter_map(|e| {
-                if let constraints::FieldLabel::Field(fld) = e.weight() {
-                    translate_field(fld, e.target())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>(),
-    )
-}
-
 fn build_alias_types<U: NamedLatticeElement>(
     nd: NodeIndex,
     grph: &SketchGraph<LatticeBounds<U>>,
@@ -238,29 +217,7 @@ fn build_alias_types<U: NamedLatticeElement>(
 
     unique_tgts
         .into_iter()
-        .map(|ind| CType::Alias(ind.index()))
-        .collect()
-}
-
-fn build_pointer_types<U: NamedLatticeElement>(
-    nd: NodeIndex,
-    grph: &SketchGraph<LatticeBounds<U>>,
-) -> Vec<CType> {
-    let load_or_store_targets = grph
-        .get_graph()
-        .get_graph()
-        .edges_directed(nd, EdgeDirection::Outgoing)
-        .filter(|e| {
-            matches!(e.weight(), FieldLabel::Load) || matches!(e.weight(), FieldLabel::Store)
-        })
-        .map(|e| e.target())
-        .collect::<BTreeSet<_>>();
-
-    load_or_store_targets
-        .into_iter()
-        .map(|tgt| CType::Pointer {
-            target: tgt.index(),
-        })
+        .map(|ind| CType::Alias(ind))
         .collect()
 }
 
@@ -268,14 +225,28 @@ fn field_to_protobuf(internal_field: Field) -> ctypes::Field {
     ctypes::Field {
         bit_size: internal_field.bit_sz.try_into().unwrap(),
         byte_offset: internal_field.byte_offset.try_into().unwrap(),
-        type_id: u32::try_from(internal_field.type_index).unwrap(),
+        type_id: Some(convert_typeid(internal_field.type_index)),
     }
 }
 
 fn param_to_protofbuf(internal_param: Parameter) -> ctypes::Parameter {
     ctypes::Parameter {
         parameter_index: internal_param.index.try_into().unwrap(),
-        type_index: u32::try_from(internal_param.type_index).unwrap(),
+        type_index: Some(convert_typeid(internal_param.type_index)),
+    }
+}
+
+/// Converts a node index to protobuf
+pub fn convert_node_index(nd_idx: NodeIndex) -> ctypes::NodeIndex {
+    ctypes::NodeIndex {
+        idx: u32::try_from(nd_idx.index()).unwrap(),
+    }
+}
+
+/// Converts a type id to protobuf
+pub fn convert_typeid(type_id: TypeId) -> ctypes::TypeId {
+    ctypes::TypeId {
+        type_id: u32::try_from(type_id.0).unwrap(),
     }
 }
 
@@ -283,7 +254,7 @@ fn param_to_protofbuf(internal_param: Parameter) -> ctypes::Parameter {
 pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
     match ct {
         CType::Alias(tgt) => ctypes::c_type::InnerType::Alias(ctypes::Alias {
-            to_type_id: tgt.try_into().unwrap(),
+            to_node: Some(convert_node_index(tgt)),
         }),
         CType::Function { params, return_ty } => {
             let mut func = ctypes::Function::default();
@@ -292,7 +263,7 @@ pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
                 .for_each(|x| func.parameters.push(param_to_protofbuf(x)));
 
             if let Some(return_ty) = return_ty {
-                func.return_type = Some(return_ty.try_into().unwrap());
+                func.return_type = Some(convert_typeid(return_ty));
                 func.has_return = true;
             } else {
                 func.has_return = false;
@@ -301,7 +272,7 @@ pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
             ctypes::c_type::InnerType::Function(func)
         }
         CType::Pointer { target } => ctypes::c_type::InnerType::Pointer(ctypes::Pointer {
-            to_type_id: target.try_into().unwrap(),
+            to_type_id: Some(convert_typeid(target)),
         }),
         CType::Primitive(val) => {
             ctypes::c_type::InnerType::Primitive(ctypes::Primitive { type_constant: val })
@@ -318,7 +289,7 @@ pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
             let mut union = ctypes::Union::default();
             children
                 .into_iter()
-                .for_each(|x| union.target_type_ids.push(u32::try_from(x).unwrap()));
+                .for_each(|x| union.target_type_ids.push(convert_typeid(x)));
 
             ctypes::c_type::InnerType::Union(union)
         }
@@ -327,16 +298,15 @@ pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
 
 // TODO(ian): dont unwrap u32s
 /// Converts a mapping from NodeIndex's to CTypes to a protobuf representation [CTypeMapping].
-pub fn convert_mapping_to_profobuf(mp: BTreeMap<usize, CType>) -> CTypeMapping {
+pub fn convert_mapping_to_profobuf(mp: BTreeMap<TypeId, CType>) -> CTypeMapping {
     let mut mapping = CTypeMapping::default();
 
     mp.into_iter().for_each(|(idx, ctype)| {
-        let id: u32 = idx.try_into().unwrap();
         let ctype = produce_inner_types(ctype);
         mapping.type_id_to_ctype.insert(
-            id,
+            convert_typeid(idx).type_id,
             ctypes::CType {
-                type_id: id,
+                type_id: Some(convert_typeid(idx)),
                 inner_type: Some(ctype),
             },
         );
@@ -352,13 +322,39 @@ pub struct LoweringContext<'a, U: NamedLatticeElement> {
     grph: &'a SketchGraph<LatticeBounds<U>>,
     out_params: BTreeMap<NodeIndex, Vec<Arg>>,
     default_lattice_elem: LatticeBounds<U>,
-    ephemeral_types: BTreeMap<usize, CType>,
-    cached_primitivies: BTreeMap<String, usize>,
+    ephemeral_types: BTreeMap<TypeId, CType>,
+    cached_primitivies: BTreeMap<String, TypeId>,
     curr_id: usize,
 }
 
 impl<'a, U: NamedLatticeElement> LoweringContext<'a, U> {
-    fn build_terminal_type(&mut self, nd_bounds: &LatticeBounds<U>) -> usize {
+    fn build_structure_types(
+        &mut self,
+        nd: NodeIndex,
+        grph: &SketchGraph<LatticeBounds<U>>,
+    ) -> Vec<CType> {
+        // check if this is an actual  structure
+        if !has_non_zero_fields(nd, grph) {
+            return Vec::new();
+        }
+
+        schedule_structures(
+            &grph
+                .get_graph()
+                .get_graph()
+                .edges_directed(nd, EdgeDirection::Outgoing)
+                .filter_map(|e| {
+                    if let constraints::FieldLabel::Field(fld) = e.weight() {
+                        translate_field(fld, self.add_type(CType::Alias(e.target())))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn build_terminal_type(&mut self, nd_bounds: &LatticeBounds<U>) -> TypeId {
         // TODO(Ian): be more clever
         let nm = nd_bounds.get_upper().get_name();
         if let Some(id) = self.cached_primitivies.get(nm) {
@@ -369,6 +365,29 @@ impl<'a, U: NamedLatticeElement> LoweringContext<'a, U> {
         let res = self.add_type(ty);
         self.cached_primitivies.insert(nm.to_owned(), res);
         res
+    }
+
+    fn build_pointer_types(
+        &mut self,
+        nd: NodeIndex,
+        grph: &SketchGraph<LatticeBounds<U>>,
+    ) -> Vec<CType> {
+        let load_or_store_targets = grph
+            .get_graph()
+            .get_graph()
+            .edges_directed(nd, EdgeDirection::Outgoing)
+            .filter(|e| {
+                matches!(e.weight(), FieldLabel::Load) || matches!(e.weight(), FieldLabel::Store)
+            })
+            .map(|e| e.target())
+            .collect::<BTreeSet<_>>();
+
+        load_or_store_targets
+            .into_iter()
+            .map(|tgt| CType::Pointer {
+                target: self.add_type(CType::Alias(tgt)),
+            })
+            .collect()
     }
 
     /// Creates a new type lowering context from a mapping from term to node,
@@ -399,11 +418,12 @@ impl<'a, U: NamedLatticeElement> LoweringContext<'a, U> {
         }
     }
 
-    fn add_type(&mut self, ty: CType) -> usize {
+    fn add_type(&mut self, ty: CType) -> TypeId {
         let id = self.curr_id;
         self.curr_id += 1;
-        self.ephemeral_types.insert(id, ty);
-        id
+        let ty_id = TypeId(id);
+        self.ephemeral_types.insert(ty_id, ty);
+        ty_id
     }
 
     fn collect_params(
@@ -437,9 +457,14 @@ impl<'a, U: NamedLatticeElement> LoweringContext<'a, U> {
                     index: idx,
                     type_index: if types.len() == 1 {
                         let ty = types.remove(0);
-                        ty.index()
+                        self.add_type(CType::Alias(ty))
                     } else {
-                        let utype = CType::Union(types.into_iter().map(|x| x.index()).collect());
+                        let utype = CType::Union(
+                            types
+                                .into_iter()
+                                .map(|x| self.add_type(CType::Alias(x)))
+                                .collect(),
+                        );
                         self.add_type(utype)
                     },
                 })
@@ -529,7 +554,7 @@ impl<'a, U: NamedLatticeElement> LoweringContext<'a, U> {
     }
 
     // We shall always give a type... even if it is undef
-    fn build_type(&mut self, nd: NodeIndex, grph: &SketchGraph<LatticeBounds<U>>) -> usize {
+    fn build_type(&mut self, nd: NodeIndex, grph: &SketchGraph<LatticeBounds<U>>) -> TypeId {
         let act_graph = grph.get_graph().get_graph();
         if act_graph
             .edges_directed(nd, EdgeDirection::Outgoing)
@@ -539,11 +564,11 @@ impl<'a, U: NamedLatticeElement> LoweringContext<'a, U> {
             return self.build_terminal_type(&act_graph[nd]);
         }
 
-        let struct_types = build_structure_types(nd, grph);
+        let struct_types = self.build_structure_types(nd, grph);
         // alias types, alias and struct are mutually exclusive, by checking if we only have zero fields in both
         let alias_types = build_alias_types(nd, grph);
         // pointer types
-        let pointer_types = build_pointer_types(nd, grph);
+        let pointer_types = self.build_pointer_types(nd, grph);
 
         // function types
 
@@ -569,7 +594,7 @@ impl<'a, U: NamedLatticeElement> LoweringContext<'a, U> {
     /// Collects ctypes for a graph
     pub fn collect_ctypes(
         mut self,
-    ) -> anyhow::Result<(HashMap<NodeIndex, usize>, BTreeMap<usize, CType>)> {
+    ) -> anyhow::Result<(HashMap<NodeIndex, TypeId>, BTreeMap<TypeId, CType>)> {
         // types are local decisions so we dont care what order types are built in
         let mut types = HashMap::new();
         for nd in self.grph.get_graph().get_graph().node_indices() {

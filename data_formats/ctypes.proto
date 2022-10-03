@@ -7,9 +7,13 @@ message Tid {
   string address = 2;
 }
 
+message TypeId {
+  uint32 type_id = 1;
+}
+
 message TidToTypeId {
   Tid tid = 1;
-  uint32 type_id = 2;
+  TypeId type_id = 2;
 }
 
 message CTypeMapping {
@@ -19,33 +23,38 @@ message CTypeMapping {
 
 message Parameter {
   uint32 parameter_index = 1;
-  uint32 type_index = 2;
+  TypeId type_index = 2;
 }
 
 message Function {
   repeated Parameter parameters = 1;
-  optional uint32 return_type = 2;
+  optional TypeId return_type = 2;
   bool has_return = 3;
 }
 
 message Field {
   uint32 bit_size = 1;
   uint32 byte_offset = 2;
-  uint32 type_id = 3;
+  TypeId type_id = 3;
 }
 
 message Structure { repeated Field fields = 1; }
 
-message Alias { uint32 to_type_id = 1; }
+
+message NodeIndex {
+  uint32 idx = 1;
+}
+
+message Alias { NodeIndex to_node = 1; }
 
 message Primitive { string type_constant = 1; }
 
-message Pointer { uint32 to_type_id = 1; }
+message Pointer { TypeId to_type_id = 1; }
 
-message Union { repeated uint32 target_type_ids = 1; }
+message Union { repeated TypeId target_type_ids = 1; }
 
 message CType {
-  uint32 type_id = 7;
+  TypeId type_id = 7;
   oneof inner_type {
     Function function = 1;
     Structure structure = 2;
