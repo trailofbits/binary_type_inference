@@ -183,9 +183,13 @@ mod tests {
         P: inference_job::InferenceParsing<intermediate_representation::Tid>,
     {
         init();
-        let mut job =
-            InferenceJob::parse::<P>(&tc.job_def, std::env::var("BTI_DEBUG_DIR").ok(), vec![])
-                .unwrap();
+        let mut job = InferenceJob::parse::<P>(
+            &tc.job_def,
+            std::env::var("BTI_DEBUG_DIR").ok(),
+            vec![],
+            false,
+        )
+        .unwrap();
         job.recover_additional_shared_returns();
 
         let expected_values = ExpectedOutputs::try_from(tc.expected_outputs)

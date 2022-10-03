@@ -41,6 +41,11 @@ fn main() -> anyhow::Result<()> {
                 .takes_value(false),
         )
         .arg(
+            Arg::with_name("use_aggressive_shared_returns")
+                .long("use_aggressive_shared_returns")
+                .takes_value(false),
+        )
+        .arg(
             Arg::with_name("out")
                 .long("out")
                 .required(true)
@@ -69,11 +74,13 @@ fn main() -> anyhow::Result<()> {
         additional_constraints_file: additional_constraints_file.to_owned(),
     };
 
+    let use_aggressive_shared_returns = matches.is_present("use_aggressive_shared_returns");
+
     let dbg_dir = matches.value_of("debug_out_dir").map(|x| x.to_owned());
     let mut if_job = if matches.is_present("human_readable_input") {
-        InferenceJob::parse::<JsonDef>(&job_def, dbg_dir, vec![])
+        InferenceJob::parse::<JsonDef>(&job_def, dbg_dir, vec![], use_aggressive_shared_returns)
     } else {
-        InferenceJob::parse::<ProtobufDef>(&job_def, dbg_dir, vec![])
+        InferenceJob::parse::<ProtobufDef>(&job_def, dbg_dir, vec![], use_aggressive_shared_returns)
     }?;
 
     let (grph, (node_to_type_id, type_id_to_type)) = if_job.infer_ctypes()?;
