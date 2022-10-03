@@ -236,13 +236,6 @@ fn param_to_protofbuf(internal_param: Parameter) -> ctypes::Parameter {
     }
 }
 
-/// Converts a node index to protobuf
-pub fn convert_node_index(nd_idx: NodeIndex) -> ctypes::NodeIndex {
-    ctypes::NodeIndex {
-        idx: u32::try_from(nd_idx.index()).unwrap(),
-    }
-}
-
 /// Converts a type id to protobuf
 pub fn convert_typeid(type_id: TypeId) -> ctypes::TypeId {
     ctypes::TypeId {
@@ -251,10 +244,13 @@ pub fn convert_typeid(type_id: TypeId) -> ctypes::TypeId {
 }
 
 /// Converts an in memory [CType] to a protobuf representation of the enum
-pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
+pub fn produce_inner_types(
+    ct: CType,
+    mp: &HashMap<NodeIndex, TypeId>,
+) -> ctypes::c_type::InnerType {
     match ct {
         CType::Alias(tgt) => ctypes::c_type::InnerType::Alias(ctypes::Alias {
-            to_node: Some(convert_node_index(tgt)),
+            to_type: mp.get(&tgt).map(|tyid| convert_typeid(*tyid)),
         }),
         CType::Function { params, return_ty } => {
             let mut func = ctypes::Function::default();
@@ -298,11 +294,14 @@ pub fn produce_inner_types(ct: CType) -> ctypes::c_type::InnerType {
 
 // TODO(ian): dont unwrap u32s
 /// Converts a mapping from NodeIndex's to CTypes to a protobuf representation [CTypeMapping].
-pub fn convert_mapping_to_profobuf(mp: BTreeMap<TypeId, CType>) -> CTypeMapping {
+pub fn convert_mapping_to_profobuf(
+    mp: BTreeMap<TypeId, CType>,
+    node_to_ty: &HashMap<NodeIndex, TypeId>,
+) -> CTypeMapping {
     let mut mapping = CTypeMapping::default();
 
     mp.into_iter().for_each(|(idx, ctype)| {
-        let ctype = produce_inner_types(ctype);
+        let ctype = produce_inner_types(ctype, node_to_ty);
         mapping.type_id_to_ctype.insert(
             convert_typeid(idx).type_id,
             ctypes::CType {

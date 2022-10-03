@@ -40,12 +40,7 @@ message Field {
 
 message Structure { repeated Field fields = 1; }
 
-
-message NodeIndex {
-  uint32 idx = 1;
-}
-
-message Alias { NodeIndex to_node = 1; }
+message Alias { TypeId to_type = 1; }
 
 message Primitive { string type_constant = 1; }
 
