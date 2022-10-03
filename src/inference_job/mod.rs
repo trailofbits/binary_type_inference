@@ -72,6 +72,7 @@ pub struct InferenceJob {
     interesting_tids: HashSet<Tid>,
     vman: VariableManager,
     debug_dir: FileDebugLogger,
+    should_use_aggressive_shared_returns: bool,
 }
 
 /// A way to parse readers into a given representation type
@@ -513,6 +514,7 @@ impl InferenceJob {
         def: &JobDefinition,
         debug_dir: Option<String>,
         additional_lattices: Vec<LatticeDefinition>,
+        should_use_aggressive_shared_returns: bool,
     ) -> anyhow::Result<InferenceJob> {
         let bin = Self::parse_binary(&def.binary_path).with_context(|| "Trying to parse binary")?;
         let proj = Self::parse_project(&def.ir_json_path, &bin)
@@ -535,6 +537,7 @@ impl InferenceJob {
             weakest_integral_type,
             vman: VariableManager::new(),
             debug_dir: FileDebugLogger::new(debug_dir),
+            should_use_aggressive_shared_returns,
         })
     }
 }
