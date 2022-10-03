@@ -105,7 +105,10 @@ fn main() -> anyhow::Result<()> {
 
     let mut out_file = std::fs::File::create(out_file)?;
     if !matches.is_present("human_readable_output") {
-        let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(type_id_to_type);
+        let mut pb = binary_type_inference::lowering::convert_mapping_to_profobuf(
+            type_id_to_type,
+            &node_to_type_id,
+        );
 
         let mapping = if_job.get_graph_labeling(&grph);
         for (k, v) in mapping {
