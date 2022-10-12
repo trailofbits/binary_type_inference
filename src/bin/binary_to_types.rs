@@ -7,7 +7,6 @@ use clap::{App, Arg};
 use petgraph::dot::Dot;
 use prost::Message;
 
-use std::convert::TryFrom;
 use std::{
     io::Write,
     path::{Path, PathBuf},

@@ -482,7 +482,9 @@ impl InferenceJob {
         &mut self,
         // debug_dir: &PathBuf,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<CustomLatticeElement>>> {
-        self.recover_additional_shared_returns();
+        if self.should_use_aggressive_shared_returns {
+            self.recover_additional_shared_returns();
+        }
         let cons = self.get_simplified_constraints()?;
 
         // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.
