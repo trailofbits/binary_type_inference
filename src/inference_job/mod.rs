@@ -413,7 +413,12 @@ impl InferenceJob {
             self.debug_dir.clone(),
             &self.additional_constraints,
         );
-        context.get_simplified_constraints()
+        let res = context.get_simplified_constraints();
+        println!(
+            "Num generated recursive variables: {}",
+            self.vman.num_generated_loop_breakers()
+        );
+        res
     }
 
     /// Converts simplified scc constraints into a single type supergraph with labels

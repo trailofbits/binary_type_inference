@@ -610,7 +610,7 @@ impl FSA {
     }
 
     // todo this is slow, use a trie
-    fn select_entry_reprs(&self, it: BTreeSet<NodeIndex>) -> BTreeSet<NodeIndex> {
+    fn select_an_entry_repr(&self, it: BTreeSet<NodeIndex>) -> NodeIndex {
         let repr_vars: BTreeSet<DerivedTypeVar> = it
             .iter()
             .map(|x| {
@@ -621,14 +621,13 @@ impl FSA {
             .collect();
 
         it.into_iter()
-            .filter(|curr_node| {
+            .find(|curr_node| {
                 let root =
                     Self::get_root_type_var(self.grph.node_weight(*curr_node).unwrap().clone())
                         .expect("All scc entries should be tvs");
-
                 repr_vars.iter().all(|x| !x.is_prefix_of(&root))
             })
-            .collect()
+            .expect("should always find at least one node that does not have a prefix")
     }
 
     /// Removes SCC by selecting a representative node that receives a new interesting type variable.
@@ -651,18 +650,17 @@ impl FSA {
 
                     let entries = self.get_entries_to_scc(&scc);
                     assert!(!entries.is_empty());
-                    let non_redundant_removes = self.select_entry_reprs(entries);
-                    assert!(!non_redundant_removes.is_empty());
-                    for idx in non_redundant_removes.into_iter() {
-                        let tv = vman.fresh_loop_breaker();
+                    let idx = self.select_an_entry_repr(entries);
+                    //assert!(!non_redundant_removes.is_empty());
+                    //for idx in non_redundant_removes.into_iter() {
+                    let tv = vman.fresh_loop_breaker();
 
-                        let eq = self.get_equiv_node_idxs(idx);
-                        eq.iter()
-                            .for_each(|i| self.replace_if_exists(*i, tv.clone()));
-                        eq.into_iter().for_each(|x| {
-                            removed.insert(x);
-                        });
-                    }
+                    let eq = self.get_equiv_node_idxs(idx);
+                    eq.iter()
+                        .for_each(|i| self.replace_if_exists(*i, tv.clone()));
+                    eq.into_iter().for_each(|x| {
+                        removed.insert(x);
+                    });
                 }
             }
 

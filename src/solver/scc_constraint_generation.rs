@@ -536,6 +536,15 @@ where
                 .collect::<BTreeSet<_>>(),
         );
 
+        let repr_tid = tid_filter
+            .iter()
+            .next()
+            .expect("every scc must have a node");
+        self.debug_dir.log_to_fname(
+            &format!("{}_basic_cons_no_sigs", repr_tid.get_str_repr()),
+            &|| &basic_cons,
+        )?;
+
         instantiate_callee_signatures(&mut basic_cons, state);
 
         for tid in tid_filter.iter() {
@@ -543,11 +552,6 @@ where
                 basic_cons.insert_all(to_insert);
             }
         }
-
-        let repr_tid = tid_filter
-            .iter()
-            .next()
-            .expect("every scc must have a node");
 
         self.debug_dir
             .log_to_fname(&format!("{}_basic_cons", repr_tid.get_str_repr()), &|| {
