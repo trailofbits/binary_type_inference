@@ -10,11 +10,11 @@ use std::{collections::HashMap, hash::Hash};
 use alga::general::{AbstractMagma, Additive, JoinSemilattice, Lattice, MeetSemilattice};
 use anyhow::Context;
 
-use cwe_checker_lib::intermediate_representation::{Sub, Tid};
+use cwe_checker_lib::intermediate_representation::{Tid};
 
 use itertools::Itertools;
 use log::info;
-use petgraph::algo::scc;
+
 use petgraph::dot::Dot;
 use petgraph::graph::IndexType;
 use petgraph::stable_graph::StableDiGraph;
@@ -32,7 +32,7 @@ use EdgeDirection::Outgoing;
 use crate::analysis::callgraph::{self, CallGraph};
 use crate::constraint_generation::{self, tid_to_tvar};
 use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable,
+    DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable,
 };
 
 use crate::graph_algos::mapping_graph::MappingGraph;
@@ -1617,7 +1617,7 @@ where
         let mut global_sketches: HashMap<TypeVariable, Sketch<LatticeBounds<U>>> = HashMap::new();
 
         self.scc_repr.iter().for_each(|(scc_repr, sg)| {
-            Self::insert_global_sketches(&scc_repr, &mut global_sketches, sg, &self.debug_dir);
+            Self::insert_global_sketches(scc_repr, &mut global_sketches, sg, &self.debug_dir);
         });
 
         for (tv, sketch) in global_sketches.iter() {

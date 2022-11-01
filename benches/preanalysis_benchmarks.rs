@@ -54,7 +54,10 @@ fn criterion_bench_reaching_defs_ls(c: &mut Criterion) {
     let mut grp = c.benchmark_group("heavy weight integration benchmarks");
     grp.sample_size(10);
     grp.bench_function("ls-reaching-defs", |b| {
-        b.iter(|| black_box(reaching_def_performance_ls()))
+        b.iter(|| {
+            reaching_def_performance_ls();
+            black_box(())
+        })
     });
     grp.finish();
 }

@@ -216,7 +216,6 @@ where
         .dfa_edges()
         .into_iter()
         .filter(|(src, _, dst)| reached_idxs.contains(src) && reached_idxs.contains(dst))
-        .map(|a| a.clone())
         .collect();
     // TODO(Ian): maybe reinstantiate this code by doing the following: each reject node is actually starts in its own behavior class.. except for maybe rejects reached from non
     // terminals??? all of this is very fuzzy but that might allow us to do some simplification on paths to rejects, which rejects can be merged? Maybe rejects that are the same in both?

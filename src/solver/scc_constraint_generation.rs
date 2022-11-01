@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt::Display,
-    iter::FromIterator,
     rc::Rc,
     vec,
 };
@@ -451,11 +450,7 @@ fn identify_called_formals(cs_set: &ConstraintSet) -> BTreeSet<(TypeVariable, Ti
         })
         .map(|dtv| dtv.get_base_variable())
         .filter_map(|basev| {
-            if let Some(cs_tag) = basev.get_cs_tag() {
-                Some((basev.to_callee(), cs_tag.clone()))
-            } else {
-                None
-            }
+            basev.get_cs_tag().as_ref().map(|cs_tag| (basev.to_callee(), cs_tag.clone()))
         })
         .collect()
 }
@@ -471,7 +466,7 @@ fn instantiate_callee_signatures(
                 .expect("A callee should have a sig")
                 .instantiate(cs_tag)
                 .into_iter()
-                .map(|x| TyConstraint::SubTy(x)),
+                .map(TyConstraint::SubTy),
         )
     }
 }
@@ -561,9 +556,8 @@ where
         self.debug_dir.log_to_fname(
             &format!("{}_basic_cons_repro_file", repr_tid.get_str_repr()),
             &|| {
-                let s =
-                    serde_json::to_string(&basic_cons).expect("should be able to serialize cons");
-                s
+                
+                serde_json::to_string(&basic_cons).expect("should be able to serialize cons")
             },
         )?;
 
@@ -590,7 +584,7 @@ where
         // generation out we can seperate this out.
         let new_interesting_vars = base_interesting_variables
             .into_iter()
-            .chain(tid_filter.iter().map(|tid| tid_to_tvar(tid)))
+            .chain(tid_filter.iter().map(tid_to_tvar))
             .chain(
                 resolved_cs_set
                     .variables()
@@ -697,7 +691,7 @@ where
         let mut state: HashMap<TypeVariable, Rc<Signature>> = HashMap::new();
         for nd in condensed_cg.get_reverse_topo() {
             let scc = &condensed_cg.condensed_cg[nd];
-            let sig = Rc::from(self.simplify_signature(&scc, &state)?);
+            let sig = Rc::from(self.simplify_signature(scc, &state)?);
             for tid in scc {
                 state.insert(tid_to_tvar(tid), sig.clone());
             }
@@ -717,7 +711,7 @@ impl Signature {
         // filter globals and type constants
         if dtv.is_formal_dtv() && (dtv.refers_to_in_parameter() || dtv.refers_to_out_parameter()) {
             dtv.substitute_base(TypeVariable::with_tag(
-                dtv.get_base_variable().get_name().to_owned(),
+                dtv.get_base_variable().get_name(),
                 new_tag,
             ));
         }

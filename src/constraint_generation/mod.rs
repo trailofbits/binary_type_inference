@@ -647,7 +647,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
 
     fn apply_store(
         &self,
-        tid: &Tid,
+        _tid: &Tid,
         value_from: &Expression,
         address_into: &Expression,
         vman: &mut VariableManager,

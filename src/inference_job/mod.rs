@@ -8,7 +8,6 @@ use anyhow::Context;
 use cwe_checker_lib::{
     analysis::{
         graph::{Graph, Node},
-        pointer_inference::Config,
     },
     intermediate_representation::{Arg, Project, RuntimeMemoryImage, Tid},
     AnalysisResults,
@@ -33,7 +32,7 @@ use crate::{
     },
     solver::{
         constraint_graph::RuleContext,
-        scc_constraint_generation::{self, LatticeInfo, ProgramInfo, SCCConstraints},
+        scc_constraint_generation::{self, LatticeInfo, ProgramInfo},
         type_lattice::{
             CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLattice,
         },
