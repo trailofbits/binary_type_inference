@@ -18,17 +18,17 @@ jobs:
           override: true
 
       - name: Format
-        uses: actions-rs/toolchain@v1.0.6
+        uses: actions-rs/cargo@v1.0.6
         with:
           command: fmt
           args: --all -- --check
 
       - name: Test
-        uses: actions-rs/toolchain@v1.0.6
+        uses: actions-rs/cargo@v1.0.6
         with:
           command: test
 
       - name: Clippy
-        uses: actions-rs/toolchain@v1.0.6
+        uses: actions-rs/cargo@v1.0.6
         with:
           command: clippy
