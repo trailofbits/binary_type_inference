@@ -1,0 +1,34 @@
+name: CI
+on:
+  pull_request:
+    branches:
+      - "*"
+  push:
+    branches:
+      - "main"
+
+jobs:
+  test:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Install stable rust
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Format
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Test
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          command: test
+
+      - name: Clippy
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          command: clippy
