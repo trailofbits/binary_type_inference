@@ -10,7 +10,7 @@ use std::{collections::HashMap, hash::Hash};
 use alga::general::{AbstractMagma, Additive, JoinSemilattice, Lattice, MeetSemilattice};
 use anyhow::Context;
 
-use cwe_checker_lib::intermediate_representation::{Tid};
+use cwe_checker_lib::intermediate_representation::Tid;
 
 use itertools::Itertools;
 use log::info;
@@ -31,9 +31,7 @@ use EdgeDirection::Outgoing;
 
 use crate::analysis::callgraph::{self, CallGraph};
 use crate::constraint_generation::{self, tid_to_tvar};
-use crate::constraints::{
-    DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable,
-};
+use crate::constraints::{DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable};
 
 use crate::graph_algos::mapping_graph::MappingGraph;
 use crate::graph_algos::{explore_paths, find_node};

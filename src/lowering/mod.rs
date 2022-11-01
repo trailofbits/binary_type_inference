@@ -1,6 +1,4 @@
-use cwe_checker_lib::{
-    intermediate_representation::{Arg, Tid},
-};
+use cwe_checker_lib::intermediate_representation::{Arg, Tid};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -214,10 +212,7 @@ fn build_alias_types<U: NamedLatticeElement>(
         .map(|e| e.target())
         .collect::<BTreeSet<_>>();
 
-    unique_tgts
-        .into_iter()
-        .map(CType::Alias)
-        .collect()
+    unique_tgts.into_iter().map(CType::Alias).collect()
 }
 
 fn field_to_protobuf(internal_field: Field) -> ctypes::Field {

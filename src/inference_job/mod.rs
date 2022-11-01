@@ -6,9 +6,7 @@ use std::{
 
 use anyhow::Context;
 use cwe_checker_lib::{
-    analysis::{
-        graph::{Graph, Node},
-    },
+    analysis::graph::{Graph, Node},
     intermediate_representation::{Arg, Project, RuntimeMemoryImage, Tid},
     AnalysisResults,
 };
