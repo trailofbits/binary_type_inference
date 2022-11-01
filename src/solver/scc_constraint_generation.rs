@@ -450,7 +450,10 @@ fn identify_called_formals(cs_set: &ConstraintSet) -> BTreeSet<(TypeVariable, Ti
         })
         .map(|dtv| dtv.get_base_variable())
         .filter_map(|basev| {
-            basev.get_cs_tag().as_ref().map(|cs_tag| (basev.to_callee(), cs_tag.clone()))
+            basev
+                .get_cs_tag()
+                .as_ref()
+                .map(|cs_tag| (basev.to_callee(), cs_tag.clone()))
         })
         .collect()
 }
@@ -506,7 +509,7 @@ where
 
     fn simplify_scc(
         &mut self,
-        scc: &Vec<Tid>,
+        scc: &[Tid],
         state: &HashMap<TypeVariable, Rc<Signature>>,
         base_interesting_variables: BTreeSet<TypeVariable>,
     ) -> anyhow::Result<Signature> {
@@ -555,10 +558,7 @@ where
 
         self.debug_dir.log_to_fname(
             &format!("{}_basic_cons_repro_file", repr_tid.get_str_repr()),
-            &|| {
-                
-                serde_json::to_string(&basic_cons).expect("should be able to serialize cons")
-            },
+            &|| serde_json::to_string(&basic_cons).expect("should be able to serialize cons"),
         )?;
 
         let resolved_cs_set = self
@@ -647,7 +647,7 @@ where
 
     fn simplify_signature(
         &mut self,
-        scc: &Vec<Tid>,
+        scc: &[Tid],
         state: &HashMap<TypeVariable, Rc<Signature>>,
     ) -> anyhow::Result<Signature> {
         self.simplify_scc(scc, state, BTreeSet::new())
@@ -655,7 +655,7 @@ where
 
     fn simplify_scc_cons(
         &mut self,
-        scc: &Vec<Tid>,
+        scc: &[Tid],
         state: &HashMap<TypeVariable, Rc<Signature>>,
     ) -> anyhow::Result<Signature> {
         self.simplify_scc(
