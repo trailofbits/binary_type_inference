@@ -128,4 +128,15 @@ mod tests {
 
         assert!(ir_res.is_ok());
     }
+
+    #[test]
+    pub fn test_get_ir_for_cwe_checker_acceptance_test() {
+        let acc_test_ir = test_utils::open_test_file("cwe_560_aarch64_gcc_ir.json");
+        let acc_test_bin = test_utils::test_file_to_bytes("cwe_560_aarch64_gcc.out");
+
+        let ir_res =
+            super::get_intermediate_representation_for_reader(acc_test_ir, &acc_test_bin[..]);
+
+        ir_res.unwrap();
+    }
 }
