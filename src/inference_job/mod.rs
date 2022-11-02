@@ -6,10 +6,7 @@ use std::{
 
 use anyhow::Context;
 use cwe_checker_lib::{
-    analysis::{
-        graph::{Graph, Node},
-        pointer_inference::Config,
-    },
+    analysis::graph::{Graph, Node},
     intermediate_representation::{Arg, Project, RuntimeMemoryImage, Tid},
     AnalysisResults,
 };
@@ -33,7 +30,7 @@ use crate::{
     },
     solver::{
         constraint_graph::RuleContext,
-        scc_constraint_generation::{self, LatticeInfo, ProgramInfo, SCCConstraints},
+        scc_constraint_generation::{self, LatticeInfo, ProgramInfo},
         type_lattice::{
             CustomLatticeElement, EnumeratedNamedLattice, LatticeDefinition, NamedLattice,
         },
@@ -413,7 +410,12 @@ impl InferenceJob {
             self.debug_dir.clone(),
             &self.additional_constraints,
         );
-        context.get_simplified_constraints()
+        let res = context.get_simplified_constraints();
+        println!(
+            "Num generated recursive variables: {}",
+            self.vman.num_generated_loop_breakers()
+        );
+        res
     }
 
     /// Converts simplified scc constraints into a single type supergraph with labels
@@ -482,7 +484,9 @@ impl InferenceJob {
         &mut self,
         // debug_dir: &PathBuf,
     ) -> anyhow::Result<SketchGraph<LatticeBounds<CustomLatticeElement>>> {
-        self.recover_additional_shared_returns();
+        if self.should_use_aggressive_shared_returns {
+            self.recover_additional_shared_returns();
+        }
         let cons = self.get_simplified_constraints()?;
 
         // Insert additional constraints, additional constraints are now mapped to a tid, and inserted into the scc that has that tid.

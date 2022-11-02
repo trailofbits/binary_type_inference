@@ -99,6 +99,8 @@ impl PointsToContext {
 }
 
 impl PointsToContext {
+    /// Converts a cwe_checker abstract identifier into a unique type variable representing that
+    /// abstract identifier for this function.
     pub fn type_variable_from_abstract_id(aid: &AbstractIdentifier) -> TypeVariable {
         TypeVariable::new(
             aid.to_string()
@@ -267,15 +269,14 @@ mod test {
     use std::path::{Path, PathBuf};
 
     use cwe_checker_lib::{
-        abstract_domain::{AbstractDomain, TryToBitvec, TryToInterval},
+        abstract_domain::TryToBitvec,
         analysis::graph::{Graph, Node},
         intermediate_representation::{
-            BinOpType, Bitvector, Blk, ByteSize, Expression, RuntimeMemoryImage, Term, Tid,
-            Variable,
+            BinOpType, Bitvector, Blk, ByteSize, Expression, RuntimeMemoryImage, Term, Variable,
         },
         AnalysisResults,
     };
-    use petgraph::{data, stable_graph::NodeIndex};
+    use petgraph::stable_graph::NodeIndex;
 
     use crate::{
         constraint_generation::NodeContextMapping, inference_job::InferenceJob,

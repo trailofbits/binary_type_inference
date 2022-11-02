@@ -64,8 +64,6 @@ impl<T> Default for IdContext<T> {
     }
 }
 
-type DFAEdgeMap<A> = BTreeMap<usize, BTreeMap<A, usize>>;
-
 fn create_edge_map<A, T>(dfa: &T) -> BTreeMap<usize, BTreeMap<A, usize>>
 where
     A: Alphabet,
@@ -107,67 +105,6 @@ impl<A: Alphabet> DFA<A> for ExplicitDFA<A> {
     fn dfa_edges(&self) -> Vec<(usize, A, usize)> {
         self.edges.iter().cloned().collect()
     }
-}
-
-/// For each node in a partition determines based on the transitions which set transitions occur
-fn find_edge_set<A: Alphabet>(
-    edges: &DFAEdgeMap<A>,
-    // maps a node index to a part id.
-    old_parts: &HashMap<usize, usize>,
-    curr_part: &BTreeSet<usize>,
-) -> Vec<(usize, BTreeSet<(A, usize)>)> {
-    curr_part
-        .iter()
-        .map(|nd| {
-            let def = BTreeMap::new();
-            (
-                *nd,
-                edges
-                    .get(nd)
-                    .unwrap_or(&def)
-                    .iter()
-                    .map(|(a, x)| {
-                        (
-                            a.clone(),
-                            *old_parts.get(x).expect("all nodes should have a partition"),
-                        )
-                    })
-                    .collect::<BTreeSet<(A, usize)>>(),
-            )
-        })
-        .collect()
-}
-
-/// Edge set to partition group
-fn edge_set_to_partitions<A: Alphabet>(
-    edges: Vec<(usize, BTreeSet<(A, usize)>)>,
-) -> Vec<BTreeSet<usize>> {
-    let mut prev_trans_map: HashMap<BTreeSet<(A, usize)>, BTreeSet<usize>> = HashMap::new();
-    for (nd_id, transitions) in edges.into_iter() {
-        let set = prev_trans_map
-            .entry(transitions)
-            .or_insert_with(BTreeSet::new);
-        set.insert(nd_id);
-    }
-
-    prev_trans_map.into_iter().map(|(_, part)| part).collect()
-}
-
-fn find_new_partitions<A: Alphabet>(
-    edges: &DFAEdgeMap<A>,
-    // maps a node index to a part id.
-    old_parts: &HashMap<usize, usize>,
-    curr_part: &BTreeSet<usize>,
-) -> Vec<BTreeSet<usize>> {
-    edge_set_to_partitions(find_edge_set(edges, old_parts, curr_part))
-}
-
-fn partition_vector_to_id_map<'a>(
-    it: impl Iterator<Item = &'a BTreeSet<usize>>,
-) -> HashMap<usize, usize> {
-    it.enumerate()
-        .flat_map(|(part_id, nd_set)| nd_set.iter().map(move |mem| (*mem, part_id)))
-        .collect()
 }
 
 fn get_reachable_idxs<T, A>(lhs: &T) -> BTreeSet<usize>
@@ -216,94 +153,8 @@ where
         .dfa_edges()
         .into_iter()
         .filter(|(src, _, dst)| reached_idxs.contains(src) && reached_idxs.contains(dst))
-        .map(|a| a.clone())
         .collect();
-    // TODO(Ian): maybe reinstantiate this code by doing the following: each reject node is actually starts in its own behavior class.. except for maybe rejects reached from non
-    // terminals??? all of this is very fuzzy but that might allow us to do some simplification on paths to rejects, which rejects can be merged? Maybe rejects that are the same in both?
-    /*
-        let lhs_edge_map: DFAEdgeMap<A> = create_edge_map(lhs);
 
-        let mut paritions: Vec<BTreeSet<usize>> = vec![accepts.clone(), rejects];
-
-        loop {
-            let mut new_partitions = Vec::new();
-
-            let old_part_ids: HashMap<usize, usize> = partition_vector_to_id_map(paritions.iter());
-
-            for part in paritions.iter() {
-                new_partitions.extend(find_new_partitions(&lhs_edge_map, &old_part_ids, part));
-            }
-
-            if new_partitions.len() <= paritions.len() {
-                break;
-            } else {
-                paritions = new_partitions;
-            }
-        }
-
-        let mut cont: IdContext<BTreeSet<usize>> = IdContext::default();
-        let part_id = partition_vector_to_id_map(paritions.iter());
-        // I regret writing things this way, i apologize, flattens should occur earlier clones later
-        let edges = paritions
-            .iter()
-            .flat_map(|x| {
-                let src_node = cont.get_node(x.clone());
-                let ref_src = &src_node;
-                x.iter()
-                    .flat_map(|src| {
-                        let emp = BTreeMap::new();
-                        lhs_edge_map
-                            .get(src)
-                            .unwrap_or(&emp)
-                            .iter()
-                            .map(|(k, v)| {
-                                (
-                                    *ref_src,
-                                    k.clone(),
-                                    cont.get_node(
-                                        paritions[*part_id
-                                            .get(v)
-                                            .expect("every node should be in a partition")]
-                                        .clone(),
-                                    ),
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .into_iter()
-                    })
-                    .collect::<Vec<_>>()
-                    .into_iter()
-            })
-            .collect::<BTreeSet<_>>();
-
-        let ent_node = cont.get_node(
-            paritions[*part_id
-                .get(&lhs.entry())
-                .expect("should have partition for entry")]
-            .clone(),
-        );
-
-        let all_nodes = paritions
-            .iter()
-            .filter_map(|part| {
-                if !part.is_empty() {
-                    Some(cont.get_node(part.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect::<BTreeSet<_>>();
-
-        let all_accept_nodes = accepts
-            .iter()
-            .map(|x| {
-                let part = *part_id
-                    .get(x)
-                    .expect("the accept node should be in a partition");
-                cont.get_node(paritions[part].clone())
-            })
-            .collect::<BTreeSet<_>>();
-    */
     ExplicitDFA {
         ent_id: lhs.entry(),
         edges: new_edges,
@@ -421,7 +272,7 @@ where
     minimize(&new_dfa)
 }
 
-/// Compplement of the DFA
+/// Complement of the DFA
 pub fn complement<T, A>(lhs: &T) -> impl DFA<A>
 where
     A: Alphabet,
@@ -494,61 +345,4 @@ mod test {
         assert_eq!(min.all_indices().len(), 2);
         assert_eq!(min.accept_indices().len(), 1);
     }
-
-    /*
-    #[test]
-    fn test_empty_intersection() {
-        let lhs = ExplicitDFA::<usize> {
-            ent_id: 0,
-            edges: BTreeSet::from([(0, 10, 1), (1, 10, 0)]),
-            accept_indexes: BTreeSet::from([1]),
-            all_indeces: BTreeSet::from([0, 1]),
-        };
-
-        let rhs = ExplicitDFA::<usize> {
-            ent_id: 0,
-            edges: BTreeSet::from([(0, 10, 1), (1, 10, 0)]),
-            accept_indexes: BTreeSet::from([]),
-            all_indeces: BTreeSet::from([0, 1]),
-        };
-
-        let res = intersection(&lhs, &rhs);
-        assert_eq!(res.accept_indices().len(), 0);
-        assert_eq!(res.all_indices().len(), 1);
-        assert_eq!(res.dfa_edges().len(), 1);
-    }*/
-
-    /*
-    #[test]
-    fn test_simple_union() {
-        let lhs = ExplicitDFA::<usize> {
-            ent_id: 0,
-            edges: BTreeSet::from([(0, 10, 1), (1, 10, 1)]),
-            accept_indexes: BTreeSet::from([0]),
-            all_indeces: BTreeSet::from([0, 1]),
-        };
-
-        let rhs = ExplicitDFA::<usize> {
-            ent_id: 0,
-            edges: BTreeSet::from([(0, 10, 2), (2, 10, 2)]),
-            accept_indexes: BTreeSet::from([0, 2]),
-            all_indeces: BTreeSet::from([0, 2]),
-        };
-
-        let new_dfa = cartesian_product_internal(&lhs, &rhs, true);
-
-        assert_eq!(new_dfa.accept_indices().len(), 4);
-        assert_eq!(new_dfa.all_indices().len(), 4);
-
-        assert_eq!(new_dfa.dfa_edges().len(), 4);
-
-        let minimal_dfa = minimize(&new_dfa);
-
-        assert_eq!(minimal_dfa.accept_indices().len(), 1);
-        assert_eq!(minimal_dfa.all_indices().len(), 1);
-        assert_eq!(minimal_dfa.dfa_edges().len(), 1);
-
-        let (src, _, dst) = minimal_dfa.dfa_edges()[0];
-        assert_eq!(src, dst);
-    }*/
 }

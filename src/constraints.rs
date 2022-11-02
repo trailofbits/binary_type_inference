@@ -255,12 +255,16 @@ impl Display for TypeVariable {
 /// Manages ephemeral type variables
 pub struct VariableManager {
     curr_id: u64,
+    lb_count: u64,
 }
 
 impl VariableManager {
     /// Creates a new default variable manager
     pub fn new() -> VariableManager {
-        VariableManager { curr_id: 0 }
+        VariableManager {
+            curr_id: 0,
+            lb_count: 0,
+        }
     }
 
     /// Creates a fresh [TypeVariable] of the form τn where n is the count of fresh variables from this manager.
@@ -274,7 +278,13 @@ impl VariableManager {
     pub fn fresh_loop_breaker(&mut self) -> TypeVariable {
         let next_name = format!("loop_breaker{}", self.curr_id);
         self.curr_id += 1;
+        self.lb_count += 1;
         TypeVariable::new(next_name)
+    }
+
+    /// Gets number of generated loop breakers, generally we want this number to be lower
+    pub fn num_generated_loop_breakers(&self) -> u64 {
+        self.lb_count
     }
 }
 

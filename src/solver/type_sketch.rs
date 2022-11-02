@@ -10,11 +10,11 @@ use std::{collections::HashMap, hash::Hash};
 use alga::general::{AbstractMagma, Additive, JoinSemilattice, Lattice, MeetSemilattice};
 use anyhow::Context;
 
-use cwe_checker_lib::intermediate_representation::{Sub, Tid};
+use cwe_checker_lib::intermediate_representation::Tid;
 
 use itertools::Itertools;
 use log::info;
-use petgraph::algo::scc;
+
 use petgraph::dot::Dot;
 use petgraph::graph::IndexType;
 use petgraph::stable_graph::StableDiGraph;
@@ -31,9 +31,7 @@ use EdgeDirection::Outgoing;
 
 use crate::analysis::callgraph::{self, CallGraph};
 use crate::constraint_generation::{self, tid_to_tvar};
-use crate::constraints::{
-    ConstraintSet, DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TyConstraint, TypeVariable,
-};
+use crate::constraints::{DerivedTypeVar, Field, FieldLabel, SubtypeConstraint, TypeVariable};
 
 use crate::graph_algos::mapping_graph::MappingGraph;
 use crate::graph_algos::{explore_paths, find_node};
@@ -50,6 +48,7 @@ use std::convert::TryFrom;
 struct EdgeImplication {
     eq: (NodeIndex, NodeIndex),
     edge: (NodeIndex, NodeIndex),
+    edge_idxs: (EdgeIndex, EdgeIndex),
 }
 
 /// The minimum type capabilities required to be used as a type bound
@@ -177,6 +176,7 @@ where
                 Some(EdgeImplication {
                     eq: (src1, src2),
                     edge: (dst1, dst2),
+                    edge_idxs: (e1, e2),
                 })
             } else {
                 None
@@ -260,6 +260,34 @@ where
         for implic in edge_implications.clone().into_iter() {
             if cons.equiv(implic.eq.0.index(), implic.eq.1.index()) {
                 edge_implications.remove(&implic);
+                #[cfg(debug_assertions)]
+                if cons.find(implic.edge.0.index()) != cons.find(implic.edge.1.index()) {
+                    log_lines.push(format!(
+                        "Consuming: {} {} to unify {} {}",
+                        implic.edge_idxs.0.index(),
+                        implic.edge_idxs.1.index(),
+                        cons.find(implic.edge.0.index()),
+                        cons.find(implic.edge.1.index())
+                    ));
+                    log_lines.push(format!(
+                        "Weight: {} {}",
+                        grph.get_graph().edge_weight(implic.edge_idxs.0).unwrap(),
+                        grph.get_graph().edge_weight(implic.edge_idxs.1).unwrap()
+                    ));
+
+                    log_lines.push(format!(
+                        "dst1: {} dst2: {}",
+                        implic.edge.0.index(),
+                        implic.edge.1.index()
+                    ));
+
+                    log_lines.push(format!(
+                        "Because src1: {} src2: {} eq",
+                        implic.eq.0.index(),
+                        implic.eq.1.index()
+                    ));
+                }
+
                 cons.union(implic.edge.0.index(), implic.edge.1.index());
             }
         }
@@ -1244,7 +1272,6 @@ where
         associated_scc_tids: &Vec<Tid>,
         target_idx: NodeIndex,
     ) {
-        println!("Refining formals for {:?}", associated_scc_tids);
         let mut orig_repr = self.get_built_sketch_from_scc(associated_scc_tids);
         // for each in parameter without a callsite tag:
         //bind intersection
@@ -1522,8 +1549,10 @@ where
     }
 
     fn insert_global_sketches(
+        scc_repr: &TypeVariable,
         global_sketches: &mut HashMap<TypeVariable, Sketch<LatticeBounds<U>>>,
         sg: &SketchGraph<LatticeBounds<U>>,
+        debug_dir: &FileDebugLogger,
     ) {
         sg.quotient_graph
             .get_node_mapping()
@@ -1535,20 +1564,21 @@ where
 
                     let (_, skg) = &sks[0];
 
-                    if dtv.get_base_variable().get_name() == "glb_00104040_DAT_00104040" {
-                        println!("skg for glb: {}", skg);
-                    }
+                    debug_dir
+                        .log_to_fname(
+                            &format!(
+                                "global_representation_inside_{}_for_{}",
+                                scc_repr.get_name(),
+                                dtv
+                            ),
+                            &|| skg,
+                        )
+                        .expect("should be able to debug log if enabled");
 
                     let curr_sketch = global_sketches
                         .entry(dtv.get_base_variable().clone())
                         .or_insert_with(|| skg.clone());
-                    if dtv.get_base_variable().get_name() == "glb_00104040_DAT_00104040" {
-                        println!("intersect with: {}", *curr_sketch);
-                    }
                     *curr_sketch = curr_sketch.intersect(skg);
-                    if dtv.get_base_variable().get_name() == "glb_00104040_DAT_00104040" {
-                        println!("next: {}", *curr_sketch);
-                    }
                 }
             });
     }
@@ -1584,8 +1614,8 @@ where
     ) -> anyhow::Result<HashMap<TypeVariable, Sketch<LatticeBounds<U>>>> {
         let mut global_sketches: HashMap<TypeVariable, Sketch<LatticeBounds<U>>> = HashMap::new();
 
-        self.scc_repr.iter().for_each(|(_, sg)| {
-            Self::insert_global_sketches(&mut global_sketches, sg);
+        self.scc_repr.iter().for_each(|(scc_repr, sg)| {
+            Self::insert_global_sketches(scc_repr, &mut global_sketches, sg, &self.debug_dir);
         });
 
         for (tv, sketch) in global_sketches.iter() {
@@ -1930,7 +1960,7 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                     .iter()
                     .map(|e| new_graph.edge_weight(*e).expect("indices should be valid"))
                     .collect::<Vec<_>>();
-                println!("{:#?}", pth_as_weights);
+
                 let lhs = find_node(
                     self.quotient_graph.get_graph(),
                     self.get_entry(),
@@ -2004,18 +2034,14 @@ impl<U: std::cmp::PartialEq + Clone + Lattice + AbstractMagma<Additive> + Displa
                 .and_then(|o1| self.quotient_graph.get_graph().node_weight(o1).cloned())
                 .unwrap_or_else(|| self.default_label.clone());
 
-            println!("slabel {}", self_label);
-
             let other_label = o2
                 .and_then(|o2| other.quotient_graph.get_graph().node_weight(o2).cloned())
                 .unwrap_or_else(|| self.default_label.clone());
 
-            println!("other_label {}", self_label);
             // Both nodes should recogonize the word in the case of an intersection
             //assert!(!self_dtvs.is_empty() && !other_dtvs.is_empty());
 
             let new_label = lattice_op(&self_label, &other_label);
-            println!("new_label {}", new_label);
 
             assert!(weight_mapping.get_graph().contains_node(*base_node));
             *weight_mapping
@@ -2869,7 +2895,6 @@ mod test {
         let global_graph = skb
             .build_global_type_graph()
             .expect("Global graph should build");
-        println!("{}", global_graph);
 
         assert_eq!(skb.parameter_aliases.len(), 2);
 

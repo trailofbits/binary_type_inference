@@ -1,7 +1,4 @@
-use cwe_checker_lib::{
-    analysis::graph::Node,
-    intermediate_representation::{Arg, Tid},
-};
+use cwe_checker_lib::intermediate_representation::{Arg, Tid};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -215,10 +212,7 @@ fn build_alias_types<U: NamedLatticeElement>(
         .map(|e| e.target())
         .collect::<BTreeSet<_>>();
 
-    unique_tgts
-        .into_iter()
-        .map(|ind| CType::Alias(ind))
-        .collect()
+    unique_tgts.into_iter().map(CType::Alias).collect()
 }
 
 fn field_to_protobuf(internal_field: Field) -> ctypes::Field {
@@ -491,7 +485,7 @@ impl<'a, U: NamedLatticeElement> LoweringContext<'a, U> {
                 bit_sz: arg.bytesize().as_bit_length(),
                 type_index: mp
                     .get(&i)
-                    .map(|x| x.type_index.clone())
+                    .map(|x| x.type_index)
                     .unwrap_or_else(|| self.build_terminal_type(default_lattice_elem)),
             });
             // TODO(Ian) doesnt seem like there is a non bit length accessor on the private field?
@@ -539,7 +533,7 @@ impl<'a, U: NamedLatticeElement> LoweringContext<'a, U> {
             );
             Some(self.add_type(ret_struct))
         } else {
-            out_params.get(0).map(|x| x.type_index.clone())
+            out_params.get(0).map(|x| x.type_index)
         };
 
         if !in_params.is_empty() || !out_params.is_empty() {

@@ -24,6 +24,7 @@ pub struct CGOrdering {
 }
 
 impl CGOrdering {
+    /// Creates a [CGOrdering] from the given callgraph which defines a condensed node ordering.
     pub fn new(cg: &CallGraph) -> anyhow::Result<CGOrdering> {
         let condensed = petgraph::algo::condensation(cg.clone(), true);
         petgraph::algo::toposort(&condensed, None)
@@ -42,6 +43,7 @@ impl CGOrdering {
         r
     }
 
+    /// Get's an iterator over the nodes in this condensed callgraph in topo order
     pub fn iter(&self) -> impl Iterator<Item = (&CondensedCallgraph, NodeIndex, &Vec<Tid>)> {
         self.topo_order
             .iter()
