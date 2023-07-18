@@ -37,3 +37,11 @@ The methods described in the paper are patented under process patent [US10423397
 Any opinions, findings and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of GrammaTech, Inc.
 
 We would also like to thank the team at FKIE-CAD behind [CWE Checker](https://github.com/fkie-cad/cwe_checker). Their static analysis platform over Ghidra PCode provided an excellent base set of capabilities in our analysis. 
+
+## License
+
+`binary_type_inference` is licensed according to the [GPL-3.0](LICENSE) license.
+
+This research was developed with funding from the Defense Advanced Research Projects Agency (DARPA). The views, opinions and/or findings expressed are those of the author and should not be interpreted as representing the official views or policies of the Department of Defense or the U.S. Government.
+
+Distribution Statement A – Approved for Public Release, Distribution Unlimited
