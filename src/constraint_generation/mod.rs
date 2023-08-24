@@ -569,8 +569,7 @@ impl<R: RegisterMapping, P: PointsToMapping, S: SubprocedureLocators, C: Constan
         vman: &mut VariableManager,
     ) -> BaseValueDomain {
         let tv_access = self.points_to.points_to(adressing_expr, sz);
-        let (reg_repr, mut cons) =
-            self.evaluate_expression(adressing_expr, !address_is_subtype, vman);
+        let (reg_repr, mut cons) = self.evaluate_expression(adressing_expr, true, vman);
 
         let mut representation = reg_repr;
         representation.add_field_label(field_label);
