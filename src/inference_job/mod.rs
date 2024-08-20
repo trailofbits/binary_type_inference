@@ -338,7 +338,7 @@ impl InferenceJob {
         let reaching_defs_start_of_block = reg_context
             .iter()
             .filter_map(|(k, v)| {
-                let nd = grph[(*k)];
+                let nd = grph[*k];
                 match nd {
                     Node::BlkStart(blk, _sub) => Some((blk.tid.clone(), v.clone())),
                     _ => None,
