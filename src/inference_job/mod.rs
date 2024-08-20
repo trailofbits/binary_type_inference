@@ -206,8 +206,9 @@ impl InferenceJob {
         lattice_json: &str,
     ) -> anyhow::Result<LatticeDefinition> {
         let lattice_fl = std::fs::File::open(lattice_json)?;
-        let lattice_def: LatticeDefinition = serde_json::from_reader(lattice_fl)
-            .map_err(|e| anyhow::Error::from(e).context("lattice json"))?;
+        let lattice_def: LatticeDefinition =
+            serde_json::from_reader(std::io::BufReader::new(lattice_fl))
+                .map_err(|e| anyhow::Error::from(e).context("lattice json"))?;
         Ok(lattice_def)
     }
 

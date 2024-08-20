@@ -31,7 +31,8 @@ pub fn get_intermediate_representation_for_reader(
     rdr: impl Read,
     binary: &[u8],
 ) -> Result<Project> {
-    let mut pcode_proj: cwe_checker_lib::pcode::Project = serde_json::from_reader(rdr)?;
+    let mut pcode_proj: cwe_checker_lib::pcode::Project =
+        serde_json::from_reader(std::io::BufReader::new(rdr))?;
     let base_addr = cwe_checker_lib::utils::get_binary_base_address(binary)?;
     let msgs = pcode_proj.normalize();
 
