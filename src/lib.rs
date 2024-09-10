@@ -103,14 +103,15 @@ mod tests {
     fn parse_scc_constraints(fname: &str) -> anyhow::Result<Vec<DeserSCCCons>> {
         let f = std::fs::File::open(fname)?;
 
-        let mut v: Vec<DeserSCCCons> = serde_json::from_reader(f)?;
+        let mut v: Vec<DeserSCCCons> = serde_json::from_reader(std::io::BufReader::new(f))?;
         normalize_cons(&mut v);
         Ok(v)
     }
 
     fn parse_ctype_mapping(fname: &str) -> anyhow::Result<HashMap<NodeIndex, CType>> {
         let f = std::fs::File::open(fname)?;
-        let content: HashMap<NodeIndex, CType> = serde_json::from_reader(f)?;
+        let content: HashMap<NodeIndex, CType> =
+            serde_json::from_reader(std::io::BufReader::new(f))?;
         Ok(content)
     }
 

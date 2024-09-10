@@ -206,8 +206,9 @@ impl InferenceJob {
         lattice_json: &str,
     ) -> anyhow::Result<LatticeDefinition> {
         let lattice_fl = std::fs::File::open(lattice_json)?;
-        let lattice_def: LatticeDefinition = serde_json::from_reader(lattice_fl)
-            .map_err(|e| anyhow::Error::from(e).context("lattice json"))?;
+        let lattice_def: LatticeDefinition =
+            serde_json::from_reader(std::io::BufReader::new(lattice_fl))
+                .map_err(|e| anyhow::Error::from(e).context("lattice json"))?;
         Ok(lattice_def)
     }
 
@@ -338,7 +339,7 @@ impl InferenceJob {
         let reaching_defs_start_of_block = reg_context
             .iter()
             .filter_map(|(k, v)| {
-                let nd = grph[(*k)];
+                let nd = grph[*k];
                 match nd {
                     Node::BlkStart(blk, _sub) => Some((blk.tid.clone(), v.clone())),
                     _ => None,
